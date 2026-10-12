@@ -5,9 +5,9 @@
 [![CI](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml/badge.svg)](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml)
 
 > [!NOTE]
-> Nothing is built yet. Slice 1 brings the conversation itself: streaming replies, Markdown, live
+> Nothing is built yet. First comes the conversation itself: streaming replies, Markdown, live
 > status and an instant Stop, without ever losing a message. The
-> [map](https://github.com/akai-ito/.github/blob/main/map.md) has the design and the plan.
+> [map](https://github.com/akai-ito/.github/blob/main/map.md) has the design.
 
 ## What it will be
 
