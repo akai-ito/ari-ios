@@ -1,0 +1,9 @@
+// Build settings shared by every build of Ari. Nothing personal goes here: to sign with your own
+// Apple team, copy Local.xcconfig.example to Local.xcconfig, which git ignores.
+
+// Someone signing with another team needs a bundle identifier of their own.
+ARI_BUNDLE_ID = io.github.akai-ito.ari
+PRODUCT_BUNDLE_IDENTIFIER = $(ARI_BUNDLE_ID)
+CODE_SIGN_STYLE = Automatic
+
+#include? "Local.xcconfig"
