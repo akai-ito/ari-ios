@@ -10,10 +10,12 @@ runs:
     - name: Check the Xcode version
       shell: bash
       run: |
-        if ! version=$(xcodebuild -version | head -n 1); then
+        # No pipe: xcodebuild crashes writing to one that closes early, as `head -n 1` does.
+        if ! output=$(xcodebuild -version); then
           echo "::error title=No Xcode::There is no working Xcode at $DEVELOPER_DIR. If the runner image changed, update DEVELOPER_DIR in .github/workflows/ci.yml."
           exit 1
         fi
+        version=${output%%$'\n'*}
         echo "$version ($DEVELOPER_DIR)"
         case "$version" in
           "Xcode 27.0" | "Xcode 27.0."*) ;;
