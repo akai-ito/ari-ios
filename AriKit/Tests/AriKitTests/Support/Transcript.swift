@@ -40,6 +40,8 @@ struct Transcript: Sendable, CustomTestStringConvertible {
         let line: Int
         let json: JSONValue
         let event: Event
+        /// When the app receives it, in milliseconds from the start; `nil` for a given event.
+        var at: Int? = nil
     }
 
     enum Step: Sendable {
@@ -51,6 +53,16 @@ struct Transcript: Sendable, CustomTestStringConvertible {
         case event(LoggedEvent)
         /// Something happens outside the API, such as the network dropping.
         case world(World)
+
+        /// When it happens, in milliseconds from the start.
+        var at: Int {
+            switch self {
+            case .app(let request): request.at
+            case .server(let response): response.at
+            case .event(let event): event.at ?? 0
+            case .world(let world): world.at
+            }
+        }
 
         var line: Int {
             switch self {
@@ -75,6 +87,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
 
     struct Request: Sendable {
         let line: Int
+        let at: Int
         let method: String
         let path: String
         let headers: [String: String]
@@ -85,6 +98,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
 
     struct Response: Sendable {
         let line: Int
+        let at: Int
         let status: Int
         let headers: [String: String]
         let body: JSONValue?
@@ -94,6 +108,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
 
     struct World: Sendable {
         let line: Int
+        let at: Int
         let marker: String
     }
 
@@ -119,23 +134,26 @@ struct Transcript: Sendable, CustomTestStringConvertible {
                     given.append(logged)
                 } else if let event = json["event"] {
                     let logged = LoggedEvent(
-                        line: line, json: event, event: try event.decode(Event.self))
+                        line: line, json: event, event: try event.decode(Event.self),
+                        at: json["at"]?.int ?? 0)
                     steps.append(.event(logged))
                 } else if let request = json["app"] {
                     let sent = Request(
-                        line: line, method: request["method"]?.string ?? "",
+                        line: line, at: json["at"]?.int ?? 0,
+                        method: request["method"]?.string ?? "",
                         path: request["path"]?.string ?? "",
                         headers: Self.headers(request["headers"]),
                         body: request["body"])
                     steps.append(.app(sent))
                 } else if let response = json["server"] {
                     let answer = Response(
-                        line: line, status: response["status"]?.int ?? 0,
+                        line: line, at: json["at"]?.int ?? 0, status: response["status"]?.int ?? 0,
                         headers: Self.headers(response["headers"]), body: response["body"],
                         lost: json["lost"] == .bool(true))
                     steps.append(.server(answer))
                 } else if let marker = json["world"]?.string {
-                    steps.append(.world(World(line: line, marker: marker)))
+                    steps.append(
+                        .world(World(line: line, at: json["at"]?.int ?? 0, marker: marker)))
                 } else {
                     throw TranscriptError("no given, event, app, server or world")
                 }
