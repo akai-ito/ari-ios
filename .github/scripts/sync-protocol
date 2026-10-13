@@ -1,0 +1,80 @@
+#!/bin/sh
+# Keeps protocol/ an exact copy of ito-core's protocol/ at the commit named in protocol.pin.
+#
+#   .github/scripts/sync-protocol <commit>   copy protocol/ from that ito-core commit and pin it
+#   .github/scripts/sync-protocol            copy it again from the pinned commit
+#   .github/scripts/sync-protocol --check    fail unless the copy git has matches the pin
+#
+# <commit> can be a full or short SHA, or main for ito-core's latest. It must be on ito-core's
+# main branch, so the pin can never point at an unmerged change. The check compares what git
+# holds for protocol/ (the index, which equals the commit in CI) with the pinned commit, blob by
+# blob, so it needs no file contents and ignores untracked files.
+
+set -eu
+
+repo=https://github.com/akai-ito/ito-core.git
+root=$(cd "$(dirname "$0")/../.." && pwd)
+pin_file="$root/protocol.pin"
+
+fail() {
+  if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    printf '::error file=protocol.pin,title=%s::%s\n' "$1" "$2"
+  else
+    printf 'sync-protocol: %s\n  %s\n' "$1" "$2" >&2
+  fi
+  exit 1
+}
+
+read_pin() {
+  [ -f "$pin_file" ] || fail "No pin" "protocol.pin is missing. Run .github/scripts/sync-protocol main to create it."
+  pin=$(tr -d '[:space:]' < "$pin_file")
+  if ! printf '%s\n' "$pin" | grep -Eq '^[0-9a-f]{40}$'; then
+    fail "Pin is not a commit" "protocol.pin must hold one full, lowercase commit SHA from ito-core; it holds \"$pin\"."
+  fi
+}
+
+mode=sync
+case "${1:-}" in
+  --check) mode=check; read_pin; wanted=$pin ;;
+  "") read_pin; wanted=$pin ;;
+  -*) fail "Unknown option" "Use --check, a commit of ito-core, or no argument." ;;
+  *) wanted=$1 ;;
+esac
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+clone="$work/ito-core"
+
+# All of main's commits and trees, but no file contents until something needs them.
+git -c core.autocrlf=false clone --quiet --filter=blob:none --no-checkout --single-branch \
+  --branch main "$repo" "$clone"
+
+# An unknown commit makes the partial clone try to fetch it and complain; the message below says it
+# better.
+if ! sha=$(git -C "$clone" rev-parse --quiet --verify "$wanted^{commit}" 2> /dev/null); then
+  fail "Unknown commit" "$wanted is not a commit on ito-core's main branch."
+fi
+if ! git -C "$clone" merge-base --is-ancestor "$sha" origin/main; then
+  fail "Commit not on main" "$sha is not on ito-core's main branch; pin a merged commit."
+fi
+
+listing='%(objectmode) %(objectname) %(path)'
+git -C "$clone" ls-tree -r --format="$listing" "$sha" -- protocol > "$work/pinned"
+[ -s "$work/pinned" ] || fail "No protocol at commit" "ito-core has no protocol/ directory at $sha."
+
+if [ "$mode" = check ]; then
+  git -C "$root" ls-files --format="$listing" -- protocol > "$work/copy"
+  if ! diff -u "$work/pinned" "$work/copy" > "$work/differences"; then
+    sed -e '1,2d' -e '/^@@/d' "$work/differences" >&2
+    fail "Protocol copy out of date" \
+      "protocol/ doesn't match ito-core at $sha (lines with - are what the pin holds, + what this repository holds). Run .github/scripts/sync-protocol to copy it again, or pass a new commit to move the pin."
+  fi
+  echo "protocol/ matches ito-core at $sha."
+  exit 0
+fi
+
+git -c core.autocrlf=false -C "$clone" checkout --quiet "$sha" -- protocol
+rm -rf "$root/protocol"
+cp -R "$clone/protocol" "$root/protocol"
+printf '%s\n' "$sha" > "$pin_file"
+echo "Copied protocol/ from ito-core at $sha and pinned it. Review and commit protocol/ and protocol.pin."
