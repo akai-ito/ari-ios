@@ -15,8 +15,15 @@ let package = Package(
     products: [
         .library(name: "AriKit", targets: ["AriKit"])
     ],
+    dependencies: [
+        // Tests only: a clock the tests move by hand, for heartbeats, backoff and Retry-After.
+        .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0")
+    ],
     targets: [
         .target(name: "AriKit", swiftSettings: swiftSettings),
-        .testTarget(name: "AriKitTests", dependencies: ["AriKit"], swiftSettings: swiftSettings),
+        .testTarget(
+            name: "AriKitTests",
+            dependencies: ["AriKit", .product(name: "Clocks", package: "swift-clocks")],
+            swiftSettings: swiftSettings),
     ]
 )
