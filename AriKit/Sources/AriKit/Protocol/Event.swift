@@ -1,0 +1,160 @@
+/// One event from `GET /v0/events`. It decodes envelope first: its id and type, then the fields of a
+/// type this version of Ari knows. A type it doesn't know decodes as ``Payload/unknown`` and keeps its
+/// id, so the cursor still moves past it; fields Ari doesn't know are ignored.
+public struct Event: Sendable, Equatable, Decodable {
+    /// The cursor to resume from. Only a snapshot of an empty conversation has none.
+    public let id: EventID?
+    /// The type, as sent.
+    public let type: String
+    public let payload: Payload
+
+    public enum Payload: Sendable, Equatable {
+        case snapshot(Snapshot)
+        case messageAccepted(MessageAccepted)
+        case messageQueued(MessageQueued)
+        case messageRead(MessageRead)
+        case turnStarted(TurnStarted)
+        case turnStatus(TurnStatus)
+        case messageStarted(MessageStarted)
+        case messageDelta(MessageDelta)
+        case messageEnded(MessageEnded)
+        case turnEnded(TurnEnded)
+        /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
+        case unknown
+    }
+
+    /// Every type this version of Ari decodes, as named on the wire.
+    public static let knownTypes = [
+        "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
+        "turn.status",
+        "message.started", "message.delta", "message.ended", "turn.ended",
+    ]
+
+    private enum EnvelopeKeys: String, CodingKey {
+        case id, type
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let envelope = try decoder.container(keyedBy: EnvelopeKeys.self)
+        id = try envelope.decodeIfPresent(EventID.self, forKey: .id)
+        type = try envelope.decode(String.self, forKey: .type)
+        payload =
+            switch type {
+            case "snapshot": .snapshot(try Snapshot(from: decoder))
+            case "message.accepted": .messageAccepted(try MessageAccepted(from: decoder))
+            case "message.queued": .messageQueued(try MessageQueued(from: decoder))
+            case "message.read": .messageRead(try MessageRead(from: decoder))
+            case "turn.started": .turnStarted(try TurnStarted(from: decoder))
+            case "turn.status": .turnStatus(try TurnStatus(from: decoder))
+            case "message.started": .messageStarted(try MessageStarted(from: decoder))
+            case "message.delta": .messageDelta(try MessageDelta(from: decoder))
+            case "message.ended": .messageEnded(try MessageEnded(from: decoder))
+            case "turn.ended": .turnEnded(try TurnEnded(from: decoder))
+            default: .unknown
+            }
+    }
+}
+
+/// Sent first when the server can't resume from the cursor (there was none, the server doesn't know
+/// it, or it is too far behind): replace the conversation with it. Its id repeats the latest event's.
+public struct Snapshot: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let reason: SnapshotReason
+    /// The latest messages, oldest first, including one still being written.
+    public let messages: [Message]
+    /// Whether older messages exist.
+    public let hasMore: Bool
+    /// The running turn, or `nil` when the agent is idle.
+    public let turn: LiveTurn?
+    /// Messages waiting as Next, in the order they will be answered.
+    public let next: [MessageID]
+
+    enum CodingKeys: String, CodingKey {
+        case at, reason, messages, turn, next
+        case hasMore = "has_more"
+    }
+}
+
+/// A message you sent is on the server's disk. Every connected app receives it, the sender included.
+public struct MessageAccepted: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: Message
+}
+
+/// The message can't join the running turn, so it waits as Next.
+public struct MessageQueued: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: MessageID
+    /// The running turn it waits behind.
+    public let turn: TurnID
+}
+
+/// The agent took the message into the running turn. A reply it was already writing may finish
+/// first.
+public struct MessageRead: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: MessageID
+    public let turn: TurnID
+}
+
+/// The agent starts working; Stop works from here.
+public struct TurnStarted: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let turn: TurnID
+    /// The messages this turn answers, in the order they were sent.
+    public let inputs: [MessageID]
+    /// Present when this is a new attempt at a failed turn.
+    public let retryOf: TurnID?
+
+    enum CodingKeys: String, CodingKey {
+        case at, turn, inputs
+        case retryOf = "retry_of"
+    }
+}
+
+/// What the agent is doing now. It replaces the previous status; `turn.ended` clears it.
+public struct TurnStatus: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let turn: TurnID
+    public let kind: StatusKind
+    public let label: String
+    public let detail: String?
+
+    public var status: Status { Status(kind: kind, label: label, detail: detail) }
+}
+
+/// The agent begins a message, with empty text and no outcome; `message.delta` events follow.
+public struct MessageStarted: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: Message
+}
+
+/// Text appended to a message. Text is never revised: `offset` is always the message's length before
+/// this piece.
+public struct MessageDelta: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: MessageID
+    /// Where the piece starts, in UTF-16 code units.
+    public let offset: Int
+    public let text: String
+}
+
+/// A message is finished. Its final text is its first `length` UTF-16 code units: everything
+/// streamed, or less when you stopped it.
+public struct MessageEnded: Sendable, Equatable, Decodable {
+    /// When it ended: the message's `ended_at`.
+    public let at: Timestamp
+    public let message: MessageID
+    public let outcome: Outcome
+    /// The final length of the text, in UTF-16 code units.
+    public let length: Int
+    public let error: ServerError?
+}
+
+/// The turn is over and its status is cleared. Nothing more about this turn follows.
+public struct TurnEnded: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let turn: TurnID
+    public let outcome: Outcome
+    public let error: ServerError?
+}

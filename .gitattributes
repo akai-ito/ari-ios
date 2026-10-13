@@ -1,0 +1,3 @@
+# protocol/ is a verbatim copy of ito-core's protocol/ at the commit in protocol.pin: keep its bytes
+# exactly, collapse it in pull request diffs, and leave it out of the language statistics.
+protocol/** -text linguist-generated linguist-vendored

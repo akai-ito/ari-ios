@@ -1,0 +1,219 @@
+import AriKit
+import Foundation
+import Testing
+
+/// A golden transcript from ito-core: a header, the server's log when the scenario starts (`given`),
+/// then every step in time order. protocol/transcripts/README.md describes the format.
+struct Transcript: Sendable, CustomTestStringConvertible {
+    /// The file's name without its extension, such as "07-stop".
+    let name: String
+    let header: Header
+    /// The events in the server's log before the first step.
+    let given: [LoggedEvent]
+    let steps: [Step]
+
+    var testDescription: String { name }
+
+    struct Header: Sendable, Decodable {
+        let transcript: String
+        let scenario: Int
+        let title: String
+        let guarantees: [String]
+        let app: App
+
+        /// Where the app starts.
+        struct App: Sendable, Decodable {
+            /// The last event the app applied, if any.
+            let cursor: EventID?
+            /// The oldest message the app has cached, where that matters.
+            let oldestCached: MessageID?
+
+            enum CodingKeys: String, CodingKey {
+                case cursor
+                case oldestCached = "oldest_cached"
+            }
+        }
+    }
+
+    /// An event as the transcript holds it: its line, its JSON, and what Ari decodes from it.
+    struct LoggedEvent: Sendable {
+        let line: Int
+        let json: JSONValue
+        let event: Event
+    }
+
+    enum Step: Sendable {
+        /// The app sends a request.
+        case app(Request)
+        /// The app receives the answer to its last request, unless it was lost on the way.
+        case server(Response)
+        /// The app receives an event from `GET /v0/events`.
+        case event(LoggedEvent)
+        /// Something happens outside the API, such as the network dropping.
+        case world(World)
+
+        var line: Int {
+            switch self {
+            case .app(let request): request.line
+            case .server(let response): response.line
+            case .event(let event): event.line
+            case .world(let world): world.line
+            }
+        }
+
+        /// The step in a few words, such as "POST /v0/turns/t_1/stop" or "message.ended e_9", so a
+        /// test can check it stopped where it meant to.
+        var summary: String {
+            switch self {
+            case .app(let request): "\(request.method) \(request.path)"
+            case .server(let response): "\(response.status)\(response.lost ? " lost" : "")"
+            case .event(let event): "\(event.event.type) \(event.event.id?.rawValue ?? "")"
+            case .world(let world): world.marker
+            }
+        }
+    }
+
+    struct Request: Sendable {
+        let line: Int
+        let method: String
+        let path: String
+        let headers: [String: String]
+        let body: JSONValue?
+
+        var route: Route { Route(method: method, path: path) }
+    }
+
+    struct Response: Sendable {
+        let line: Int
+        let status: Int
+        let headers: [String: String]
+        let body: JSONValue?
+        /// The answer never reached the app.
+        let lost: Bool
+    }
+
+    struct World: Sendable {
+        let line: Int
+        let marker: String
+    }
+
+    init(contentsOf url: URL) throws {
+        name = url.deletingPathExtension().lastPathComponent
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+        guard let first = lines.first else {
+            throw TranscriptError("\(url.lastPathComponent) is empty")
+        }
+        header = try Self.reading(url, line: 1) {
+            try JSONValue(json: String(first)).decode(Header.self)
+        }
+
+        var given: [LoggedEvent] = []
+        var steps: [Step] = []
+        for (index, text) in lines.enumerated().dropFirst() {
+            let line = index + 1
+            try Self.reading(url, line: line) {
+                let json = try JSONValue(json: String(text))
+                if let event = json["given"] {
+                    let logged = LoggedEvent(
+                        line: line, json: event, event: try event.decode(Event.self))
+                    given.append(logged)
+                } else if let event = json["event"] {
+                    let logged = LoggedEvent(
+                        line: line, json: event, event: try event.decode(Event.self))
+                    steps.append(.event(logged))
+                } else if let request = json["app"] {
+                    let sent = Request(
+                        line: line, method: request["method"]?.string ?? "",
+                        path: request["path"]?.string ?? "",
+                        headers: Self.headers(request["headers"]),
+                        body: request["body"])
+                    steps.append(.app(sent))
+                } else if let response = json["server"] {
+                    let answer = Response(
+                        line: line, status: response["status"]?.int ?? 0,
+                        headers: Self.headers(response["headers"]), body: response["body"],
+                        lost: json["lost"] == .bool(true))
+                    steps.append(.server(answer))
+                } else if let marker = json["world"]?.string {
+                    steps.append(.world(World(line: line, marker: marker)))
+                } else {
+                    throw TranscriptError("no given, event, app, server or world")
+                }
+            }
+        }
+        self.given = given
+        self.steps = steps
+    }
+
+    private init(name: String, header: Header, given: [LoggedEvent], steps: [Step]) {
+        self.name = name
+        self.header = header
+        self.given = given
+        self.steps = steps
+    }
+
+    /// The same transcript with each step replaced by what `transform` returns for it.
+    func replacingSteps(_ transform: (Step) throws -> [Step]) rethrows -> Transcript {
+        Transcript(name: name, header: header, given: given, steps: try steps.flatMap(transform))
+    }
+
+    /// Every event the transcript holds, given or received, in order.
+    var events: [LoggedEvent] {
+        given
+            + steps.compactMap { step in
+                if case .event(let event) = step { event } else { nil }
+            }
+    }
+
+    private static func headers(_ json: JSONValue?) -> [String: String] {
+        json?.object?.compactMapValues(\.string) ?? [:]
+    }
+
+    @discardableResult
+    private static func reading<T>(_ url: URL, line: Int, _ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch {
+            throw TranscriptError("\(url.lastPathComponent) line \(line): \(error)")
+        }
+    }
+}
+
+/// What a request asks for, read from its method and path.
+enum Route: Equatable {
+    case discover
+    case server
+    case events
+    case send
+    case earlierMessages(before: MessageID, limit: Int?)
+    case stop(TurnID)
+    case retry(TurnID)
+    case other
+
+    init(method: String, path: String) {
+        let components = URLComponents(string: path)
+        let parts = (components?.path ?? path).split(separator: "/").map(String.init)
+        let query = Dictionary(
+            (components?.queryItems ?? []).map { ($0.name, $0.value ?? "") },
+            uniquingKeysWith: { $1 })
+        switch (method, parts.count) {
+        case ("GET", 2) where parts == [".well-known", "ito"]: self = .discover
+        case ("GET", 2) where parts == ["v0", "server"]: self = .server
+        case ("GET", 2) where parts == ["v0", "events"]: self = .events
+        case ("POST", 2) where parts == ["v0", "messages"]: self = .send
+        case ("GET", 2) where parts == ["v0", "messages"]:
+            self = .earlierMessages(
+                before: MessageID(query["before"] ?? ""), limit: query["limit"].flatMap { Int($0) })
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "stop":
+            self = .stop(TurnID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "retry":
+            self = .retry(TurnID(parts[2]))
+        default: self = .other
+        }
+    }
+}
+
+struct TranscriptError: Error, CustomStringConvertible {
+    let description: String
+    init(_ description: String) { self.description = description }
+}

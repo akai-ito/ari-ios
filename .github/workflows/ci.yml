@@ -8,6 +8,22 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The newest Xcode on GitHub's runners, and the build Ari is developed with. Its image is the only
+  # one with Xcode 27; .github/actionlint.yaml names its label.
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+  XCODEGEN_VERSION: 2.46.0
+  XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+
+defaults:
+  run:
+    # Unlike the default, this fails a step when any command in a pipe fails.
+    shell: bash
+
 jobs:
   commit-messages:
     name: Commit messages
@@ -20,3 +36,77 @@ jobs:
   workflows:
     name: Workflows and scripts
     uses: akai-ito/.github/.github/workflows/workflows.yml@main
+
+  build-iphone:
+    name: Build (iPhone)
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/xcode
+        with:
+          project: "true"
+      - name: Build Ari and its tests for the iPhone Simulator, unsigned
+        run: |
+          if ! xcodebuild build-for-testing -project Ari.xcodeproj -scheme Ari \
+              -destination "generic/platform=iOS Simulator" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO \
+              | xcbeautify --renderer github-actions; then
+            echo "::error title=Build (iPhone)::Ari or its tests don't build for the iPhone Simulator; the errors above say where."
+            exit 1
+          fi
+
+  build-mac:
+    name: Build (Mac)
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/xcode
+        with:
+          project: "true"
+      - name: Build Ari for the Mac, unsigned
+        run: |
+          if ! xcodebuild build -project Ari.xcodeproj -scheme Ari \
+              -destination "generic/platform=macOS" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO \
+              | xcbeautify --renderer github-actions; then
+            echo "::error title=Build (Mac)::Ari doesn't build for the Mac; the errors above say where."
+            exit 1
+          fi
+
+  tests:
+    name: Tests
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/xcode
+      - name: Run AriKit's tests against the golden transcripts
+        run: |
+          if ! swift test --package-path AriKit --disable-xctest; then
+            echo "::error title=Tests::AriKit's tests failed. Each ✘ line above names the test, and the transcript and line where it went wrong."
+            exit 1
+          fi
+
+  format:
+    name: Swift format
+    runs-on: xcode-27
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/xcode
+      - name: Check the Swift sources with swift-format
+        run: |
+          paths=(Ari AriKit/Package.swift AriKit/Sources AriKit/Tests)
+          if ! swift format lint --strict --recursive --parallel "${paths[@]}" 2> "$RUNNER_TEMP/lint"; then
+            sed -E 's/^([^:]+):([0-9]+):([0-9]+): (error|warning): (.*)$/::error file=\1,line=\2,col=\3::\5/' "$RUNNER_TEMP/lint"
+            echo "::error title=Swift format::Some Swift isn't formatted as .swift-format says. Run: swift format format --in-place --recursive ${paths[*]}"
+            exit 1
+          fi
+
+  protocol:
+    name: Protocol is pinned
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compare protocol/ with ito-core at the commit in protocol.pin
+        run: .github/scripts/sync-protocol --check
