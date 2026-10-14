@@ -16,11 +16,16 @@ let package = Package(
         .library(name: "AriKit", targets: ["AriKit"])
     ],
     dependencies: [
+        // Apple's GitHub Markdown parser (cmark-gfm underneath); Ari draws the result itself.
+        .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.9.0"),
         // Tests only: a clock the tests move by hand, for heartbeats, backoff and Retry-After.
-        .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0")
+        .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     ],
     targets: [
-        .target(name: "AriKit", swiftSettings: swiftSettings),
+        .target(
+            name: "AriKit",
+            dependencies: [.product(name: "Markdown", package: "swift-markdown")],
+            swiftSettings: swiftSettings),
         .testTarget(
             name: "AriKitTests",
             dependencies: ["AriKit", .product(name: "Clocks", package: "swift-clocks")],

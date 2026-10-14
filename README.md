@@ -5,10 +5,8 @@
 [![CI](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml/badge.svg)](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml)
 
 > [!NOTE]
-> Ari has no screens yet. What's here is everything beneath them: Ito's client protocol in Swift,
-> the store that turns the server's events into the conversation, and the networking that keeps it
-> live and never loses a message, all tested against every golden transcript. The connect screen
-> and the conversation itself come next. The
+> Ari connects to your Ito server and holds the conversation live, in its own look. Still to come:
+> opening instantly from the phone's cache, a light mode, and polish for the Mac. The
 > [map](https://github.com/akai-ito/.github/blob/main/map.md) has the design.
 
 ## What it will be
@@ -22,8 +20,8 @@
 
 | Path | What it is |
 | --- | --- |
-| [Ari](Ari) | The app, for iPhone and Mac from one SwiftUI target; for now, a placeholder screen |
-| [AriKit](AriKit) | Everything but the screens: the protocol's models, the conversation store and the networking |
+| [Ari](Ari) | The app, for iPhone and Mac from one SwiftUI target: the connect screen and the conversation |
+| [AriKit](AriKit) | Everything but the screens: the protocol's models, the conversation store, the networking and the reading pace |
 | [protocol](protocol) | ito-core's client API, copied at the commit in [protocol.pin](protocol.pin) |
 | [project.yml](project.yml) | The Xcode project, which XcodeGen generates |
 
@@ -41,6 +39,16 @@
 - **A session that stays live.** `Session` keeps the conversation current from the event stream:
   it resumes from the last event it applied, reconnects with backoff, the moment the network
   returns, and treats 45 seconds without even a ping as a lost connection.
+- **Reading at a person's pace.** `Reveal` shows a reply at a steady reading pace, catching up
+  when the screen falls more than a couple of seconds behind the server. `ReplyDocument` reads its
+  Markdown with Apple's [swift-markdown](https://github.com/swiftlang/swift-markdown) and keeps
+  where each run of text sits in the source, so text never reflows as it arrives, no `**` ever
+  flashes, and Stop can say exactly how much was on screen.
+- **The look.** A cool slate dark with soft white text and no accent colour. Ari writes in New
+  York, Apple's serif; you write in SF Pro, in a thin outline. Ari's presence is a small pebble of
+  bone-coloured dots with two eyes that follow what it's doing: up while thinking, aside while
+  searching, along the lines while writing, dimmed when the connection drops, and fading to a quiet
+  stone at rest. Colours live in the asset catalogue, ready for a light mode.
 - **Never lose a message.** Each message is saved on the device before it's sent, then sent one at
   a time, in order, with the same id until the server has it, even across a restart. Stop has its
   own lane, never behind a send or a reconnect, and Try again is safe to repeat.
@@ -55,7 +63,15 @@ xcodegen generate   # writes Ari.xcodeproj; run it again whenever project.yml ch
 open Ari.xcodeproj
 ```
 
-Ari runs in the Simulator and on your Mac as it is. To run it on your iPhone, copy
+Ari runs in the Simulator and on your Mac as it is. To try it without an agent, run ito-core's
+demo engine on the same Mac (`node bin/ito.ts serve --engine demo` in an
+[ito-core](https://github.com/akai-ito/ito-core) clone) and connect to `http://127.0.0.1:8787` with
+the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen,
+`ARI_SAY` sends a message once connected, and `ARI_STOP_AFTER` taps Stop that many seconds later,
+which is handy from `xcrun simctl launch` (prefix each with `SIMCTL_CHILD_`).
+
+To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
+the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy
 `Config/Local.xcconfig.example` to `Config/Local.xcconfig`, which git ignores, and set your Apple
 team there. If you sign with your own team, choose your own bundle identifier there too.
 

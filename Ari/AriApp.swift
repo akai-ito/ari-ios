@@ -1,10 +1,27 @@
+import AriKit
 import SwiftUI
 
 @main
 struct AriApp: App {
+    @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
-            PlaceholderView()
+            Group {
+                if let session = model.session {
+                    ConversationView(session: session, connectAgain: model.connectAgain)
+                } else {
+                    ConnectView(address: model.lastAddress, connected: model.connected)
+                }
+            }
+            .preferredColorScheme(.dark)
+            .tint(.ariText)
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                // On screen, the stream is live; off screen it closes, while a waiting message
+                // or a Stop still goes.
+                if phase == .active { model.session?.start() } else { model.session?.pause() }
+            }
         }
     }
 }
