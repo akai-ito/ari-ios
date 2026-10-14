@@ -160,6 +160,7 @@ struct OutlinedField<Content: View>: View {
                 .font(.caption)
                 .foregroundStyle(.ariTertiary)
             content
+                .textFieldStyle(.plain)
                 .font(.body)
                 .foregroundStyle(.ariText)
                 .padding(.horizontal, 16)

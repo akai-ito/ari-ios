@@ -5,7 +5,6 @@ extension Font {
     static let ariBody = Font.system(.body, design: .serif)
     static let ariStrong = Font.system(.body, design: .serif).weight(.semibold).monospacedDigit()
     static let ariName = Font.system(.headline, design: .serif)
-    static let ariNote = Font.system(.subheadline, design: .serif).italic()
     static let ariHeading = Font.system(.title3, design: .serif).weight(.semibold)
     static let code = Font.callout.monospaced()
 }
@@ -16,4 +15,6 @@ enum Rhythm {
     static let ariParagraphGap: CGFloat = 18
     static let listItemGap: CGFloat = 6
     static let messageGap: CGFloat = 16
+    /// The widest the conversation gets, for comfortable lines on a wide window.
+    static let column: CGFloat = 720
 }

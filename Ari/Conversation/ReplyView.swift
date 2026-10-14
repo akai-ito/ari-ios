@@ -1,13 +1,23 @@
 import AriKit
 import SwiftUI
 
-/// One of Ari's replies, drawn from its Markdown and revealed at reading pace. A block is laid out
+/// One of Ari's messages, drawn from its Markdown and revealed at reading pace. A block is laid out
 /// in full as soon as the reveal reaches it, with the unread rest transparent, so nothing ever
 /// reflows; the leading edge fades in over a few characters instead of ticking.
 struct ReplyView: View {
     let document: ReplyDocument
     /// How much is on screen, in source units; infinite once it's all shown.
     let position: Double
+    var tone = Tone.reply
+
+    /// A reply is Ari's answer, in its white serif. A note is what it says along the way, a little
+    /// quieter: grey italic serif.
+    enum Tone {
+        case reply, note
+
+        var color: Color { self == .reply ? .ariText : .ariSecondary }
+        var italic: Bool { self == .note }
+    }
 
     /// Characters over which the leading edge fades in.
     static let edge = 10.0
@@ -17,7 +27,7 @@ struct ReplyView: View {
             ForEach(document.blocks.indices, id: \.self) { index in
                 let block = document.blocks[index]
                 if position > Double(block.start) {
-                    BlockView(block: block, position: position)
+                    BlockView(block: block, position: position, tone: tone)
                         .padding(.top, index == 0 ? 0 : gap(before: index))
                 }
             }
@@ -33,12 +43,13 @@ struct ReplyView: View {
     }
 
     /// The runs as text, each character as visible as the reveal allows.
-    static func text(_ runs: [ReplyDocument.Run], position: Double, base: Font) -> AttributedString
-    {
+    static func text(
+        _ runs: [ReplyDocument.Run], position: Double, base: Font, tone: Tone = .reply
+    ) -> AttributedString {
         var result = AttributedString()
         for run in runs {
             var attributes = AttributeContainer()
-            attributes.font = font(for: run.style, base: base)
+            attributes.font = font(for: run.style, base: base, italic: tone.italic)
             if run.style.contains(.strikethrough) { attributes.strikethroughStyle = .single }
             if let link = run.link {
                 attributes.link = link
@@ -47,14 +58,14 @@ struct ReplyView: View {
             let fullyShown =
                 position == .infinity || Double(run.start + run.text.utf16.count) + edge <= position
             if fullyShown {
-                attributes.foregroundColor = .ariText
+                attributes.foregroundColor = tone.color
                 result += AttributedString(run.text, attributes: attributes)
                 continue
             }
             var offset = run.start
             for character in run.text {
                 let alpha = clamp((position - Double(offset)) / edge)
-                attributes.foregroundColor = Color.ariText.opacity(alpha)
+                attributes.foregroundColor = tone.color.opacity(alpha)
                 result += AttributedString(String(character), attributes: attributes)
                 offset += character.utf16.count
             }
@@ -62,10 +73,10 @@ struct ReplyView: View {
         return result
     }
 
-    private static func font(for style: ReplyDocument.Style, base: Font) -> Font {
+    private static func font(for style: ReplyDocument.Style, base: Font, italic: Bool) -> Font {
         if style.contains(.code) { return .code }
         var font = style.contains(.strong) ? Font.ariStrong : base
-        if style.contains(.emphasis) { font = font.italic() }
+        if style.contains(.emphasis) != italic { font = font.italic() }
         return font
     }
 }
@@ -73,6 +84,7 @@ struct ReplyView: View {
 private struct BlockView: View {
     let block: ReplyDocument.Block
     let position: Double
+    let tone: ReplyView.Tone
 
     var body: some View {
         content
@@ -89,9 +101,10 @@ private struct BlockView: View {
     private var content: some View {
         switch block.kind {
         case .paragraph:
-            item(Text(ReplyView.text(block.runs, position: position, base: .ariBody)))
+            item(Text(ReplyView.text(block.runs, position: position, base: .ariBody, tone: tone)))
         case .heading:
-            item(Text(ReplyView.text(block.runs, position: position, base: .ariHeading)))
+            item(
+                Text(ReplyView.text(block.runs, position: position, base: .ariHeading, tone: tone)))
         case .code(let language):
             CodeBlockView(
                 language: language, code: block.runs.first?.text ?? "",
@@ -103,7 +116,7 @@ private struct BlockView: View {
 
     @ViewBuilder
     private func item(_ text: Text) -> some View {
-        let text = text.lineSpacing(Rhythm.ariLineSpacing).foregroundStyle(.ariText)
+        let text = text.lineSpacing(Rhythm.ariLineSpacing).foregroundStyle(tone.color)
         if let marker = block.marker {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(marker)

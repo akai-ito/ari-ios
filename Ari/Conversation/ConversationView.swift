@@ -48,6 +48,9 @@ struct ConversationView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
                 .padding(.bottom, 24)
+                // A comfortable reading width on a wide Mac window.
+                .frame(maxWidth: Rhythm.column)
+                .frame(maxWidth: .infinity)
             }
             .scrollIndicators(.hidden)
             .scrollPosition($position)
@@ -76,6 +79,8 @@ struct ConversationView: View {
                 ProblemNotice(problem: problem, connectAgain: connectAgain)
             } else {
                 Composer(draft: $draft, role: role(working: working), send: send, stop: stop)
+                    .frame(maxWidth: Rhythm.column)
+                    .frame(maxWidth: .infinity)
             }
         }
         .background(.ariBackground)
@@ -121,11 +126,12 @@ struct ConversationView: View {
         let kind: Kind
     }
 
-    /// The conversation's shown messages, with the date at the start of each day.
+    /// The conversation's shown messages and Ari's notes along the way, with the date at the start
+    /// of each day.
     private func rows(_ conversation: Conversation) -> [Row] {
         var rows: [Row] = []
         var day: Date?
-        for entry in conversation.entries where entry.isShown {
+        for entry in conversation.entries where entry.isShown || Self.isNote(entry) {
             let date = entry.at?.date ?? .now
             if day.map({ !Calendar.current.isDate($0, inSameDayAs: date) }) ?? true {
                 rows.append(Row(id: "day \(entry.id)", kind: .day(date)))
@@ -156,7 +162,9 @@ struct ConversationView: View {
             let shown = reveal.position(of: entry)
             let position = shown >= Double(text.utf16.count) ? .infinity : shown
             VStack(alignment: .leading, spacing: 8) {
-                ReplyView(document: ReplyDocument(markdown: text), position: position)
+                ReplyView(
+                    document: ReplyDocument(markdown: text), position: position,
+                    tone: Self.isNote(entry) ? .note : .reply)
                 if position == .infinity { footer(for: entry, in: conversation) }
             }
             .contextMenu {
@@ -220,6 +228,11 @@ struct ConversationView: View {
             })
     }
 
+    /// What Ari says along the way, as against its answer.
+    private static func isNote(_ entry: Conversation.Entry) -> Bool {
+        entry.role == .agent && entry.kind == .note
+    }
+
     // MARK: - What you do
 
     private func role(working: Bool) -> Composer.Role {
@@ -265,9 +278,6 @@ struct ConversationView: View {
         let conversation = session.conversation
         if let turn = conversation.turn {
             if conversation.pendingStop != nil { return .status("Stopping", detail: nil) }
-            if let note = conversation.noteInProgress, !note.text.isEmpty {
-                return .note(StatusText.latestSentence(of: note.text))
-            }
             return turn.status.map { .status($0.label, detail: $0.detail) }
         }
         if revealing { return .status("Writing", detail: nil) }

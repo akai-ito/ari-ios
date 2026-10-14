@@ -17,6 +17,7 @@ struct Composer: View {
                 "", text: $draft, prompt: Text("Message Ari").foregroundStyle(.ariTertiary),
                 axis: .vertical
             )
+            .textFieldStyle(.plain)
             .lineLimit(1...6)
             .foregroundStyle(.ariText)
             .padding(.horizontal, 16)

@@ -114,16 +114,19 @@ private struct Reader {
         case let quote as BlockQuote:
             for child in quote.children { read(child, depth: depth, quoted: true) }
         case let table as Table:
-            // Tables are rare in replies: each row reads as a line of its cells.
-            for row in [Markup](table.head.children) + table.body.children.map({ $0 }) {
+            // On a phone a table reads best as one small block per row: its first cell in bold,
+            // each other cell on a line of its own. The header's labels are left out.
+            for row in table.body.rows {
                 var cells: [ReplyDocument.Run] = []
-                for (index, cell) in row.children.enumerated() {
-                    if index > 0 {
+                for (index, cell) in row.cells.enumerated() {
+                    let text = runs(in: cell, style: index == 0 ? .strong : [])
+                    guard !text.isEmpty else { continue }
+                    if !cells.isEmpty {
                         cells.append(
                             ReplyDocument.Run(
-                                text: "   ", style: [], link: nil, start: offset(of: cell)))
+                                text: "\n", style: [], link: nil, start: offset(of: cell)))
                     }
-                    cells += runs(in: cell)
+                    cells += text
                 }
                 add(.paragraph, runs: cells, at: row, depth: depth, quoted: quoted)
             }

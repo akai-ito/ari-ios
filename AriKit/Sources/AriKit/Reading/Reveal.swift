@@ -1,11 +1,12 @@
 import Foundation
 
-/// How much of each reply is on screen. Text is revealed at a steady reading pace, catching up when
-/// the screen falls behind what has arrived, so it's never more than a second or two back. A reply
-/// starts once the one before it is fully shown. A reply that was already finished, long enough
-/// ago, when Ari first saw it (history, a snapshot, one finished while Ari was away) shows at once.
+/// How much of each of the agent's messages (its replies, and its notes along the way) is on
+/// screen. Text is revealed at a steady reading pace, catching up when the screen falls behind what
+/// has arrived, so it's never more than a second or two back. A message starts once the one before
+/// it is fully shown. One that was already finished, long enough ago, when Ari first saw it
+/// (history, a snapshot, one finished while Ari was away) shows at once.
 ///
-/// It counts UTF-16 units of the reply's source, the unit of Stop's cut, and is a plain value the
+/// It counts UTF-16 units of the message's source, the unit of Stop's cut, and is a plain value the
 /// screen moves on with each frame.
 public struct Reveal: Sendable, Equatable {
     /// The steady reading pace, in units a second.
@@ -20,10 +21,10 @@ public struct Reveal: Sendable, Equatable {
 
     public init() {}
 
-    /// Whether the reveal paces this entry: the agent's replies. Your messages show at once, and
-    /// notes belong to the status line.
+    /// Whether the reveal paces this entry: the agent's replies and notes, in the order they
+    /// began. Your messages show at once.
     public static func paces(_ entry: Conversation.Entry) -> Bool {
-        entry.role == .agent && entry.kind == .reply
+        entry.role == .agent && (entry.kind == .reply || entry.kind == .note)
     }
 
     /// How much of `entry` is on screen, in source units: fractional, so the leading edge can fade

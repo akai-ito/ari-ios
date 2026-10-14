@@ -79,6 +79,29 @@ struct ReplyDocumentTests {
         #expect(fence?.runs.first?.text == "lsof -nP")
     }
 
+    @Test(
+        "a table reads as one block per row: its first cell bold, each other cell on its own line")
+    func table() {
+        let source = """
+            Here are two:
+
+            | Café | Where | Why |
+            | --- | --- | --- |
+            | **Prufrock Coffee** | 23–25 Leather Lane | Coffee first |
+            | WatchHouse | Seven Dials | Brunch |
+            """
+        let blocks = ReplyDocument(markdown: source).blocks
+        #expect(blocks.count == 3)
+        #expect(
+            blocks[1].runs.map(\.text) == [
+                "Prufrock Coffee", "\n", "23–25 Leather Lane", "\n", "Coffee first",
+            ])
+        #expect(blocks[1].runs.first?.style == .strong)
+        #expect(blocks[2].runs.first?.text == "WatchHouse")
+        #expect(blocks[2].runs.first?.style == .strong)
+        #expect(!blocks.contains { $0.runs.contains { $0.text == "Café" } })
+    }
+
     @Test("offsets count UTF-16 units, past emoji; numbered and nested lists; links")
     func offsetsAndStructure() {
         #expect(ReplyDocument(markdown: "🚲 **bike**").blocks.first?.runs.last?.start == 5)

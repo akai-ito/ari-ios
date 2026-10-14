@@ -5,28 +5,15 @@ import SwiftUI
 enum StatusText: Equatable {
     /// A status label, with its detail when it has one: "Searching the web · riverside cafés".
     case status(String, detail: String?)
-    /// The agent's note, as its latest sentence.
-    case note(String)
     /// Something about the connection or the turn, in Ari's grey: "Reconnecting", "Stopped".
     case quiet(String)
-
-    /// A note's latest sentence: notes can run to several, and the line has room for one.
-    static func latestSentence(of note: String) -> String {
-        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        var sentences: [String] = []
-        trimmed.enumerateSubstrings(in: trimmed.startIndex..., options: .bySentences) {
-            sentence, _, _, _ in
-            if let sentence { sentences.append(sentence.trimmingCharacters(in: .whitespaces)) }
-        }
-        return sentences.last(where: { !$0.isEmpty }) ?? trimmed
-    }
 
     /// Everything, for VoiceOver.
     var spoken: String {
         switch self {
         case .status(let label, let detail):
             [label, detail].compactMap(\.self).joined(separator: ", ")
-        case .note(let note), .quiet(let note): note
+        case .quiet(let text): text
         }
     }
 }
@@ -97,8 +84,6 @@ struct StatusLine: View {
             return Text(
                 "\(Text(label).foregroundStyle(.ariSecondary))\(Text("  ·  ").foregroundStyle(.ariTertiary))\(Text(detail).foregroundStyle(.ariTertiary))"
             )
-        case .note(let note):
-            return Text(note).font(.ariNote).foregroundStyle(.ariSecondary)
         case .quiet(let text):
             return Text(text).foregroundStyle(.ariTertiary)
         }
