@@ -16,6 +16,9 @@ struct ConversationView: View {
     // Scrolled by message, not by edge: scrolling to an edge also shifts the content sideways.
     @State private var position = ScrollPosition(idType: String.self)
     @State private var distanceFromEnd: CGFloat = 0
+    /// Whether the conversation follows what arrives. It does while you're at the end, stops once
+    /// you scroll up, and starts again when you come back to the end, send, or tap the pill.
+    @State private var following = true
     @State private var repliedWhileAway = false
     @State private var status: StatusText?
     @State private var statusSince = Date.distantPast
@@ -53,15 +56,35 @@ struct ConversationView: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollIndicators(.hidden)
+            // Drag the conversation down and the keyboard follows your finger away.
+            .scrollDismissesKeyboard(.interactively)
             .scrollPosition($position)
-            .defaultScrollAnchor(.bottom)
-            // At the end, the conversation follows what arrives; scrolled up, your place stays.
-            .defaultScrollAnchor(distanceFromEnd < 40 ? .bottom : .top, for: .sizeChanges)
+            // Anchored at the leading edge: a centred anchor can shift everything sideways when
+            // the composer grows or the keyboard moves.
+            .defaultScrollAnchor(.bottomLeading)
+            // Following, the end stays in view as the reply grows; scrolled up, your place stays.
+            .defaultScrollAnchor(following ? .bottomLeading : .topLeading, for: .sizeChanges)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, geometry.contentSize.height - geometry.visibleRect.maxY)
             } action: { _, distance in
                 distanceFromEnd = distance
-                if distance < 40 { repliedWhileAway = false }
+            }
+            // The anchor can slip while a row's height is still an estimate, so whenever the
+            // conversation grows while following, it also settles at the new end.
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentSize.height
+            } action: { old, new in
+                if following, new > old { scrollToEnd() }
+            }
+            // Scrolling yourself stops the following; coming to rest at the end starts it again.
+            .onScrollPhaseChange { _, phase in
+                switch phase {
+                case .tracking, .interacting: following = false
+                case .idle where distanceFromEnd < 40:
+                    following = true
+                    repliedWhileAway = false
+                default: break
+                }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 HeaderView(poses: poses, name: name, status: status)
@@ -98,7 +121,7 @@ struct ConversationView: View {
         .onChange(of: session.link, initial: true) { _, link in noticeLink(link) }
         .onChange(of: conversation.lastEndedTurn?.id) { _, _ in noticeEnd(conversation) }
         .onChange(of: working) { wasWorking, isWorking in
-            if wasWorking, !isWorking, distanceFromEnd >= 40 { repliedWhileAway = true }
+            if wasWorking, !isWorking, !following { repliedWhileAway = true }
         }
         .sheet(item: $sheet) { item in
             switch item {
@@ -107,7 +130,10 @@ struct ConversationView: View {
             }
         }
         #if DEBUG
-            .task { await DebugScript.run(in: session, stop: stop) }
+            .task {
+                if let draft = DebugScript.draft { self.draft = draft }
+                await DebugScript.run(in: session, stop: stop)
+            }
         #endif
     }
 
@@ -164,7 +190,7 @@ struct ConversationView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ReplyView(
                     document: ReplyDocument(markdown: text), position: position,
-                    tone: Self.isNote(entry) ? .note : .reply)
+                    tone: Self.isQuietNote(entry) ? .note : .reply)
                 if position == .infinity { footer(for: entry, in: conversation) }
             }
             .contextMenu {
@@ -233,6 +259,14 @@ struct ConversationView: View {
         entry.role == .agent && entry.kind == .note
     }
 
+    /// A note that's only progress ("Checking what people say."): one short line, set quieter.
+    /// A longer one, or one with lines of its own (a poem, a list, a result), is something you asked
+    /// for, so it reads like an answer.
+    private static func isQuietNote(_ entry: Conversation.Entry) -> Bool {
+        let text = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isNote(entry) && !text.contains("\n") && text.count <= 160
+    }
+
     // MARK: - What you do
 
     private func role(working: Bool) -> Composer.Role {
@@ -249,7 +283,11 @@ struct ConversationView: View {
 
     private func scrollToEnd() {
         guard let last = rows(session.conversation).last?.id else { return }
-        withAnimation(.smooth(duration: 0.5)) { position.scrollTo(id: last, anchor: .bottom) }
+        following = true
+        repliedWhileAway = false
+        withAnimation(.smooth(duration: 0.4)) {
+            position.scrollTo(id: last, anchor: .bottomLeading)
+        }
     }
 
     /// Stop names the message the server is still writing, at how much of it is on screen.
@@ -326,7 +364,7 @@ struct ConversationView: View {
     }
 
     private func pillText(working: Bool) -> String? {
-        guard distanceFromEnd >= 40 else { return nil }
+        guard !following, distanceFromEnd >= 40 else { return nil }
         if working { return "Ari is writing" }
         if repliedWhileAway { return "Ari has replied" }
         return distanceFromEnd > 600 ? "Latest" : nil
