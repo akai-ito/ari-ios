@@ -12,8 +12,9 @@ public struct Discovery: Sendable, Equatable, Decodable {
     }
 }
 
-/// `GET /v0/server`: the token is accepted, and this is who answered.
-public struct ServerInfo: Sendable, Equatable, Decodable {
+/// `GET /v0/server`: the token is accepted, and this is who answered. Ari keeps it, so it can open
+/// on the same server next time.
+public struct ServerInfo: Sendable, Equatable, Codable {
     /// The server's name, usually its host name.
     public let name: String
     /// The version of Ito it runs.
@@ -22,7 +23,7 @@ public struct ServerInfo: Sendable, Equatable, Decodable {
     public let protocolVersion: ProtocolVersion
     public let agent: Agent
 
-    public struct Agent: Sendable, Equatable, Decodable {
+    public struct Agent: Sendable, Equatable, Codable {
         /// What the agent is called; Ari until you choose another name.
         public let name: String
     }
