@@ -49,6 +49,11 @@ targets:
         "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphone*]": YES
         "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone[sdk=iphone*]": UIInterfaceOrientationPortrait
         ENABLE_PREVIEWS: YES
+        # Colours live in the asset catalogue; Xcode makes Color.ariBackground and the rest from it.
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Dark first: the light values come later, and then this goes.
+        "INFOPLIST_KEY_UIUserInterfaceStyle[sdk=iphone*]": Dark
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         # Only the Mac build turns these into entitlements; iOS ignores them.
