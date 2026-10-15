@@ -44,6 +44,11 @@
   Markdown with Apple's [swift-markdown](https://github.com/swiftlang/swift-markdown) and keeps
   where each run of text sits in the source, so text never reflows as it arrives, no `**` ever
   flashes, and Stop can say exactly how much was on screen.
+- **Ari's trail.** Between your message and Ari's answer, what it did along the way: each step on
+  a rail of the character's own dots, in plain words that change tense as it finishes, with Ari's
+  short notes where it wrote them. `Timeline` merges messages and steps by position, groups
+  similar steps ("Read 3 files"), and folds each run once the turn is over; tap a step to open
+  its specifics (the command and its output, the pages, the files, the plan) in place.
 - **The look.** A cool slate dark with soft white text and no accent colour. Ari writes in New
   York, Apple's serif; you write in SF Pro, in a thin outline. Ari's presence is a small pebble of
   bone-coloured dots with two eyes that follow what it's doing: up while thinking, aside while
@@ -67,8 +72,11 @@ Ari runs in the Simulator and on your Mac as it is. To try it without an agent, 
 demo engine on the same Mac (`node bin/ito.ts serve --engine demo` in an
 [ito-core](https://github.com/akai-ito/ito-core) clone) and connect to `http://127.0.0.1:8787` with
 the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen,
-`ARI_SAY` sends a message once connected, and `ARI_STOP_AFTER` taps Stop that many seconds later,
-which is handy from `xcrun simctl launch` (prefix each with `SIMCTL_CHILD_`).
+`ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
+`ARI_DRAFT` fills in the composer, and `ARI_OPEN_TRAIL` opens every step on the trail, which is
+handy from `xcrun simctl launch` (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
+makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
+and a timeout.
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy
