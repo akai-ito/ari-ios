@@ -17,6 +17,10 @@ struct ConversationView: View {
     @State private var reveal = Reveal()
     @State private var poses = PoseHistory()
     @State private var draft = ""
+    /// Photos and files on the message you're writing, uploading as you write.
+    @State private var attached: [PendingAttachment] = []
+    /// Something you picked that can't be attached, said for a few seconds.
+    @State private var attachProblem: String?
     @State private var sheet: SheetItem?
     /// The trail's runs and steps you've opened.
     @State private var opened: Set<String> = []
@@ -112,12 +116,34 @@ struct ConversationView: View {
             } else {
                 // While Ari waits for your answer, the composer takes it, as a secret if asked.
                 let asking = revealing ? nil : conversation.waitingAsk
+                let secret = asking?.secret ?? false
                 Composer(
                     draft: $draft, role: role(working: working, asking: asking != nil),
                     prompt: asking.map(Self.takesTypedAnswer) == true
                         ? "Answer Ari" : "Message Ari",
-                    secret: asking?.secret ?? false, send: send, stop: stop
-                )
+                    secret: secret, send: send, stop: stop
+                ) {
+                    // A secret answer is only ever typed.
+                    if !secret {
+                        AttachButton(
+                            room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
+                            problem: { attachProblem = $0 })
+                    }
+                } above: {
+                    if !attached.isEmpty {
+                        AttachedStrip(attached: attached, uploads: session.uploads, remove: detach)
+                    }
+                    if let attachProblem {
+                        Text(attachProblem)
+                            .font(.footnote)
+                            .foregroundStyle(.ariSecondary)
+                            .task(id: attachProblem) {
+                                try? await Task.sleep(for: .seconds(4))
+                                if !Task.isCancelled { self.attachProblem = nil }
+                            }
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: attached)
                 .frame(maxWidth: Rhythm.column)
                 .frame(maxWidth: .infinity)
             }
@@ -163,7 +189,17 @@ struct ConversationView: View {
         #if DEBUG
             .task {
                 if let draft = DebugScript.draft { self.draft = draft }
-                await DebugScript.run(in: session, stop: stop)
+                for url in DebugScript.attachments {
+                    if let attachment = try? await AttachmentMaker.file(at: url) {
+                        attach(attachment)
+                    }
+                }
+                await DebugScript.run(
+                    in: session,
+                    send: { message in
+                        draft = message
+                        send()
+                    }, stop: stop)
             }
         #endif
     }
@@ -225,7 +261,13 @@ struct ConversationView: View {
         case .yours(let entry):
             YourMessage(
                 text: entry.isSecret ? "••••••" : entry.text, tag: tag(for: entry, in: conversation)
-            )
+            ) {
+                if !entry.attachments.isEmpty {
+                    MessageAttachments(attachments: entry.attachments) {
+                        await session.bytes(of: $0)
+                    }
+                }
+            }
         case .ari(let entry):
             let text = conversation.visibleText(of: entry)
             let shown = reveal.position(of: entry)
@@ -309,8 +351,10 @@ struct ConversationView: View {
 
     // MARK: - What you do
 
-    private func role(working: Bool, asking: Bool) -> Composer.Role {
-        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .send }
+    private func role(working: Bool, asking: Bool) -> ComposerRole {
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty {
+            return anyRefused ? .idle : .send
+        }
         if working, session.conversation.pendingStop == nil { return .stop }
         // Stop while Ari waits for you cancels what it asked.
         return asking ? .stop : .idle
@@ -320,10 +364,33 @@ struct ConversationView: View {
     private func send() {
         let asking = session.conversation.waitingAsk
         let secret = asking?.secret ?? false
-        guard session.send(draft, answers: secret ? asking?.id : nil, secret: secret) != nil
+        guard !anyRefused,
+            session.send(
+                draft, answers: secret ? asking?.id : nil, secret: secret,
+                attachments: secret ? [] : attached.map(\.id)) != nil
         else { return }
         draft = ""
+        attached = []
         scrollToEnd()
+    }
+
+    /// A photo or file you picked: it starts uploading at once.
+    private func attach(_ attachment: PendingAttachment) {
+        guard attached.count < AttachmentMaker.mostPerMessage else { return }
+        attached.append(attachment)
+        session.attach(attachment)
+    }
+
+    private func detach(_ attachment: AttachmentID) {
+        attached.removeAll { $0.id == attachment }
+        session.detach(attachment)
+    }
+
+    /// An attachment the server refused holds the message until you take it off.
+    private var anyRefused: Bool {
+        attached.contains {
+            if case .refused = session.uploads[$0.id] { true } else { false }
+        }
     }
 
     /// Whether an ask takes a typed answer. Any message still answers it, but the composer only

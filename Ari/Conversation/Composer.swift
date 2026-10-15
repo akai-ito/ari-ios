@@ -1,9 +1,12 @@
 import SwiftUI
 
+/// Which action the composer's round button is.
+enum ComposerRole { case send, stop, idle }
+
 /// The composer: an outlined field and one round button, which is whichever action makes sense
-/// now. Send while you have text; Stop while Ari works and the field is empty; otherwise a dimmed
-/// Send.
-struct Composer: View {
+/// now. Send while you have something to send; Stop while Ari works and the field is empty;
+/// otherwise a dimmed Send. Beside the field, what attaches; above it, what's attached.
+struct Composer<Leading: View, Above: View>: View {
     @Binding var draft: String
     let role: Role
     /// What the empty field says: "Message Ari", or "Answer Ari" while Ari waits for you.
@@ -12,45 +15,72 @@ struct Composer: View {
     var secret = false
     let send: () -> Void
     let stop: () -> Void
+    let leading: Leading
+    let above: Above
 
-    enum Role { case send, stop, idle }
+    init(
+        draft: Binding<String>, role: ComposerRole, prompt: String = "Message Ari",
+        secret: Bool = false, send: @escaping () -> Void, stop: @escaping () -> Void,
+        @ViewBuilder leading: () -> Leading = { EmptyView() },
+        @ViewBuilder above: () -> Above = { EmptyView() }
+    ) {
+        _draft = draft
+        self.role = role
+        self.prompt = prompt
+        self.secret = secret
+        self.send = send
+        self.stop = stop
+        self.leading = leading()
+        self.above = above()
+    }
+
+    typealias Role = ComposerRole
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            field
-                .foregroundStyle(.ariText)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(.ariLine, lineWidth: 1)
-                )
-                #if os(macOS)
-                    .onSubmit(send)
-                #endif
-            Button(action: role == .stop ? stop : send) {
-                ZStack {
-                    if role == .send {
-                        Circle().fill(.ariText)
-                    } else {
-                        Circle().strokeBorder(.ariLine, lineWidth: 1)
-                    }
-                    Image(systemName: role == .stop ? "stop.fill" : "arrow.up")
-                        .font(.system(size: role == .stop ? 14 : 18, weight: .bold))
-                        .foregroundStyle(glyph)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .frame(width: 44, height: 44)
+        VStack(alignment: .leading, spacing: 8) {
+            above
+            HStack(alignment: .bottom, spacing: 10) {
+                leading
+                composerField
             }
-            .buttonStyle(.plain)
-            .disabled(role == .idle)
-            .keyboardShortcut(role == .stop ? .cancelAction : .defaultAction)
-            .accessibilityLabel(role == .stop ? "Stop" : "Send")
-            .animation(.smooth(duration: 0.3), value: role)
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private var composerField: some View {
+        field
+            .foregroundStyle(.ariText)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(.ariLine, lineWidth: 1)
+            )
+            #if os(macOS)
+                .onSubmit(send)
+            #endif
+        Button(action: role == .stop ? stop : send) {
+            ZStack {
+                if role == .send {
+                    Circle().fill(.ariText)
+                } else {
+                    Circle().strokeBorder(.ariLine, lineWidth: 1)
+                }
+                Image(systemName: role == .stop ? "stop.fill" : "arrow.up")
+                    .font(.system(size: role == .stop ? 14 : 18, weight: .bold))
+                    .foregroundStyle(glyph)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(role == .idle)
+        .keyboardShortcut(role == .stop ? .cancelAction : .defaultAction)
+        .accessibilityLabel(role == .stop ? "Stop" : "Send")
+        .animation(.smooth(duration: 0.3), value: role)
     }
 
     @ViewBuilder

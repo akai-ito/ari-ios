@@ -34,11 +34,18 @@
   confirms each.
 - **A first connection that names the problem.** `Connector` checks the address (HTTPS, or plain
   HTTP to this device only), that an Ito server answers, that it speaks Ari's protocol (and if not,
-  which side to update), and then the token. The token lives in the Keychain, on this device only,
-  and never prints in full: anything that logs it shows its last four characters.
+  which side to update), and then the token. Or it pairs: the short code `ito pair` shows, scanned
+  from its QR code, opened from the Camera as an `ito://pair` link, or typed, becomes a token of
+  this device's own. The token lives in the Keychain, on this device only, and never prints in
+  full: anything that logs it shows its last four characters.
 - **A session that stays live.** `Session` keeps the conversation current from the event stream:
   it resumes from the last event it applied, reconnects with backoff, the moment the network
   returns, and treats 45 seconds without even a ping as a lost connection.
+- **Photos and files.** An attachment starts uploading the moment you pick it, under an id Ari
+  makes, so a retry never makes a second copy, and it's saved beside the outbox until the server
+  has it. Photos go as JPEG, about 2048 pixels on the long edge, without their location. A message
+  waits for its attachments, and `AttachmentCache` keeps their bytes, so each is fetched at most
+  once.
 - **Reading at a person's pace.** `Reveal` shows a reply at a steady reading pace, catching up
   when the screen falls more than a couple of seconds behind the server. `ReplyDocument` reads its
   Markdown with Apple's [swift-markdown](https://github.com/swiftlang/swift-markdown) and keeps
@@ -80,8 +87,9 @@ demo engine on the same Mac (`node bin/ito.ts serve --engine demo` in an
 [ito-core](https://github.com/akai-ito/ito-core) clone) and connect to `http://127.0.0.1:8787` with
 the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen,
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
-`ARI_DRAFT` fills in the composer, `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_PLACE`
-opens a tab and `ARI_SETTINGS` opens Settings, which is
+`ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
+`ARI_OPEN_TRAIL` opens every step on the trail, `ARI_PLACE` opens a tab, `ARI_SETTINGS` opens
+Settings and `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is
 handy from `xcrun simctl launch` (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout.
@@ -119,6 +127,8 @@ which answers without an agent and prints a token on its first run; then:
 ```sh
 ITO_SERVER=http://127.0.0.1:8787 ITO_TOKEN=<token> swift test --package-path AriKit
 ```
+
+With `ITO_PAIRING_CODE` set to a fresh code from `node bin/ito.ts pair`, they pair too.
 
 ## The protocol
 

@@ -53,9 +53,11 @@ struct DayLabel: View {
 }
 
 /// Your message, in a thin outline.
-struct YourMessage: View {
+struct YourMessage<Attachments: View>: View {
     let text: String
     let tag: String?
+    /// Its photos and files, above the words.
+    @ViewBuilder var attachments: Attachments
 
     /// The tag on screen. "Sending" waits half a second first, so a message that goes at once
     /// doesn't flicker a tag in and out.
@@ -63,15 +65,19 @@ struct YourMessage: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Text(text)
-                .foregroundStyle(.ariText)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(
-                        .ariLine, lineWidth: 1)
-                )
-                .textSelection(.enabled)
+            attachments
+            // A message may be only photos.
+            if !text.isEmpty {
+                Text(text)
+                    .foregroundStyle(.ariText)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(
+                            .ariLine, lineWidth: 1)
+                    )
+                    .textSelection(.enabled)
+            }
             if let shown {
                 // Its own line, so it never sits on what comes next.
                 Tag(text: shown).padding(.trailing, 6).transition(.opacity)

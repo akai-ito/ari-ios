@@ -7,6 +7,7 @@ import Testing
 /// so CI runs only the deterministic levels. The demo engine answers any message; one containing
 /// "long" gives a long reply to stop, one containing "fail" fails, and "ask", "approve" and
 /// "secret" make it ask. They share the server's one conversation, so they run one at a time.
+/// `ITO_PAIRING_CODE`, a fresh code from `ito pair`, adds the pairing test.
 @MainActor
 @Suite("Against a running server", .enabled(if: LiveServer.isConfigured), .serialized)
 struct LiveServerTests {
@@ -89,6 +90,46 @@ struct LiveServerTests {
         #expect(entry.isSecret && entry.text.isEmpty && entry.delivery == .delivered)
     }
 
+    @Test("a photo and a file upload first, go with the message, and come back unchanged")
+    func attachments() async throws {
+        let live = try await LiveServer()
+        defer { live.close() }
+        let files = try Fixtures.protocolDirectory().appending(path: "transcripts/files")
+        let photo = PendingAttachment(
+            name: "riverside.jpg", mediaType: "image/jpeg",
+            bytes: try Data(contentsOf: files.appending(path: "riverside.jpg")))
+        let log = PendingAttachment(
+            name: "running-log.csv", mediaType: "text/csv",
+            bytes: try Data(contentsOf: files.appending(path: "running-log.csv")))
+        live.session.attach(photo)
+        live.session.attach(log)
+        let id = try #require(
+            live.session.send("What's in these?", attachments: [photo.id, log.id]))
+        let reply = try await live.until("a reply ends") { conversation in
+            LiveServer.reply(to: id, in: conversation).flatMap { $0.outcome == nil ? nil : $0 }
+        }
+        #expect(reply.outcome == .completed)
+        let sent = try #require(live.session.conversation[id])
+        #expect(sent.attachments.map(\.name) == ["riverside.jpg", "running-log.csv"])
+        #expect(sent.attachments.map(\.kind) == [.image, .file])
+        #expect(await live.session.bytes(of: photo.id) == photo.bytes)
+    }
+
+    @Test(
+        "a pairing code becomes a token of its own, once",
+        .enabled(if: LiveServer.pairingCode != nil))
+    func pairing() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let address = environment["ITO_SERVER"] ?? ""
+        let code = try #require(LiveServer.pairingCode)
+        let connection = try await Connector().pair(
+            address: address, code: code, deviceName: "Ari's tests")
+        #expect(connection.token.secret.hasPrefix("ito_"))
+        await #expect(throws: ConnectError.self) {
+            try await Connector().pair(address: address, code: code, deviceName: "Ari's tests")
+        }
+    }
+
     @Test("a failed turn can be tried again")
     func tryAgain() async throws {
         let live = try await LiveServer()
@@ -114,6 +155,11 @@ final class LiveServer {
     nonisolated static var isConfigured: Bool {
         ProcessInfo.processInfo.environment["ITO_SERVER"] != nil
             && ProcessInfo.processInfo.environment["ITO_TOKEN"] != nil
+    }
+
+    /// A fresh code from `ito pair`, for the pairing test.
+    nonisolated static var pairingCode: String? {
+        ProcessInfo.processInfo.environment["ITO_PAIRING_CODE"]
     }
 
     let session: Session

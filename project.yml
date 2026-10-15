@@ -48,6 +48,8 @@ targets:
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Ari
+        # Only to scan the QR code ito pair shows.
+        "INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphone*]": "Ari uses the camera to scan the pairing code your server shows."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         "INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphone*]": YES
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphone*]": YES
@@ -66,7 +68,18 @@ targets:
         # Only the Mac build turns these into entitlements; iOS ignores them.
         ENABLE_APP_SANDBOX: YES
         ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        # Files you pick to attach.
+        ENABLE_USER_SELECTED_FILES: readonly
         ENABLE_HARDENED_RUNTIME: YES
+    # ito://pair links, from the QR code ito pair shows: the Camera app opens them in Ari.
+    info:
+      path: Config/Ari-Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER).pair
+            CFBundleURLSchemes: [ito]
     scheme:
       testTargets:
         - package: AriKit/AriKitTests

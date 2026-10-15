@@ -14,12 +14,22 @@ struct AriApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if let session = model.session {
+                if let session = model.session, model.pairing == nil {
                     MainView(session: session, model: model)
                 } else {
-                    ConnectView(address: model.lastAddress, connected: model.connected)
+                    // A pairing link opened while connected pairs at once; Not now goes back.
+                    ConnectView(
+                        address: model.lastAddress, pairing: model.pairing,
+                        cancel: model.session == nil ? nil : { model.pairing = nil },
+                        connected: model.connected
+                    )
+                    .id(model.pairing?.code)
                 }
             }
+            .onOpenURL { model.open($0) }
+            #if DEBUG
+                .task { if let url = DebugScript.openURL { model.open(url) } }
+            #endif
             .preferredColorScheme(.dark)
             .tint(.ariText)
             .onChange(of: scenePhase, initial: true) { _, phase in

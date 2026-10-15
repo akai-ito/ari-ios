@@ -24,6 +24,9 @@ final class AppModel {
     var opening: MessageID?
     /// Whether the conversation is on screen here.
     private(set) var isLooking = false
+    /// A pairing link from `ito pair`'s QR code, opened from the Camera or another app, for the
+    /// connect screen to use.
+    var pairing: PairingLink?
 
     @ObservationIgnored let notifications = NotificationStore.forThisApp()
     @ObservationIgnored private var pushToken: String?
@@ -47,6 +50,7 @@ final class AppModel {
 
     /// The connect screen reached a server that accepted the token.
     func connected(_ connection: Connection) {
+        pairing = nil
         try? tokens.save(connection.token, for: connection.address)
         Saved(address: connection.address, server: connection.server).save(to: defaults)
         address = connection.address
@@ -56,6 +60,12 @@ final class AppModel {
         session = Self.session(for: connection)
         session?.start()
         registerDevice()
+    }
+
+    /// A link Ari was opened with: only pairing links, for now.
+    func open(_ url: URL) {
+        guard let link = Connector.pairing(from: url) else { return }
+        pairing = PairingLink(address: link.address, code: link.code)
     }
 
     /// Asks the server who it is again, so Settings shows what it runs now rather than what it ran
@@ -180,7 +190,7 @@ final class AppModel {
             (try? OutboxStore.applicationSupport(for: connection.address))
             ?? OutboxStore(
                 directory: FileManager.default.temporaryDirectory.appending(path: "Outbox"))
-        return Session(connection: connection, outbox: outbox)
+        return Session(connection: connection, outbox: outbox, cache: .forThisApp())
     }
 
     private struct Saved: Codable {

@@ -1,10 +1,15 @@
 import AriKit
 import SwiftUI
 
-/// The first connection: the server's address and the token `ito serve` printed. Every problem is
-/// named in plain words: an address Ari won't use, nothing answering, something that isn't Ito, a
-/// protocol mismatch (and which side to update), or a token the server didn't accept.
+/// The first connection: the server's address and either a pairing code from `ito pair` (scanned
+/// from its QR code, opened from the Camera, or typed) or a token. Every problem is named in plain
+/// words: an address Ari won't use, nothing answering, something that isn't Ito, a protocol
+/// mismatch (and which side to update), or a code or token the server didn't accept.
 struct ConnectView: View {
+    /// A pairing link to use at once, such as one the Camera opened.
+    var pairing: PairingLink?
+    /// Back to the conversation, when a pairing link brought you here from it.
+    var cancel: (() -> Void)?
     let connected: (Connection) -> Void
 
     @State private var address: String
@@ -13,12 +18,19 @@ struct ConnectView: View {
     @State private var reached: String?
     @State private var connecting = false
     @State private var poses = PoseHistory()
+    @State private var scanning = false
     @FocusState private var focus: Field?
 
     private enum Field { case address, token }
 
-    init(address: String, connected: @escaping (Connection) -> Void) {
-        _address = State(initialValue: address)
+    init(
+        address: String, pairing: PairingLink? = nil, cancel: (() -> Void)? = nil,
+        connected: @escaping (Connection) -> Void
+    ) {
+        _address = State(initialValue: pairing?.address ?? address)
+        _token = State(initialValue: pairing?.code ?? "")
+        self.pairing = pairing
+        self.cancel = cancel
         self.connected = connected
     }
 
@@ -47,8 +59,8 @@ struct ConnectView: View {
                         #endif
                         .autocorrectionDisabled()
                 }
-                OutlinedField(title: "Token") {
-                    SecureField("", text: $token, prompt: prompt("The token ito serve printed"))
+                OutlinedField(title: "Pairing code or token") {
+                    SecureField("", text: $token, prompt: prompt("From ito pair, or a token"))
                         .focused($focus, equals: .token)
                         .submitLabel(.go)
                         .onSubmit(connect)
@@ -72,6 +84,22 @@ struct ConnectView: View {
             .buttonStyle(.plain)
             .disabled(connecting || address.isEmpty || token.isEmpty)
             .opacity(address.isEmpty || token.isEmpty ? 0.5 : 1)
+            #if os(iOS)
+                if CodeScanner.isAvailable {
+                    Button("Scan the code from ito pair", systemImage: "qrcode.viewfinder") {
+                        scanning = true
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.ariSecondary)
+                    .buttonStyle(.plain)
+                }
+            #endif
+            if let cancel {
+                Button("Not now", action: cancel)
+                    .font(.subheadline)
+                    .foregroundStyle(.ariSecondary)
+                    .buttonStyle(.plain)
+            }
             Spacer()
             Text("Ari speaks protocol \(ProtocolVersion.supported.description)")
                 .font(.caption)
@@ -82,6 +110,27 @@ struct ConnectView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ariBackground)
         .animation(.easeInOut(duration: 0.25), value: problem)
+        // A whole pairing link pasted as the address carries its code with it.
+        .onChange(of: address) { _, text in
+            guard let link = URL(string: text.trimmingCharacters(in: .whitespaces)),
+                let pairing = Connector.pairing(from: link)
+            else { return }
+            use(PairingLink(address: pairing.address, code: pairing.code))
+        }
+        .task {
+            if let pairing { use(pairing) }
+        }
+        #if os(iOS)
+            .sheet(isPresented: $scanning) {
+                ScanSheet { text in
+                    guard let link = URL(string: text), let pairing = Connector.pairing(from: link)
+                    else { return false }
+                    scanning = false
+                    use(PairingLink(address: pairing.address, code: pairing.code))
+                    return true
+                }
+            }
+        #endif
         #if DEBUG
             .task {
                 guard let debug = DebugScript.connection else { return }
@@ -96,14 +145,26 @@ struct ConnectView: View {
         Text(text).foregroundStyle(.ariTertiary)
     }
 
+    private func use(_ pairing: PairingLink) {
+        address = pairing.address
+        token = pairing.code
+        connect()
+    }
+
     private func connect() {
         guard !connecting, !address.isEmpty, !token.isEmpty else { return }
         connecting = true
         problem = nil
         poses.set(.thinking)
+        let secret = token.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
-                let connection = try await Connector().connect(to: address, token: Token(token))
+                // A short code from ito pair becomes a token of this device's own.
+                let connection =
+                    Connector.isPairingCode(secret)
+                    ? try await Connector().pair(
+                        address: address, code: secret, deviceName: Self.deviceName)
+                    : try await Connector().connect(to: address, token: Token(secret))
                 let server = connection.server
                 reached =
                     "Reached Ito \(server.version) on \(server.name) · protocol \(server.protocolVersion)"
@@ -140,6 +201,9 @@ struct ConnectView: View {
             case .server:
                 "This server speaks an older protocol than Ari. Update Ito on your server."
             }
+        case .pairingCodeRejected(let refusal):
+            [refusal?.message, refusal?.detail].compactMap(\.self).joined(separator: " ").nonEmpty
+                ?? "That pairing code has expired or was already used. Run ito pair for a new one."
         case .tokenRejected(let refusal):
             refusal?.message
                 ?? "The server didn't accept that token. Check it, or make a new one with ito token new."
@@ -147,6 +211,27 @@ struct ConnectView: View {
             refusal?.message ?? "The server refused, with status \(status)."
         }
     }
+}
+
+extension ConnectView {
+    /// What the server calls this device in its list of paired devices.
+    fileprivate static var deviceName: String {
+        #if os(iOS)
+            UIDevice.current.name
+        #else
+            Host.current().localizedName ?? "Mac"
+        #endif
+    }
+}
+
+/// The address and code from `ito pair`'s QR code: `ito://pair?address=…&code=…`.
+struct PairingLink: Equatable, Sendable {
+    let address: String
+    let code: String
+}
+
+extension String {
+    fileprivate var nonEmpty: String? { isEmpty ? nil : self }
 }
 
 /// A field in a thin outline, with its name above it.
