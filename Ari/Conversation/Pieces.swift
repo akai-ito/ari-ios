@@ -68,7 +68,9 @@ struct YourMessage: View {
             )
             .overlay(alignment: .bottomTrailing) {
                 if let tag {
-                    Tag(text: tag).padding(.trailing, 6).offset(y: 18).transition(.opacity)
+                    // Its own width, even under a short message such as a code's dots.
+                    Tag(text: tag).fixedSize().padding(.trailing, 6).offset(y: 18)
+                        .transition(.opacity)
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: tag)

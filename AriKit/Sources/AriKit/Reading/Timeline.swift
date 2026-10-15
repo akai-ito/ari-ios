@@ -4,9 +4,10 @@ import Foundation
 /// trail of what Ari did along the way. Messages and steps are merged by position, so each step sits
 /// exactly where it happened.
 ///
-/// A trail holds runs of steps and Ari's short notes. A note long enough to read as an answer (a
-/// poem, a list) stands as a message of its own, and the trail carries on after it. While its turn
-/// runs, a trail shows each step; once the turn is over, each run of lines folds into one. A
+/// A trail holds runs of steps, Ari's short notes, and what it asks you. A note long enough to read
+/// as an answer (a poem, a list) stands as a message of its own, and the trail carries on after it.
+/// While its turn runs, or while its ask waits for you, a trail shows each step; once it's over,
+/// each run of lines folds into one. A
 /// step waits until the note or reply before it is fully on screen, so it never appears under
 /// half-shown text.
 public struct Timeline: Equatable, Sendable {
@@ -27,6 +28,7 @@ public struct Timeline: Equatable, Sendable {
 
     public init(_ conversation: Conversation, reveal: Reveal, at now: Date = .now) {
         let liveTurn = conversation.turn?.id
+        let waiting = conversation.waitingAsk?.id
         // The first of Ari's messages still being revealed: steps after it wait.
         let held = conversation.entries.first {
             Reveal.paces($0) && $0.position != nil
@@ -37,7 +39,9 @@ public struct Timeline: Equatable, Sendable {
         var trail: Trail?
         func close() {
             if let finished = trail, !finished.parts.isEmpty {
-                items.append(.trail(finished.folding(live: finished.turn == liveTurn)))
+                // A trail whose ask waits stays open, so you can see why Ari is asking.
+                let live = finished.turn == liveTurn || finished.asks.contains { $0.id == waiting }
+                items.append(.trail(finished.folding(live: live)))
             }
             trail = nil
         }
@@ -61,6 +65,9 @@ public struct Timeline: Equatable, Sendable {
                     continue
                 }
                 add(.step(step), turn: step.turn)
+            case .ask(let ask):
+                guard held.map({ ask.position < $0 }) ?? true else { continue }
+                add(.ask(ask), turn: ask.turn)
             }
         }
         close()
@@ -94,31 +101,24 @@ public struct Timeline: Equatable, Sendable {
     private enum Piece {
         case entry(Conversation.Entry)
         case step(Step)
+        case ask(Ask)
 
-        var position: Int? {
+        var position: Int {
             switch self {
-            case .entry(let entry): entry.position
+            case .entry(let entry): entry.position ?? .max
             case .step(let step): step.position
+            case .ask(let ask): ask.position
             }
         }
     }
 
-    /// Entries and steps in one order. Your messages the server hasn't placed yet come last.
+    /// Entries, steps and asks in one order. Your messages the server hasn't placed yet come last.
     private static func merged(_ conversation: Conversation) -> [Piece] {
-        let placed = conversation.entries.filter { $0.position != nil }
-        let waiting = conversation.entries.filter { $0.position == nil }
-        var pieces: [Piece] = []
-        var steps = conversation.steps[...]
-        for entry in placed {
-            while let step = steps.first, step.position < entry.position ?? .max {
-                pieces.append(.step(step))
-                steps = steps.dropFirst()
-            }
-            pieces.append(.entry(entry))
-        }
-        pieces += steps.map(Piece.step)
-        pieces += waiting.map(Piece.entry)
-        return pieces
+        let placed =
+            conversation.entries.filter { $0.position != nil }.map(Piece.entry)
+            + conversation.steps.map(Piece.step) + conversation.asks.map(Piece.ask)
+        let waiting = conversation.entries.filter { $0.position == nil }.map(Piece.entry)
+        return placed.sorted { $0.position < $1.position } + waiting
     }
 }
 
@@ -132,18 +132,27 @@ public struct Trail: Equatable, Sendable, Identifiable {
     public enum Part: Equatable, Sendable, Identifiable {
         case note(Conversation.Entry)
         case steps(StepRun)
+        /// Something Ari asked you, waiting or settled.
+        case ask(Ask)
 
         public var id: String {
             switch self {
             case .note(let entry): entry.id.rawValue
             case .steps(let run): run.id
+            case .ask(let ask): ask.id.rawValue
             }
         }
+    }
+
+    /// What Ari asked along this trail.
+    var asks: [Ask] {
+        parts.compactMap { if case .ask(let ask) = $0 { ask } else { nil } }
     }
 
     enum Added {
         case note(Conversation.Entry)
         case step(Step)
+        case ask(Ask)
     }
 
     init(turn: TurnID) {
@@ -154,6 +163,8 @@ public struct Trail: Equatable, Sendable, Identifiable {
         switch part {
         case .note(let entry):
             parts.append(.note(entry))
+        case .ask(let ask):
+            parts.append(.ask(ask))
         case .step(let step):
             if case .steps(var run) = parts.last {
                 run.add(step, live: live)
