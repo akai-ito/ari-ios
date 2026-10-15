@@ -97,7 +97,7 @@ struct ConnectorTests {
 
     @Test("a protocol mismatch says which side to update")
     func mismatch() async throws {
-        for (versions, side) in [(#"["0.3"]"#, ProtocolMismatch.Side.ari), (#"["0.1"]"#, .server)] {
+        for (versions, side) in [(#"["0.4"]"#, ProtocolMismatch.Side.ari), (#"["0.2"]"#, .server)] {
             let server = ScriptedServer()
             let discovering = Task {
                 try await Connector(transport: server).discover("studio.example")

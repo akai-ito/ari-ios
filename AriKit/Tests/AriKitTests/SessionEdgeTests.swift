@@ -127,7 +127,7 @@ struct SessionEdgeTests {
         defer { bench.close() }
         bench.session.start()
         _ = try await bench.nextRequest()
-        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.3"])
+        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.4"])
         await bench.settle()
 
         guard case .protocolMismatch(let mismatch) = bench.session.problem else {

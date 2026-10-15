@@ -5,7 +5,7 @@ public struct ProtocolVersion: Hashable, Sendable, Comparable, CustomStringConve
     public let minor: Int
 
     /// The version this build of Ari speaks.
-    public static let supported = ProtocolVersion(major: 0, minor: 2)
+    public static let supported = ProtocolVersion(major: 0, minor: 3)
 
     public init(major: Int, minor: Int) {
         self.major = major

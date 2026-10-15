@@ -41,15 +41,20 @@ struct ProtocolDecodingTests {
                 case .send:
                     let sent = try #require(request.body).decode(SendMessage.self)
                     let result = try body.decode(MessageResult.self)
-                    #expect(
-                        result.message.id == sent.id && result.message.text == sent.text, "\(place)"
-                    )
+                    // A secret answer comes back with no text at all.
+                    let text = result.message.secret == true ? "" : sent.text
+                    #expect(result.message.id == sent.id && result.message.text == text, "\(place)")
                 case .earlierMessages:
                     #expect(try !body.decode(MessagePage.self).messages.isEmpty, "\(place)")
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
                 case .retry(let turn):
                     #expect(try body.decode(RetryResult.self).retryOf == turn, "\(place)")
+                case .cancelAsk(let ask):
+                    #expect(try body.decode(AskResult.self).ask.id == ask, "\(place)")
+                case .device, .presence:
+                    // Read with notifications.
+                    continue
                 case .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -70,12 +75,15 @@ struct ProtocolDecodingTests {
             switch request.route {
             case .send:
                 let message = try body.decode(SendMessage.self)
-                #expect(
-                    try JSONValue(encoding: SendMessage(id: message.id, text: message.text))
-                        == body, "\(place)")
+                let encoded = SendMessage(
+                    id: message.id, text: message.text, answers: message.answers)
+                #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .stop:
                 let stop = try body.decode(StopTurn.self)
                 #expect(try JSONValue(encoding: StopTurn(cut: stop.cut)) == body, "\(place)")
+            case .device, .presence:
+                // Encoded with notifications.
+                continue
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -96,7 +104,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 3) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 4) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
@@ -121,6 +129,8 @@ extension Event.Payload {
         case .stepStarted: "step.started"
         case .stepUpdated: "step.updated"
         case .stepEnded: "step.ended"
+        case .askStarted: "ask.started"
+        case .askEnded: "ask.ended"
         case .messageStarted: "message.started"
         case .messageDelta: "message.delta"
         case .messageEnded: "message.ended"

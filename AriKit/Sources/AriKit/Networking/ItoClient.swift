@@ -43,6 +43,11 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/turns/\(Self.segment(turn.rawValue))/retry"))
     }
 
+    /// `POST /v0/asks/{ask}/cancel`: what Stop does while an ask waits. Repeating it is safe.
+    public func cancelAsk(_ ask: AskID) async throws(RequestError) -> AskResult {
+        try await call(HTTPRequest(.post, "/v0/asks/\(Self.segment(ask.rawValue))/cancel"))
+    }
+
     /// `GET /v0/messages?before=…&limit=…`: older messages, oldest first.
     public func messages(before oldest: MessageID, limit: Int) async throws(RequestError)
         -> MessagePage
