@@ -57,26 +57,35 @@ struct YourMessage: View {
     let text: String
     let tag: String?
 
+    /// The tag on screen. "Sending" waits half a second first, so a message that goes at once
+    /// doesn't flicker a tag in and out.
+    @State private var shown: String?
+
     var body: some View {
-        Text(text)
-            .foregroundStyle(.ariText)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(
-                    .ariLine, lineWidth: 1)
-            )
-            .overlay(alignment: .bottomTrailing) {
-                if let tag {
-                    // Its own width, even under a short message such as a code's dots.
-                    Tag(text: tag).fixedSize().padding(.trailing, 6).offset(y: 18)
-                        .transition(.opacity)
-                }
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(text)
+                .foregroundStyle(.ariText)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(
+                        .ariLine, lineWidth: 1)
+                )
+                .textSelection(.enabled)
+            if let shown {
+                // Its own line, so it never sits on what comes next.
+                Tag(text: shown).padding(.trailing, 6).transition(.opacity)
             }
-            .animation(.easeInOut(duration: 0.3), value: tag)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.leading, 52)
-            .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.leading, 52)
+        .task(id: tag) {
+            if tag == "Sending", shown == nil {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+            }
+            withAnimation(.easeInOut(duration: 0.3)) { shown = tag }
+        }
     }
 }
 
@@ -165,19 +174,60 @@ struct SelectTextSheet: View {
     let text: String
 
     var body: some View {
-        ScrollView {
-            Text(text)
-                .font(.ariBody)
-                .lineSpacing(Rhythm.ariLineSpacing)
-                .foregroundStyle(.ariText)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(22)
+        let plain = ReplyDocument(markdown: text).plainText
+        Group {
+            #if os(iOS)
+                // SwiftUI's text on iPhone can only be copied whole; a text view lets you pick words.
+                SelectableText(text: plain)
+            #else
+                ScrollView {
+                    Text(plain)
+                        .font(.ariBody)
+                        .lineSpacing(Rhythm.ariLineSpacing)
+                        .foregroundStyle(.ariText)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(22)
+                }
+            #endif
         }
         .presentationDetents([.medium, .large])
         .presentationBackground(.ariSurface)
     }
 }
+
+#if os(iOS)
+    /// Read-only text you can select any part of, in Ari's serif.
+    private struct SelectableText: UIViewRepresentable {
+        let text: String
+
+        func makeUIView(context: Context) -> UITextView {
+            let view = UITextView()
+            view.isEditable = false
+            view.isSelectable = true
+            view.backgroundColor = .clear
+            view.textContainerInset = UIEdgeInsets(top: 22, left: 18, bottom: 22, right: 18)
+            view.adjustsFontForContentSizeCategory = true
+            return view
+        }
+
+        func updateUIView(_ view: UITextView, context: Context) {
+            let body = UIFont.preferredFont(forTextStyle: .body)
+            let serif = body.fontDescriptor.withDesign(.serif).map {
+                UIFont(descriptor: $0, size: 0)
+            }
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineSpacing = Rhythm.ariLineSpacing
+            paragraph.paragraphSpacing = 10
+            view.attributedText = NSAttributedString(
+                string: text,
+                attributes: [
+                    .font: UIFontMetrics(forTextStyle: .body).scaledFont(for: serif ?? body),
+                    .foregroundColor: UIColor(Color.ariText), .paragraphStyle: paragraph,
+                ])
+        }
+    }
+#endif
 
 /// Something a sheet shows: a failure's details, or a reply to select from.
 enum SheetItem: Identifiable {
@@ -189,5 +239,18 @@ enum SheetItem: Identifiable {
         case .details(let error): "details \(error.code.rawValue) \(error.message)"
         case .selecting(let text): "selecting \(text)"
         }
+    }
+}
+
+/// The opening of a reply, on its own card, for the long-press menu's preview.
+struct ReplyPreview: View {
+    let text: String
+
+    var body: some View {
+        let opening = text.count > 700 ? String(text.prefix(700)) + "…" : text
+        ReplyView(document: ReplyDocument(markdown: opening), position: .infinity)
+            .padding(18)
+            .frame(width: 340, alignment: .leading)
+            .background(.ariBackground)
     }
 }

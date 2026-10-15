@@ -107,7 +107,8 @@ struct ConversationView: View {
                 let asking = revealing ? nil : conversation.waitingAsk
                 Composer(
                     draft: $draft, role: role(working: working, asking: asking != nil),
-                    prompt: asking == nil ? "Message Ari" : "Answer Ari",
+                    prompt: asking.map(Self.takesTypedAnswer) == true
+                        ? "Answer Ari" : "Message Ari",
                     secret: asking?.secret ?? false, send: send, stop: stop
                 )
                 .frame(maxWidth: Rhythm.column)
@@ -216,6 +217,9 @@ struct ConversationView: View {
                     sheet = .selecting(entry.text)
                 }
                 ShareLink(item: entry.text)
+            } preview: {
+                // A long reply lifted whole would cover the screen, so the menu shows its opening.
+                ReplyPreview(text: entry.text)
             }
         case .trail(let trail):
             TrailView(
@@ -293,6 +297,12 @@ struct ConversationView: View {
         else { return }
         draft = ""
         scrollToEnd()
+    }
+
+    /// Whether an ask takes a typed answer. Any message still answers it, but the composer only
+    /// invites one when the ask does.
+    private static func takesTypedAnswer(_ ask: Ask) -> Bool {
+        ask.allowsText || ask.options.isEmpty || ask.secret
     }
 
     /// You tapped one of an ask's options: its label is your answer.

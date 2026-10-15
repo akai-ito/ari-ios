@@ -239,3 +239,22 @@ private struct SourceMap {
         return min(length, starts[number - 1] + String(decoding: bytes, as: UTF8.self).utf16.count)
     }
 }
+
+extension ReplyDocument {
+    /// The reply as you read it, without Markdown: paragraphs apart, list items on their own lines
+    /// under their markers, links as their words. For selecting and sharing text.
+    public var plainText: String {
+        var result = ""
+        var previous: Block?
+        for block in blocks {
+            let text = block.kind == .rule ? "———" : block.runs.map(\.text).joined()
+            let indent = String(repeating: "    ", count: max(0, block.depth - 1))
+            if let previous {
+                result += previous.marker != nil && block.marker != nil ? "\n" : "\n\n"
+            }
+            result += indent + (block.marker.map { "\($0) " } ?? "") + text
+            previous = block
+        }
+        return result
+    }
+}

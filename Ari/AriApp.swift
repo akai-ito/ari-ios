@@ -20,7 +20,12 @@ struct AriApp: App {
             .onChange(of: scenePhase, initial: true) { _, phase in
                 // On screen, the stream is live; off screen it closes, while a waiting message
                 // or a Stop still goes.
-                if phase == .active { model.session?.start() } else { model.session?.pause() }
+                if phase == .active {
+                    model.session?.start()
+                    model.refreshServer()
+                } else {
+                    model.session?.pause()
+                }
             }
         }
     }

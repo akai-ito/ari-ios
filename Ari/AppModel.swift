@@ -41,6 +41,18 @@ final class AppModel {
         session?.start()
     }
 
+    /// Asks the server who it is again, so Settings shows what it runs now rather than what it ran
+    /// when you first connected.
+    func refreshServer() {
+        guard let address, let token = try? tokens.token(for: address) else { return }
+        let client = ItoClient(address: address, token: token, transport: URLSessionTransport())
+        Task {
+            guard let info = try? await client.server(), info != server else { return }
+            server = info
+            Saved(address: address, server: info).save(to: defaults)
+        }
+    }
+
     /// Back to the connect screen, forgetting the token, as when the server stopped accepting it.
     func connectAgain() {
         if let address { try? tokens.delete(for: address) }
