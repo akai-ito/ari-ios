@@ -52,7 +52,9 @@ struct MainView: View {
         // A tab bar on iPhone, a sidebar on the Mac.
         .tabViewStyle(.sidebarAdaptable)
         #if os(iOS)
-            .tabBarMinimizeBehavior(.onScrollDown)
+            // Always in full: a shrunk tab bar left a lone button under the composer, and the
+            // composer can't ride in the tab bar's accessory, which hides with the keyboard.
+            .tabBarMinimizeBehavior(.never)
         #endif
         .sheet(isPresented: $showsSettings) {
             SettingsView(model: model, session: session)
