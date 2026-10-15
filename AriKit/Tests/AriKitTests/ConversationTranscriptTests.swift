@@ -311,6 +311,18 @@ struct ConversationTranscriptTests {
         #expect(turn.map(\.id).prefix(2) == ["s_0002_84756", plan])
     }
 
+    @Test("Scenario 17: a gap report is a tool step that links to its issue")
+    func reportingAGap() throws {
+        var replay = Replay(try Fixtures.transcript("17-reporting-a-gap"))
+        try replay.play()
+        // The page that wouldn't load still ran, so it completed, with its exit code.
+        let fetch = try #require(replay.conversation[step: "s_0003_94980"])
+        #expect(fetch.outcome == .completed && fetch.exitCode == 22)
+        let report = try #require(replay.conversation[step: "s_0004_29982"])
+        #expect(report.kind == .tool && report.title == "Reported it to Ito")
+        #expect(report.url == "https://github.com/akai-ito/ito-core/issues/42")
+    }
+
     private func visible(_ id: MessageID, in replay: Replay) throws -> String {
         replay.conversation.visibleText(of: try #require(replay.conversation[id]))
     }
@@ -493,6 +505,13 @@ extension ConversationTranscriptTests {
             saturdayReply("m_0003_11459"),
             you("835616aa-d801-4a42-a976-cd02a6569b27", "And Sunday?"),
             reply("m_0004_67083", 0, "", .failed),
+        ],
+        "17-reporting-a-gap": [
+            you("61fffc2c-5f33-47dc-b94a-55c3dc0b0969", bike), bikeReply("m_0001_85723"),
+            you(
+                "ccb15bb0-ea37-49ed-9d33-d215acfcf881",
+                "What time does the Battersea parkrun start?"),
+            reply("m_0002_17163", 140, "Check the page before you go."),
         ],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),

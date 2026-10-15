@@ -253,7 +253,7 @@ private struct StepDetails: View {
         case .webSearch: return step.query != nil || step.queries != nil || step.url != nil
         case .command: return step.command != nil
         case .fileChange: return !(step.files ?? []).isEmpty
-        case .tool: return step.capability != nil || step.arguments != nil
+        case .tool: return step.capability != nil || step.arguments != nil || step.url != nil
         case .plan: return !(step.items ?? []).isEmpty
         case .imageView: return step.path != nil
         default: return false
@@ -299,6 +299,8 @@ private struct StepDetails: View {
         case .tool:
             Caption([step.capability, step.operation].compactMap { $0 }.joined(separator: " · "))
             if let arguments = step.arguments { CodeBox(text: arguments) }
+            // What the tool made, such as the issue a gap report filed.
+            if let url = step.url { WebLink(title: nil, address: url) }
         case .plan:
             if let explanation = step.explanation { Caption(explanation) }
             PlanChecklist(items: step.items ?? [])
@@ -407,12 +409,24 @@ private struct WebLink: View {
             Link(destination: url) {
                 VStack(alignment: .leading, spacing: 1) {
                     if let title { Text(title).font(.caption).foregroundStyle(.ariText) }
-                    Text(url.host() ?? address).font(.caption).foregroundStyle(.ariTertiary)
+                    Text(Self.label(url) ?? address).font(.caption).foregroundStyle(.ariTertiary)
                 }
             }
         } else {
             Caption(address)
         }
+    }
+}
+
+extension WebLink {
+    /// Where a link goes, briefly: "akai-ito/ito-core #42" for a GitHub issue or pull request,
+    /// otherwise the site.
+    static func label(_ url: URL) -> String? {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        if url.host() == "github.com", parts.count == 4, ["issues", "pull"].contains(parts[2]) {
+            return "\(parts[0])/\(parts[1]) #\(parts[3])"
+        }
+        return url.host()
     }
 }
 
