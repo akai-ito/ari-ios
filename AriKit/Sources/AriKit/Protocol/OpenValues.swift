@@ -116,6 +116,9 @@ public struct ErrorCode: OpenValue {
     public static let notFound = ErrorCode(rawValue: "not_found")
     public static let idConflict = ErrorCode(rawValue: "id_conflict")
     public static let tooLarge = ErrorCode(rawValue: "too_large")
+    /// A message names an attachment the server doesn't have, as when an upload waited more than a
+    /// day for its message: upload it again, under the same id, and send again.
+    public static let attachmentMissing = ErrorCode(rawValue: "attachment_missing")
     public static let slowDown = ErrorCode(rawValue: "slow_down")
     public static let unavailable = ErrorCode(rawValue: "unavailable")
     // Either.

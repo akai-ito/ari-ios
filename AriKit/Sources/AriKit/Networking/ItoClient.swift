@@ -55,9 +55,11 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     ) async throws(RequestError) -> AttachmentResult {
         var query = URLComponents()
         query.queryItems = [URLQueryItem(name: "name", value: name)]
+        // A query's + reads as a space on the server, so it's sent encoded.
+        let encoded = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         let path =
             "/v0/attachments/\(Self.segment(attachment.rawValue))"
-            + (query.percentEncodedQuery.map { "?" + $0 } ?? "")
+            + (encoded.map { "?" + $0 } ?? "")
         return try await call(
             HTTPRequest(.put, path, headers: ["Content-Type": mediaType], body: bytes),
             contentType: mediaType)

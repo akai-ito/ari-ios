@@ -282,6 +282,65 @@ struct SessionEdgeTests {
         #expect(Set(paths) == ["/v0/events", "/v0/attachments/\(photo.id)?name=riverside.jpg"])
     }
 
+    @Test("A photo the server no longer has goes again, under the same id, then the message")
+    func photoGoneOvernight() async throws {
+        let bench = try await live()
+        defer { bench.close() }
+        bench.session.attach(photo)
+        let id = try #require(
+            bench.session.send(
+                "Look", id: "6a1d2c38-0f1e-4c5b-9d1f-2b7e4b1c9a10", attachments: [photo.id]))
+        let upload = try await bench.nextRequest()
+        try await bench.server.answer(201, json: uploaded(photo))
+        _ = try await bench.nextRequest()
+        let missing =
+            #"{"error":{"code":"attachment_missing","message":"Upload every attachment before sending."}}"#
+        try await bench.server.answer(400, json: missing)
+
+        let again = try await bench.nextRequest()
+        #expect(again.path == upload.path && again.body == upload.body)
+        try await bench.server.answer(200, json: uploaded(photo))
+        let resend = try await bench.nextRequest()
+        #expect(resend.path == "/v0/messages")
+        #expect(try resend.body.map { try JSONValue(data: $0) }?["id"]?.string == id.rawValue)
+
+        // Only once: the same answer again means the message can't go.
+        try await bench.server.answer(400, json: missing)
+        await bench.settle()
+        #expect(await bench.server.takeRequest() == nil)
+        #expect(bench.session.refusedMessages[id]?.serverError?.code == .attachmentMissing)
+    }
+
+    @Test("A photo no waiting message names, left from a draft, is dropped when Ari opens again")
+    func restartWithADraftPhoto() async throws {
+        let transcript = try Fixtures.transcript("04-the-agent-stirs")
+        let first = try Rehearsal(transcript)
+        first.session.start()
+        _ = try await first.nextRequest()
+        first.session.attach(photo)
+        _ = try await first.nextRequest()
+        first.session.close()
+
+        let second = try Rehearsal(transcript, outboxDirectory: first.outboxDirectory)
+        defer { second.close() }
+        second.session.start()
+        #expect(try await second.nextRequest().path == "/v0/events")
+        await second.settle()
+        #expect(await second.server.takeRequest() == nil)
+    }
+
+    @Test("A + in a file's name reaches the server as a +")
+    func plusInName() async throws {
+        let bench = try await live()
+        defer { bench.close() }
+        let notes = PendingAttachment(
+            id: "00000000-0000-4000-8000-0000000000b2", name: "C++ notes.pdf",
+            mediaType: "application/pdf", bytes: Data(count: 10))
+        bench.session.attach(notes)
+        let upload = try await bench.nextRequest()
+        #expect(upload.path == "/v0/attachments/\(notes.id)?name=C%2B%2B%20notes.pdf")
+    }
+
     private func uploaded(_ attachment: PendingAttachment) -> String {
         #"{"attachment":{"id":"\#(attachment.id)","kind":"image","name":"\#(attachment.name)","media_type":"image/jpeg","size":1454}}"#
     }
