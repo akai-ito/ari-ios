@@ -45,6 +45,46 @@ public struct OutboxStore: Sendable {
         }
     }
 
+    // MARK: - Attachments waiting to upload
+
+    /// Saves an attachment's bytes until the server has them, beside the waiting messages.
+    public func add(_ attachment: PendingAttachment) throws {
+        let folder = directory.appending(path: "attachments")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let id = attachment.id.rawValue
+        try attachment.bytes.write(to: folder.appending(path: id + ".bytes"), options: Self.writing)
+        let about = PendingAttachment.About(name: attachment.name, mediaType: attachment.mediaType)
+        try JSONEncoder().encode(about).write(
+            to: folder.appending(path: id + ".about"), options: Self.writing)
+    }
+
+    /// The attachments still to upload.
+    public func attachments() -> [PendingAttachment] {
+        let folder = directory.appending(path: "attachments")
+        let names =
+            (try? FileManager.default.contentsOfDirectory(
+                atPath: folder.path(percentEncoded: false)))
+            ?? []
+        return names.filter { $0.hasSuffix(".about") }.compactMap { name in
+            let id = String(name.dropLast(".about".count))
+            guard let about = try? Data(contentsOf: folder.appending(path: name)),
+                let decoded = try? JSONDecoder().decode(PendingAttachment.About.self, from: about),
+                let bytes = try? Data(contentsOf: folder.appending(path: id + ".bytes"))
+            else { return nil }
+            return PendingAttachment(
+                id: AttachmentID(id), name: decoded.name, mediaType: decoded.mediaType, bytes: bytes
+            )
+        }
+    }
+
+    public func removeAttachment(_ attachment: AttachmentID) {
+        let folder = directory.appending(path: "attachments")
+        for suffix in [".bytes", ".about"] {
+            try? FileManager.default.removeItem(
+                at: folder.appending(path: attachment.rawValue + suffix))
+        }
+    }
+
     private static var writing: Data.WritingOptions {
         #if os(iOS)
             [.atomic, .completeFileProtectionUntilFirstUserAuthentication]

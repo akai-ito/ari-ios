@@ -16,6 +16,8 @@ struct Replay {
     /// The Stop the app sent while its turn ran, followed here apart from the store: until the turn
     /// ends, no more of the cut message may show than was on screen at the tap.
     private var tapped: (turn: TurnID, cut: Cut)?
+    /// What the server said of each upload, for your message to show before it's accepted.
+    private var uploaded: [AttachmentID: AriKit.Attachment] = [:]
 
     init(_ transcript: Transcript) {
         self.transcript = transcript
@@ -79,7 +81,8 @@ struct Replay {
             let message = try #require(request.body).decode(SendMessage.self)
             let secret = message.answers.flatMap { conversation[ask: $0]?.secret } ?? false
             conversation.send(
-                message.id, text: message.text, answers: message.answers, secret: secret)
+                message.id, text: message.text, answers: message.answers, secret: secret,
+                attachments: (message.attachments ?? []).compactMap { uploaded[$0] })
         case .stop(let turn):
             let cut = try request.body?.decode(StopTurn.self).cut
             if let cut, conversation.turn?.id == turn { tapped = (turn, cut) }
@@ -111,6 +114,9 @@ struct Replay {
             conversation.confirm(try body.decode(RetryResult.self))
         case .cancelAsk:
             conversation.confirm(try body.decode(AskResult.self))
+        case .upload:
+            let attachment = try body.decode(AttachmentResult.self).attachment
+            uploaded[attachment.id] = attachment
         case .earlierMessages(let before, _):
             conversation.insertEarlier(try body.decode(MessagePage.self), before: before)
         default:

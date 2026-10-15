@@ -63,7 +63,9 @@ actor ScriptedServer: Transport {
             reply.resume(throwing: URLError(.networkConnectionLost))
             return
         }
-        let body = try response.body.map { try JSONEncoder().encode($0) } ?? Data()
+        // An attachment's bytes come with only their length: any bytes of that length do.
+        let bytes = response.headers["Content-Length"].flatMap { Int($0) }.map { Data(count: $0) }
+        let body = try response.body.map { try JSONEncoder().encode($0) } ?? bytes ?? Data()
         guard request.path.hasPrefix("/v0/events") else {
             reply.resume(
                 returning: .response(

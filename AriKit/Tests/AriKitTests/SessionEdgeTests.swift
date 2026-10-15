@@ -127,7 +127,7 @@ struct SessionEdgeTests {
         defer { bench.close() }
         bench.session.start()
         _ = try await bench.nextRequest()
-        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.4"])
+        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.5"])
         await bench.settle()
 
         guard case .protocolMismatch(let mismatch) = bench.session.problem else {
@@ -185,6 +185,105 @@ struct SessionEdgeTests {
         #expect(bench.session.send(String(repeating: "a", count: Session.maximumLength + 1)) == nil)
         await bench.settle()
         #expect(await bench.server.takeRequest() == nil)
+    }
+
+    // MARK: - Attachments
+
+    private let photo = PendingAttachment(
+        id: "00000000-0000-4000-8000-0000000000a1", name: "riverside.jpg", mediaType: "image/jpeg",
+        bytes: Data(count: 1454))
+
+    @Test("A message waits for its photo's upload, and goes once the server has it")
+    func waitsForItsPhoto() async throws {
+        let bench = try await live()
+        defer { bench.close() }
+        bench.session.attach(photo)
+        let id = bench.session.send(
+            "", id: "6a1d2c38-0f1e-4c5b-9d1f-2b7e4b1c9a10", attachments: [photo.id])
+        #expect(id != nil)
+        #expect(bench.session.conversation.entries.last?.attachments == [photo.attachment])
+        let upload = try await bench.nextRequest()
+        #expect(upload.path == "/v0/attachments/\(photo.id)?name=riverside.jpg")
+        await bench.settle()
+        #expect(await bench.server.takeRequest() == nil, "the message went before its photo")
+
+        try await bench.server.answer(201, json: uploaded(photo))
+        let send = try await bench.nextRequest()
+        #expect(send.path == "/v0/messages")
+        #expect(
+            try send.body.map { try JSONValue(data: $0) }?["attachments"]
+                == JSONValue(json: #"["\#(photo.id)"]"#))
+    }
+
+    @Test("A message isn't sent when its photo is refused, and says why")
+    func refusedPhoto() async throws {
+        let bench = try await live()
+        defer { bench.close() }
+        bench.session.attach(photo)
+        let id = try #require(
+            bench.session.send(
+                "Look", id: "6a1d2c38-0f1e-4c5b-9d1f-2b7e4b1c9a10", attachments: [photo.id]))
+        _ = try await bench.nextRequest()
+        try await bench.server.answer(
+            413,
+            json:
+                #"{"error":{"code":"too_large","message":"That file is larger than Ito accepts."}}"#
+        )
+        await bench.settle()
+        #expect(await bench.server.takeRequest() == nil)
+        #expect(bench.session.refusedMessages[id]?.status == 413)
+        guard case .refused = bench.session.uploads[photo.id] else {
+            Issue.record("expected the upload to be refused")
+            return
+        }
+    }
+
+    @Test("An attachment's bytes are fetched once and kept; your own photo is never fetched")
+    func fetchedOnce() async throws {
+        let bench = try await live()
+        defer { bench.close() }
+        let session = bench.session
+        let theirs: AttachmentID = "9f590555-6aa5-480f-832f-950cc1f5b651"
+        let first = Task { await session.bytes(of: theirs) }
+        let second = Task { await session.bytes(of: theirs) }
+        let fetch = try await bench.nextRequest()
+        #expect(fetch.path == "/v0/attachments/\(theirs)")
+        try await bench.server.answer(200, headers: ["Content-Length": "1454"])
+        #expect(await first.value?.count == 1454)
+        #expect(await second.value?.count == 1454)
+        #expect(await session.bytes(of: theirs)?.count == 1454)
+
+        session.attach(photo)
+        #expect(await session.bytes(of: photo.id) == photo.bytes)
+        let upload = try await bench.nextRequest()
+        #expect(upload.method == .put)
+        #expect(await bench.server.takeRequest() == nil)
+    }
+
+    @Test("A photo still uploading when Ari closes uploads when it opens again, then its message")
+    func restartWithAPhoto() async throws {
+        let transcript = try Fixtures.transcript("04-the-agent-stirs")
+        let first = try Rehearsal(transcript)
+        first.session.start()
+        _ = try await first.nextRequest()
+        first.session.attach(photo)
+        first.session.send(
+            "Look", id: "00000000-0000-4000-8000-000000000001", attachments: [photo.id])
+        // The upload hangs, then Ari closes.
+        _ = try await first.nextRequest()
+        first.session.close()
+
+        let second = try Rehearsal(transcript, outboxDirectory: first.outboxDirectory)
+        defer { second.close() }
+        second.session.start()
+        #expect(second.session.conversation.entries.last?.attachments == [photo.attachment])
+        var paths: [String] = []
+        for _ in 0..<2 { paths.append(try await second.nextRequest().path) }
+        #expect(Set(paths) == ["/v0/events", "/v0/attachments/\(photo.id)?name=riverside.jpg"])
+    }
+
+    private func uploaded(_ attachment: PendingAttachment) -> String {
+        #"{"attachment":{"id":"\#(attachment.id)","kind":"image","name":"\#(attachment.name)","media_type":"image/jpeg","size":1454}}"#
     }
 
     // MARK: - Events

@@ -26,6 +26,8 @@ public struct Message: Hashable, Sendable, Codable {
     /// Your messages only: a secret answer, such as a code. Its text is always empty: the agent
     /// received what you typed, and the conversation keeps nothing of it.
     public var secret: Bool?
+    /// Your messages only: the photos and files you attached, in order.
+    public var attachments: [Attachment]?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -45,7 +47,7 @@ public struct Message: Hashable, Sendable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, role, kind, turn, text, at, position, outcome, error, answers, secret
+        case id, role, kind, turn, text, at, position, outcome, error, answers, secret, attachments
         case endedAt = "ended_at"
     }
 }

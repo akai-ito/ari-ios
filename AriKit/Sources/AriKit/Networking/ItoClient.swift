@@ -48,6 +48,33 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/asks/\(Self.segment(ask.rawValue))/cancel"))
     }
 
+    /// `PUT /v0/attachments/{attachment}`: upload a photo or file's bytes. Repeating it with the
+    /// same id and bytes is safe.
+    public func upload(
+        _ attachment: AttachmentID, name: String, mediaType: String, bytes: Data
+    ) async throws(RequestError) -> AttachmentResult {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "name", value: name)]
+        let path =
+            "/v0/attachments/\(Self.segment(attachment.rawValue))"
+            + (query.percentEncodedQuery.map { "?" + $0 } ?? "")
+        return try await call(
+            HTTPRequest(.put, path, headers: ["Content-Type": mediaType], body: bytes),
+            contentType: mediaType)
+    }
+
+    /// `GET /v0/attachments/{attachment}`: an attachment's bytes, which never change.
+    public func attachmentBytes(_ attachment: AttachmentID) async throws(RequestError) -> Data {
+        try await raw(HTTPRequest(.get, "/v0/attachments/\(Self.segment(attachment.rawValue))"))
+    }
+
+    /// `POST /v0/pair`, without a token: exchange the code `ito pair` showed for a token of this
+    /// device's own.
+    public func pair(_ request: PairDevice) async throws(RequestError) -> PairResult {
+        try await call(
+            HTTPRequest(.post, "/v0/pair", body: try Self.json(request)), authorized: false)
+    }
+
     /// `PUT /v0/devices/{device}`: register this device for notifications, or register it again
     /// with a new push token or key. Repeating it is safe.
     public func registerDevice(_ device: String, _ registration: RegisterDevice)
@@ -112,11 +139,11 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     // MARK: - Plumbing
 
-    private func call<Answer: Decodable>(_ request: HTTPRequest, authorized: Bool = true)
-        async throws(RequestError) -> Answer
-    {
+    private func call<Answer: Decodable>(
+        _ request: HTTPRequest, authorized: Bool = true, contentType: String = "application/json"
+    ) async throws(RequestError) -> Answer {
         var request = authorized ? authorize(request) : request
-        if request.body != nil { request.headers["Content-Type"] = "application/json" }
+        if request.body != nil { request.headers["Content-Type"] = contentType }
         let response: HTTPResponse
         do {
             response = try await transport.send(request, to: address.url)
@@ -130,6 +157,20 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         } catch {
             throw .unreadable(String(describing: error))
         }
+    }
+
+    /// A request whose answer is bytes, not JSON.
+    private func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
+        let request = authorize(request)
+        let response: HTTPResponse
+        do {
+            response = try await transport.send(request, to: address.url)
+        } catch {
+            throw RequestError(error)
+        }
+        try Self.checkVersion(response.headers)
+        guard (200..<300).contains(response.status) else { throw Self.refusal(response) }
+        return response.body
     }
 
     /// A command whose answer has no body, such as a 204.
@@ -221,5 +262,10 @@ public enum RequestError: Error, Equatable, Sendable {
     /// The server's status code, if it answered.
     public var status: Int? {
         if case .refused(let status, _, _) = self { status } else { nil }
+    }
+
+    /// The server's reason, in its own words, if it gave one.
+    public var serverError: ServerError? {
+        if case .refused(_, let error, _) = self { error } else { nil }
     }
 }

@@ -48,6 +48,48 @@ public struct Connector: Sendable {
     public func connect(to address: String, token: Token) async throws(ConnectError) -> Connection {
         try await check(token, at: try await discover(address))
     }
+
+    /// Pairs with the server at `address` using the code `ito pair` showed (from its QR code, or
+    /// typed), which the server exchanges for a token of this device's own.
+    public func pair(address: String, code: String, deviceName: String) async throws(ConnectError)
+        -> Connection
+    {
+        try await pair(code: code, deviceName: deviceName, at: try await discover(address))
+    }
+
+    /// Pairs with a server already found with ``discover(_:)``.
+    public func pair(code: String, deviceName: String, at server: ServerAddress)
+        async throws(ConnectError) -> Connection
+    {
+        let result: PairResult
+        do {
+            result = try await ItoClient(address: server, token: nil, transport: transport)
+                .pair(PairDevice(code: code, deviceName: deviceName))
+        } catch {
+            if case .refused(401, let error, _) = error { throw .pairingCodeRejected(error) }
+            throw ConnectError(error)
+        }
+        return try await check(Token(result.token), at: server)
+    }
+
+    /// A pairing link from `ito pair`'s QR code: `ito://pair?address=…&code=…`.
+    public static func pairing(from link: URL) -> (address: String, code: String)? {
+        guard link.scheme == "ito", link.host() == "pair",
+            let items = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems,
+            let address = items.first(where: { $0.name == "address" })?.value,
+            let code = items.first(where: { $0.name == "code" })?.value
+        else { return nil }
+        return (address, code)
+    }
+
+    /// Whether what you typed in place of a token is a pairing code: 8 letters and digits, with
+    /// or without a dash in the middle.
+    public static func isPairingCode(_ text: String) -> Bool {
+        let compact = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(
+            of: "-", with: "")
+        return compact.count == 8
+            && compact.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
+    }
 }
 
 /// A server Ari has reached with a token it accepted.
@@ -73,6 +115,8 @@ public enum ConnectError: Error, Equatable, Sendable {
     case protocolMismatch(ProtocolMismatch)
     /// The server didn't accept the token. Its message says so in plain words.
     case tokenRejected(ServerError?)
+    /// The pairing code had expired or was already used.
+    case pairingCodeRejected(ServerError?)
     /// The server refused for another reason.
     case refused(status: Int, error: ServerError?)
 
