@@ -82,3 +82,59 @@ struct PushTests {
         return try #require(SealedNotification(payload: payload))
     }
 }
+
+@Suite("The notification keys")
+struct NotificationStoreTests {
+    final class Memory: KeyStorage, @unchecked Sendable {
+        var data: Data?
+        func read() -> Data? { data }
+        func write(_ data: Data?) { self.data = data }
+    }
+
+    final class Clock: @unchecked Sendable {
+        var now = Date(timeIntervalSince1970: 1_792_000_000)
+    }
+
+    @Test("a key is made once, kept for 30 days, then replaced, keeping the one before")
+    func rotation() {
+        let memory = Memory()
+        let clock = Clock()
+        let store = NotificationStore(group: "group.test", storage: memory, now: { clock.now })
+        let first = store.currentKey()
+        #expect(first.isNew)
+        #expect(store.currentKey() == (first.key, false))
+
+        clock.now += NotificationStore.rotation + 1
+        let second = store.currentKey()
+        #expect(second.isNew && second.key != first.key)
+        // A notification sealed just before the change still opens.
+        #expect(store.keys() == [second.key, first.key])
+
+        clock.now += NotificationStore.rotation + 1
+        let third = store.currentKey()
+        #expect(store.keys() == [third.key, second.key])
+
+        store.forgetKeys()
+        #expect(store.keys().isEmpty)
+    }
+}
+
+@Suite("Answering from a notification")
+struct AskActionsTests {
+    @Test("options become buttons, a typed answer a text field, and a secret only opens Ari")
+    func actions() {
+        let ask = PushNotification.AskSummary(
+            id: "a_1", options: ["Clapham", "Soho"], allowsText: true, secret: false)
+        let category = AskActions.category(for: ask)
+        #expect(category.identifier == "ask.a_1")
+        #expect(category.actions.map(\.title) == ["Clapham", "Soho", "Type an answer…"])
+        let secret = AskActions.category(
+            for: .init(id: "a_2", options: ["Skip"], allowsText: true, secret: true))
+        #expect(secret.actions.map(\.identifier) == [AskActions.open])
+
+        #expect(AskActions.answer(action: "option.1", typed: nil, options: ask.options) == "Soho")
+        #expect(
+            AskActions.answer(action: AskActions.type, typed: "Either", options: []) == "Either")
+        #expect(AskActions.answer(action: AskActions.open, typed: nil, options: []) == nil)
+    }
+}

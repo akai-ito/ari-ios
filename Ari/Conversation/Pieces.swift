@@ -242,6 +242,46 @@ enum SheetItem: Identifiable {
     }
 }
 
+/// Ari offers, once, to tell you when it's done: in its own words, at the first turn that takes a
+/// while, rather than asking at launch.
+struct NotificationOffer: View {
+    let answer: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("This one may take a minute. Want a nudge when I'm done, even if Ari is closed?")
+                .font(.ariBody)
+                .foregroundStyle(.ariText)
+                .lineSpacing(Rhythm.ariLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button {
+                    answer(true)
+                } label: {
+                    Text("Notify me")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.ariBackground)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ariText, in: Capsule())
+                }
+                Button {
+                    answer(false)
+                } label: {
+                    Text("Not now")
+                        .font(.subheadline)
+                        .foregroundStyle(.ariText)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .overlay(Capsule().strokeBorder(.ariLine, lineWidth: 1))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 /// The opening of a reply, on its own card, for the long-press menu's preview.
 struct ReplyPreview: View {
     let text: String

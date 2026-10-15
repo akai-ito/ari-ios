@@ -8,6 +8,11 @@ struct ConversationView: View {
     let session: Session
     var name = "Ari"
     let connectAgain: () -> Void
+    /// A reply to open the conversation at, from a tapped notification.
+    var opening: Binding<MessageID?> = .constant(nil)
+    /// Whether Ari may offer notifications, once a turn takes a while.
+    var offersNotifications = false
+    var answerOffer: (Bool) -> Void = { _ in }
 
     @State private var reveal = Reveal()
     @State private var poses = PoseHistory()
@@ -26,6 +31,8 @@ struct ConversationView: View {
     @State private var statusSince = Date.distantPast
     @State private var linkDown = false
     @State private var stopped = false
+    /// A turn has run long enough that a nudge when it's done would help.
+    @State private var offering = false
 
     var body: some View {
         let conversation = session.conversation
@@ -132,6 +139,21 @@ struct ConversationView: View {
         .onChange(of: working) { wasWorking, isWorking in
             if wasWorking, !isWorking, !following { repliedWhileAway = true }
         }
+        // Ten seconds into a turn, a nudge when it's done starts to be worth offering.
+        .task(id: conversation.turn?.id) {
+            guard offersNotifications, conversation.turn != nil, !offering else { return }
+            try? await Task.sleep(for: .seconds(10))
+            if !Task.isCancelled, session.conversation.turn != nil { offering = true }
+        }
+        // Tapping a reply's notification opens the conversation at that reply.
+        .onChange(of: opening.wrappedValue) { _, message in
+            guard let message else { return }
+            following = false
+            withAnimation(.smooth(duration: 0.4)) {
+                position.scrollTo(id: message.rawValue, anchor: .topLeading)
+            }
+            opening.wrappedValue = nil
+        }
         .sheet(item: $sheet) { item in
             switch item {
             case .details(let error): DetailsSheet(error: error)
@@ -154,6 +176,8 @@ struct ConversationView: View {
             case yours(Conversation.Entry)
             case ari(Conversation.Entry)
             case trail(Trail)
+            /// Ari offers to tell you when it's done, once.
+            case offer
             /// A turn that failed before writing anything.
             case failure(TurnID, ServerError?)
         }
@@ -189,6 +213,7 @@ struct ConversationView: View {
         {
             rows.append(Row(id: "failure \(ended.id)", kind: .failure(ended.id, ended.error)))
         }
+        if offering, offersNotifications { rows.append(Row(id: "offer", kind: .offer)) }
         return rows
     }
 
@@ -227,6 +252,8 @@ struct ConversationView: View {
                 answer: answer)
         case .failure(let turn, let error):
             failureLine(turn: turn, error: error, in: conversation)
+        case .offer:
+            NotificationOffer(answer: answerOffer)
         }
     }
 

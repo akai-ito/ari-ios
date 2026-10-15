@@ -36,6 +36,13 @@ public struct PushNotification: Sendable, Equatable, Decodable {
         /// A secret can't be typed into a notification safely: offer to open Ari instead.
         public var secret: Bool
 
+        public init(id: AskID, options: [String], allowsText: Bool, secret: Bool) {
+            self.id = id
+            self.options = options
+            self.allowsText = allowsText
+            self.secret = secret
+        }
+
         enum CodingKeys: String, CodingKey {
             case id, options, secret
             case allowsText = "allows_text"
