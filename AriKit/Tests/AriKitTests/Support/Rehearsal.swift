@@ -59,7 +59,7 @@ final class Rehearsal {
 
     static func connection() throws -> Connection {
         let server = try JSONValue(
-            json: #"{"name":"studio","version":"0.1.0","protocol":"0.1","agent":{"name":"Ari"}}"#
+            json: #"{"name":"studio","version":"0.2.0","protocol":"0.2","agent":{"name":"Ari"}}"#
         ).decode(ServerInfo.self)
         return Connection(
             address: try ServerAddress("https://studio.example"), token: token, server: server)

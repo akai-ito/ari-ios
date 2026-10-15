@@ -12,6 +12,9 @@ public struct Message: Hashable, Sendable, Codable {
     public var text: String
     /// When it began: when the server accepted it, or the agent's first word.
     public var at: Timestamp
+    /// Where it sits in the conversation, in one order with the agent's steps. The protocol always
+    /// sends it.
+    public var position: Int?
     /// Agent messages only: when it ended.
     public var endedAt: Timestamp?
     /// Agent messages only; absent while the message is still being written.
@@ -21,7 +24,8 @@ public struct Message: Hashable, Sendable, Codable {
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
-        at: Timestamp, endedAt: Timestamp? = nil, outcome: Outcome? = nil, error: ServerError? = nil
+        at: Timestamp, position: Int? = nil, endedAt: Timestamp? = nil, outcome: Outcome? = nil,
+        error: ServerError? = nil
     ) {
         self.id = id
         self.role = role
@@ -29,13 +33,14 @@ public struct Message: Hashable, Sendable, Codable {
         self.turn = turn
         self.text = text
         self.at = at
+        self.position = position
         self.endedAt = endedAt
         self.outcome = outcome
         self.error = error
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, role, kind, turn, text, at, outcome, error
+        case id, role, kind, turn, text, at, position, outcome, error
         case endedAt = "ended_at"
     }
 }

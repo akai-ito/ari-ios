@@ -15,6 +15,9 @@ public struct Event: Sendable, Equatable, Decodable {
         case messageRead(MessageRead)
         case turnStarted(TurnStarted)
         case turnStatus(TurnStatus)
+        case stepStarted(StepEvent)
+        case stepUpdated(StepEvent)
+        case stepEnded(StepEvent)
         case messageStarted(MessageStarted)
         case messageDelta(MessageDelta)
         case messageEnded(MessageEnded)
@@ -26,7 +29,7 @@ public struct Event: Sendable, Equatable, Decodable {
     /// Every type this version of Ari decodes, as named on the wire.
     public static let knownTypes = [
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
-        "turn.status",
+        "turn.status", "step.started", "step.updated", "step.ended",
         "message.started", "message.delta", "message.ended", "turn.ended",
     ]
 
@@ -46,6 +49,9 @@ public struct Event: Sendable, Equatable, Decodable {
             case "message.read": .messageRead(try MessageRead(from: decoder))
             case "turn.started": .turnStarted(try TurnStarted(from: decoder))
             case "turn.status": .turnStatus(try TurnStatus(from: decoder))
+            case "step.started": .stepStarted(try StepEvent(from: decoder))
+            case "step.updated": .stepUpdated(try StepEvent(from: decoder))
+            case "step.ended": .stepEnded(try StepEvent(from: decoder))
             case "message.started": .messageStarted(try MessageStarted(from: decoder))
             case "message.delta": .messageDelta(try MessageDelta(from: decoder))
             case "message.ended": .messageEnded(try MessageEnded(from: decoder))
@@ -62,6 +68,9 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let reason: SnapshotReason
     /// The latest messages, oldest first, including one still being written.
     public let messages: [Message]
+    /// Every step from the first of those messages on, the running turn's included, in position
+    /// order.
+    public let steps: [Step]
     /// Whether older messages exist.
     public let hasMore: Bool
     /// The running turn, or `nil` when the agent is idle.
@@ -70,7 +79,7 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let next: [MessageID]
 
     enum CodingKeys: String, CodingKey {
-        case at, reason, messages, turn, next
+        case at, reason, messages, steps, turn, next
         case hasMore = "has_more"
     }
 }
@@ -121,6 +130,13 @@ public struct TurnStatus: Sendable, Equatable, Decodable {
     public let detail: String?
 
     public var status: Status { Status(kind: kind, label: label, detail: detail) }
+}
+
+/// A step starts (its title in the present tense), more is known about it, or it ends (with its
+/// outcome, duration and past-tense title). Each carries the whole step as it now stands.
+public struct StepEvent: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let step: Step
 }
 
 /// The agent begins a message, with empty text and no outcome; `message.delta` events follow.

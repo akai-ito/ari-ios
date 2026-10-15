@@ -43,6 +43,15 @@ struct SpecCoverageTests {
         #expect(try spec.values(of: "MessageKind") == MessageKind.known.map(\.rawValue))
         let role = try #require(spec.definitions["Message"]?["properties"]?["role"]?["enum"]?.array)
         #expect(role.compactMap(\.string) == Role.known.map(\.rawValue))
+        #expect(try spec.values(of: "StepKind") == StepKind.known.map(\.rawValue))
+        let step = try #require(spec.definitions["Step"]?["properties"])
+        func values(_ field: String, _ key: String) throws -> [String] {
+            try #require(step[field]?["items"]?["properties"]?[key]?["enum"]?.array).compactMap(
+                \.string)
+        }
+        #expect(try values("actions", "type") == ActionType.known.map(\.rawValue))
+        #expect(try values("files", "change") == FileChangeKind.known.map(\.rawValue))
+        #expect(try values("items", "state") == PlanItemState.known.map(\.rawValue))
         let reason = try #require(
             spec.definitions["Snapshot"]?["properties"]?["reason"]?["enum"]?.array)
         #expect(reason.compactMap(\.string) == SnapshotReason.known.map(\.rawValue))

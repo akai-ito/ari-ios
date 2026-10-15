@@ -157,7 +157,7 @@ struct ConversationView: View {
     private func rows(_ conversation: Conversation) -> [Row] {
         var rows: [Row] = []
         var day: Date?
-        for entry in conversation.entries where entry.isShown || Self.isNote(entry) {
+        for entry in conversation.entries where Self.hasRow(entry) {
             let date = entry.at?.date ?? .now
             if day.map({ !Calendar.current.isDate($0, inSameDayAs: date) }) ?? true {
                 rows.append(Row(id: "day \(entry.id)", kind: .day(date)))
@@ -188,9 +188,11 @@ struct ConversationView: View {
             let shown = reveal.position(of: entry)
             let position = shown >= Double(text.utf16.count) ? .infinity : shown
             VStack(alignment: .leading, spacing: 8) {
-                ReplyView(
-                    document: ReplyDocument(markdown: text), position: position,
-                    tone: Self.isQuietNote(entry) ? .note : .reply)
+                if !text.isEmpty {
+                    ReplyView(
+                        document: ReplyDocument(markdown: text), position: position,
+                        tone: Self.isQuietNote(entry) ? .note : .reply)
+                }
                 if position == .infinity { footer(for: entry, in: conversation) }
             }
             .contextMenu {
@@ -252,6 +254,14 @@ struct ConversationView: View {
                         ?? ServerError(code: ErrorCode(rawValue: "unknown"), message: "No details.")
                 )
             })
+    }
+
+    /// Your messages, and Ari's replies and notes. One that ended before its first word shows only
+    /// how it ended: a failure keeps its line, and a reply stopped that early shows nothing at all.
+    private static func hasRow(_ entry: Conversation.Entry) -> Bool {
+        guard entry.isShown || isNote(entry) else { return false }
+        return entry.role == .user || !entry.text.isEmpty || entry.outcome == nil
+            || entry.outcome == .failed
     }
 
     /// What Ari says along the way, as against its answer.

@@ -111,6 +111,24 @@ struct ConversationEdgeTests {
         #expect(open.turn == nil)
     }
 
+    @Test("a step finds its place by position, and a turn's end closes one it left running")
+    func steps() throws {
+        var conversation = try streaming(["Half a"])
+        try conversation.apply(
+            .step("e_5", "step.started", step: "s_2", position: 20, title: "Reading notes.md"))
+        // One that arrives late still goes before it.
+        try conversation.apply(
+            .step("e_6", "step.started", step: "s_1", position: 10, title: "Thinking it through"))
+        #expect(conversation.steps.map(\.id) == ["s_1", "s_2"])
+        try conversation.apply(
+            .step("e_7", "step.updated", step: "s_2", position: 20, title: "Reading notes.md"))
+        #expect(conversation.steps.count == 2)
+
+        try conversation.apply(.turnEnded("e_9", turn: "t_1", outcome: "stopped"))
+        #expect(conversation[step: "s_2"]?.outcome == .stopped)
+        #expect(conversation[step: "s_2"]?.title == "Reading notes.md")
+    }
+
     /// Every transcript string has as many characters as UTF-16 units, so these are what would catch
     /// offsets counted in characters.
     @Test("offsets and lengths count UTF-16 units, not characters")
@@ -291,6 +309,7 @@ private enum Fixture {
            {"id":"m_1","role":"agent","kind":"reply","turn":"t_1","text":"Half a rep","at":"2026-10-12T08:41:01.000Z"},
            {"id":"u_3","role":"user","text":"Also dinner","at":"2026-10-12T08:41:02.000Z"},
            {"id":"u_2","role":"user","text":"Also lunch","at":"2026-10-12T08:41:03.000Z"}],
+         "steps":[],
          "turn":{"id":"t_1","inputs":["u_1"],"read":["u_3"],"retry_of":"t_0",
                  "status":{"kind":"writing","label":"Writing"}},
          "next":["u_2"]}
@@ -301,12 +320,12 @@ private enum Fixture {
         #"""
         {"id":"e_20","type":"snapshot","at":"2026-10-12T08:42:00.000Z","reason":"cursor_unknown","has_more":false,
          "messages":[{"id":"\#(id)","role":"user","text":"Answer lost on the way","at":"2026-10-12T08:41:50.000Z"}],
-         "turn":null,"next":[]}
+         "steps":[],"turn":null,"next":[]}
         """#
     }
 
     static let page = #"""
-        {"has_more":false,"messages":[{"id":"u_0","role":"user","text":"Morning","at":"2026-10-11T08:00:00.000Z"}]}
+        {"has_more":false,"steps":[],"messages":[{"id":"u_0","role":"user","text":"Morning","at":"2026-10-11T08:00:00.000Z"}]}
         """#
 }
 
@@ -343,6 +362,8 @@ private enum FixtureEvent: CustomStringConvertible {
     case delta(String, message: String, offset: Int, text: String)
     case ended(String, message: String, outcome: String, length: Int)
     case turnEnded(String, turn: String, outcome: String)
+    /// A step of turn t_1, as it now stands.
+    case step(String, String, step: String, position: Int, title: String)
 
     var description: String {
         "\(fields["type"]?.string ?? "event") \(fields["id"]?.string ?? "")"
@@ -394,6 +415,12 @@ private enum FixtureEvent: CustomStringConvertible {
                 "id": .string(id), "type": "turn.ended", "at": at, "turn": .string(turn),
                 "outcome": .string(outcome),
             ]
+        case .step(let id, let type, let step, let position, let title):
+            let body: JSONValue = .object([
+                "id": .string(step), "turn": "t_1", "kind": "command", "title": .string(title),
+                "at": at, "position": .int(position),
+            ])
+            return ["id": .string(id), "type": .string(type), "at": at, "step": body]
         }
     }
 }
