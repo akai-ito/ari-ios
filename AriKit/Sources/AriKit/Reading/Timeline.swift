@@ -6,7 +6,7 @@ import Foundation
 ///
 /// A trail holds runs of steps and Ari's short notes. A note long enough to read as an answer (a
 /// poem, a list) stands as a message of its own, and the trail carries on after it. While its turn
-/// runs, a trail shows each step; once the turn is over, each run of steps folds into one line. A
+/// runs, a trail shows each step; once the turn is over, each run of lines folds into one. A
 /// step waits until the note or reply before it is fully on screen, so it never appears under
 /// half-shown text.
 public struct Timeline: Equatable, Sendable {
@@ -168,7 +168,8 @@ public struct Trail: Equatable, Sendable, Identifiable {
         var trail = self
         trail.parts = parts.map { part in
             guard case .steps(var run) = part else { return part }
-            run.isFolded = !live && run.stepCount > 1
+            // One line is already as short as a fold; folding it would only say the same twice.
+            run.isFolded = !live && run.lines.count > 1
             return .steps(run)
         }
         return trail
@@ -176,7 +177,7 @@ public struct Trail: Equatable, Sendable, Identifiable {
 }
 
 /// Steps one after another, with no note between them. Similar steps in a row share a line ("Read 3
-/// files"). Once the turn is over, a run of more than one step folds into a single line.
+/// files"). Once the turn is over, a run of more than one line folds into a single line.
 public struct StepRun: Equatable, Sendable, Identifiable {
     public private(set) var lines: [StepLine]
     /// Whether it shows as its summary alone, until you open it.

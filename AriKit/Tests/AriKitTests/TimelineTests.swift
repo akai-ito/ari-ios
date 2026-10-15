@@ -26,7 +26,7 @@ struct TimelineTests {
         #expect(run[0].specifics == nil)
     }
 
-    @Test("once the turn is over, a run of steps folds into one line; a lone step stays as it is")
+    @Test("once the turn is over, a run of lines folds into one; a lone line stays as it is")
     func folds() throws {
         var replay = Replay(try Fixtures.transcript("04-the-agent-stirs"))
         try replay.play()
@@ -105,7 +105,8 @@ struct TimelineTests {
         story.endTurn()
         let done = try #require(trails(caughtUp(try story.build())).first?.parts.first?.run)
         #expect(done.lines[0].title == "Read 3 files")
-        #expect(done.isFolded && done.summary == "Read 3 files")
+        // One counted line is already short, so it doesn't fold into a summary saying the same.
+        #expect(!done.isFolded)
     }
 
     @Test("a long note stands as a message of its own, and the trail carries on after it")
