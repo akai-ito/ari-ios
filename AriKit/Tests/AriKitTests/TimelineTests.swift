@@ -60,7 +60,10 @@ struct TimelineTests {
     func stopped() throws {
         var replay = Replay(try Fixtures.transcript("07-stop"))
         try replay.play()
-        let last = try #require(trails(caughtUp(replay.conversation)).last)
+        let timeline = caughtUp(replay.conversation)
+        // The reply stopped before its first word shows nothing at all.
+        #expect(!timeline.items.contains { $0.id == "m_0006_90669" })
+        let last = try #require(trails(timeline).last)
         let line = try #require(last.parts.first?.run?.lines.first)
         #expect(line.title == "Searching the web for cafés near Battersea Park open at 9")
         #expect(line.mark == "Stopped" && !line.isRunning)

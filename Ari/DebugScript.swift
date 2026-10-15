@@ -4,8 +4,8 @@ import SwiftUI
 #if DEBUG
     /// For trying Ari against a server without typing, in debug builds only: `ARI_SERVER` and
     /// `ARI_TOKEN` fill in and submit the connect screen, `ARI_SAY` sends a message once the stream
-    /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, and `ARI_DRAFT` fills in the
-    /// composer (`\n` for a new line).
+    /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, `ARI_DRAFT` fills in the
+    /// composer (`\n` for a new line), and `ARI_OPEN_TRAIL` opens every run and step on the trail.
     enum DebugScript {
         static let environment = ProcessInfo.processInfo.environment
 
@@ -16,6 +16,8 @@ import SwiftUI
             }
             return (address, token)
         }
+
+        static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
 
         static var draft: String? {
             environment["ARI_DRAFT"]?.replacingOccurrences(of: "\\n", with: "\n")

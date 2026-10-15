@@ -65,9 +65,14 @@ struct StatusLine: View {
         ZStack {
             Text(" ").hidden()
             if let status {
+                // The old line leaves quickly before the new one arrives, so two long ones
+                // never sit on top of each other.
                 line(status)
                     .id(status)
-                    .transition(.opacity)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.animation(.easeIn(duration: 0.28).delay(0.1)),
+                            removal: .opacity.animation(.easeOut(duration: 0.1))))
             }
         }
         .font(.subheadline)

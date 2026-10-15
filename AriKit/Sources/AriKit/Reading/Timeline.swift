@@ -52,7 +52,7 @@ public struct Timeline: Equatable, Sendable {
             case .entry(let entry):
                 if Self.isAside(entry), let turn = entry.turn {
                     add(.note(entry), turn: turn)
-                } else if entry.isShown || Self.isNote(entry) {
+                } else if Self.isMessage(entry) {
                     close()
                     items.append(.message(entry))
                 }
@@ -71,6 +71,14 @@ public struct Timeline: Equatable, Sendable {
     public static func isAside(_ entry: Conversation.Entry) -> Bool {
         let text = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
         return isNote(entry) && !text.contains("\n") && text.count <= 160
+    }
+
+    /// Yours, and Ari's replies and longer notes. One of Ari's that ended before its first word
+    /// shows only how it ended: a failure keeps its line, and one stopped that early shows nothing.
+    static func isMessage(_ entry: Conversation.Entry) -> Bool {
+        guard entry.isShown || isNote(entry) else { return false }
+        return entry.role == .user || !entry.text.isEmpty || entry.outcome == nil
+            || entry.outcome == .failed
     }
 
     static func isNote(_ entry: Conversation.Entry) -> Bool {

@@ -13,6 +13,8 @@ struct ConversationView: View {
     @State private var poses = PoseHistory()
     @State private var draft = ""
     @State private var sheet: SheetItem?
+    /// The trail's runs and steps you've opened.
+    @State private var opened: Set<String> = []
     // Scrolled by message, not by edge: scrolling to an edge also shifts the content sideways.
     @State private var position = ScrollPosition(idType: String.self)
     @State private var distanceFromEnd: CGFloat = 0
@@ -144,6 +146,7 @@ struct ConversationView: View {
             case day(Date)
             case yours(Conversation.Entry)
             case ari(Conversation.Entry)
+            case trail(Trail)
             /// A turn that failed before writing anything.
             case failure(TurnID, ServerError?)
         }
@@ -152,12 +155,18 @@ struct ConversationView: View {
         let kind: Kind
     }
 
-    /// The conversation's shown messages and Ari's notes along the way, with the date at the start
-    /// of each day.
+    /// The conversation as it reads (messages, and Ari's trail between them), with the date at the
+    /// start of each day.
     private func rows(_ conversation: Conversation) -> [Row] {
         var rows: [Row] = []
         var day: Date?
-        for entry in conversation.entries where Self.hasRow(entry) {
+        for item in Timeline(conversation, reveal: reveal).items {
+            guard case .message(let entry) = item else {
+                if case .trail(let trail) = item {
+                    rows.append(Row(id: trail.id, kind: .trail(trail)))
+                }
+                continue
+            }
             let date = entry.at?.date ?? .now
             if day.map({ !Calendar.current.isDate($0, inSameDayAs: date) }) ?? true {
                 rows.append(Row(id: "day \(entry.id)", kind: .day(date)))
@@ -189,9 +198,7 @@ struct ConversationView: View {
             let position = shown >= Double(text.utf16.count) ? .infinity : shown
             VStack(alignment: .leading, spacing: 8) {
                 if !text.isEmpty {
-                    ReplyView(
-                        document: ReplyDocument(markdown: text), position: position,
-                        tone: Self.isQuietNote(entry) ? .note : .reply)
+                    ReplyView(document: ReplyDocument(markdown: text), position: position)
                 }
                 if position == .infinity { footer(for: entry, in: conversation) }
             }
@@ -202,6 +209,8 @@ struct ConversationView: View {
                 }
                 ShareLink(item: entry.text)
             }
+        case .trail(let trail):
+            TrailView(trail: trail, conversation: conversation, reveal: reveal, opened: $opened)
         case .failure(let turn, let error):
             failureLine(turn: turn, error: error, in: conversation)
         }
@@ -254,27 +263,6 @@ struct ConversationView: View {
                         ?? ServerError(code: ErrorCode(rawValue: "unknown"), message: "No details.")
                 )
             })
-    }
-
-    /// Your messages, and Ari's replies and notes. One that ended before its first word shows only
-    /// how it ended: a failure keeps its line, and a reply stopped that early shows nothing at all.
-    private static func hasRow(_ entry: Conversation.Entry) -> Bool {
-        guard entry.isShown || isNote(entry) else { return false }
-        return entry.role == .user || !entry.text.isEmpty || entry.outcome == nil
-            || entry.outcome == .failed
-    }
-
-    /// What Ari says along the way, as against its answer.
-    private static func isNote(_ entry: Conversation.Entry) -> Bool {
-        entry.role == .agent && entry.kind == .note
-    }
-
-    /// A note that's only progress ("Checking what people say."): one short line, set quieter.
-    /// A longer one, or one with lines of its own (a poem, a list, a result), is something you asked
-    /// for, so it reads like an answer.
-    private static func isQuietNote(_ entry: Conversation.Entry) -> Bool {
-        let text = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return isNote(entry) && !text.contains("\n") && text.count <= 160
     }
 
     // MARK: - What you do
