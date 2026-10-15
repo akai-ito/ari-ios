@@ -48,6 +48,29 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/asks/\(Self.segment(ask.rawValue))/cancel"))
     }
 
+    /// `PUT /v0/devices/{device}`: register this device for notifications, or register it again
+    /// with a new push token or key. Repeating it is safe.
+    public func registerDevice(_ device: String, _ registration: RegisterDevice)
+        async throws(RequestError) -> DeviceResult
+    {
+        let body = try Self.json(registration)
+        return try await call(
+            HTTPRequest(.put, "/v0/devices/\(Self.segment(device))", body: body))
+    }
+
+    /// `DELETE /v0/devices/{device}`: stop notifying this device.
+    public func removeDevice(_ device: String) async throws(RequestError) {
+        try await callWithoutAnswer(HTTPRequest(.delete, "/v0/devices/\(Self.segment(device))"))
+    }
+
+    /// `PUT /v0/devices/{device}/presence`: whether the conversation is on screen here, so the
+    /// server doesn't push what you're already watching.
+    public func setPresence(_ device: String, looking: Bool) async throws(RequestError) {
+        let body = try Self.json(Presence(looking: looking))
+        try await callWithoutAnswer(
+            HTTPRequest(.put, "/v0/devices/\(Self.segment(device))/presence", body: body))
+    }
+
     /// `GET /v0/messages?before=…&limit=…`: older messages, oldest first.
     public func messages(before oldest: MessageID, limit: Int) async throws(RequestError)
         -> MessagePage
@@ -107,6 +130,20 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         } catch {
             throw .unreadable(String(describing: error))
         }
+    }
+
+    /// A command whose answer has no body, such as a 204.
+    private func callWithoutAnswer(_ request: HTTPRequest) async throws(RequestError) {
+        var request = authorize(request)
+        if request.body != nil { request.headers["Content-Type"] = "application/json" }
+        let response: HTTPResponse
+        do {
+            response = try await transport.send(request, to: address.url)
+        } catch {
+            throw RequestError(error)
+        }
+        try Self.checkVersion(response.headers)
+        guard (200..<300).contains(response.status) else { throw Self.refusal(response) }
     }
 
     private func authorize(_ request: HTTPRequest) -> HTTPRequest {

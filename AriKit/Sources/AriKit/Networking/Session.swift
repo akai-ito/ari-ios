@@ -58,6 +58,11 @@ public final class Session {
     @ObservationIgnored private var stopRequest: (turn: TurnID?, cut: Cut?)?
     @ObservationIgnored private var retries: [TurnID] = []
     @ObservationIgnored private var cancels: [AskID] = []
+    /// The device to register for notifications (or forget, with no registration), until the
+    /// server has it.
+    @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
+    /// Whether the conversation is on screen here, as the server should next hear it.
+    @ObservationIgnored private var presenceRequest: (device: String, looking: Bool)?
     /// Secret answers waiting to go: kept in memory only, never in the outbox on disk.
     @ObservationIgnored private var secrets: Set<MessageID> = []
     @ObservationIgnored private var isOnline = true
@@ -108,6 +113,8 @@ public final class Session {
                 Task { await self.runStops() },
                 Task { await self.runRetries() },
                 Task { await self.runCancels() },
+                Task { await self.runDevice() },
+                Task { await self.runPresence() },
             ]
         }
         guard streamTask == nil else { return }
@@ -160,6 +167,52 @@ public final class Session {
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
+    }
+
+    /// You answered from a notification, with Ari closed or in the background: the message goes
+    /// at once, without waiting for the event stream, and stays in the outbox until the server has
+    /// it, so a failed attempt still goes next time Ari opens. Returns whether the server has it.
+    @discardableResult
+    public func sendFromNotification(
+        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
+        answers: AskID? = nil
+    ) async -> Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            text.count <= Self.maximumLength
+        else { return false }
+        let message = SendMessage(id: id, text: text, answers: answers)
+        conversation.send(id, text: text, answers: answers)
+        try? outbox.add(message)
+        if !queue.contains(message) { queue.append(message) }
+        do {
+            let result = try await client.send(message)
+            conversation.confirm(result)
+            finish(message)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Notifications are allowed: register this device, with its push token and notification key,
+    /// so the server can reach it while you're not looking. Call it again when either changes.
+    public func register(device: String, _ registration: RegisterDevice) {
+        deviceRequest = (device, registration)
+        wake(.device)
+    }
+
+    /// Notifications are turned off here: the server forgets this device.
+    public func unregister(device: String) {
+        deviceRequest = (device, nil)
+        wake(.device)
+    }
+
+    /// The conversation came on screen here, or left it. The server pushes nothing while any
+    /// device is looking with a live stream; it forgets this when it restarts, so say it again
+    /// after reconnecting.
+    public func setLooking(_ looking: Bool, device: String) {
+        presenceRequest = (device, looking)
+        wake(.presence)
     }
 
     /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
@@ -432,6 +485,69 @@ public final class Session {
         }
     }
 
+    private func runDevice() async {
+        var failures = 0
+        while !Task.isCancelled {
+            guard let request = deviceRequest else {
+                await nap(until: .device)
+                continue
+            }
+            guard isOnline else {
+                await nap(until: [.network, .device])
+                continue
+            }
+            do {
+                if let registration = request.registration {
+                    _ = try await client.registerDevice(request.id, registration)
+                } else {
+                    try await client.removeDevice(request.id)
+                }
+                // A newer request that came while this one went is still to send.
+                if deviceRequest?.id == request.id,
+                    deviceRequest?.registration == request.registration
+                {
+                    deviceRequest = nil
+                }
+                failures = 0
+            } catch {
+                if error.isTemporary {
+                    failures += 1
+                    await nap(
+                        Self.commandDelay(after: failures, error), until: [.network, .device])
+                } else {
+                    deviceRequest = nil
+                }
+            }
+        }
+    }
+
+    private func runPresence() async {
+        var failures = 0
+        while !Task.isCancelled {
+            guard let request = presenceRequest else {
+                await nap(until: .presence)
+                continue
+            }
+            guard isOnline else {
+                await nap(until: [.network, .presence])
+                continue
+            }
+            do {
+                try await client.setPresence(request.device, looking: request.looking)
+                if presenceRequest?.looking == request.looking { presenceRequest = nil }
+                failures = 0
+            } catch {
+                if error.isTemporary {
+                    failures += 1
+                    await nap(
+                        Self.commandDelay(after: failures, error), until: [.network, .presence])
+                } else {
+                    presenceRequest = nil
+                }
+            }
+        }
+    }
+
     // MARK: - Waiting
 
     /// What a lane waits for, so it can be woken early when it changes.
@@ -443,6 +559,8 @@ public final class Session {
         static let stop = Wake(rawValue: 1 << 3)
         static let retry = Wake(rawValue: 1 << 4)
         static let cancel = Wake(rawValue: 1 << 5)
+        static let device = Wake(rawValue: 1 << 6)
+        static let presence = Wake(rawValue: 1 << 7)
     }
 
     /// Waits for `duration`, or, without one, until woken; anything in `reasons` wakes it early.

@@ -46,6 +46,12 @@ struct SpecCoverageTests {
         #expect(try spec.values(of: "StepKind") == StepKind.known.map(\.rawValue))
         #expect(try spec.values(of: "AskKind") == AskKind.known.map(\.rawValue))
         #expect(try spec.values(of: "AskOutcome") == AskOutcome.known.map(\.rawValue))
+        let push = try JSONValue(
+            json: String(
+                contentsOf: try Fixtures.protocolDirectory().appending(path: "push.schema.json"),
+                encoding: .utf8))
+        let kinds = try #require(push["$defs"]?["NotificationKind"]?["enum"]?.array)
+        #expect(kinds.compactMap(\.string) == NotificationKind.known.map(\.rawValue))
         let step = try #require(spec.definitions["Step"]?["properties"])
         func values(_ field: String, _ key: String) throws -> [String] {
             try #require(step[field]?["items"]?["properties"]?[key]?["enum"]?.array).compactMap(
