@@ -14,6 +14,10 @@ public struct Conversation: Sendable, Equatable {
     /// The agent's steps from the oldest message on, in conversation order: merged with the messages
     /// by position, each sits exactly where it happened.
     public private(set) var steps: [Step] = []
+    /// What the agent asked, from the oldest message on, in conversation order.
+    public private(set) var asks: [Ask] = []
+    /// Asks you've answered or cancelled here, until the server says they've ended.
+    public private(set) var settling: [AskID: Settling] = [:]
     /// Whether older messages exist on the server, to page back to.
     public private(set) var hasEarlierMessages = false
     /// The turn the agent is working on, if any.
@@ -30,6 +34,8 @@ public struct Conversation: Sendable, Equatable {
     private var positions: [MessageID: Int] = [:]
     /// Each step's index in `steps`.
     private var stepIndices: [StepID: Int] = [:]
+    /// Each ask's index in `asks`.
+    private var askIndices: [AskID: Int] = [:]
     /// How many entries, from the start, the server has put in its order. The rest are yours, still on
     /// their way.
     private var serverCount = 0
@@ -60,6 +66,11 @@ extension Conversation {
         public internal(set) var delivery: Delivery?
         /// Your messages: taken into the running turn, or waiting for the next one.
         public internal(set) var mark: Mark?
+        /// Your messages: the ask this one answered.
+        public internal(set) var answers: AskID?
+        /// Your messages: a secret answer. Its text is empty: the agent has it, the conversation
+        /// keeps nothing of it.
+        public internal(set) var isSecret = false
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -92,14 +103,18 @@ extension Conversation {
             outcome = message.outcome
             error = message.error
             delivery = message.role == .user ? .delivered : nil
+            answers = message.answers
+            isSecret = message.secret ?? false
         }
 
-        init(sending id: MessageID, text: String) {
+        init(sending id: MessageID, text: String, answers: AskID?, secret: Bool) {
             self.id = id
             role = .user
-            self.text = text
-            length = text.utf16.count
+            self.text = secret ? "" : text
+            length = self.text.utf16.count
             delivery = .sending
+            self.answers = answers
+            isSecret = secret
         }
     }
 
@@ -118,6 +133,14 @@ extension Conversation {
         public let id: TurnID
         public let outcome: Outcome
         public let error: ServerError?
+    }
+
+    /// An ask you've settled here, before the server confirms it.
+    public enum Settling: Sendable, Equatable {
+        /// Your message answers it.
+        case answering(MessageID)
+        /// You tapped Stop while it waited.
+        case cancelling
     }
 
     /// Your Stop. Until its turn ends, the message it cut holds at the cut.
@@ -157,6 +180,8 @@ extension Conversation {
             if update.turn == turn?.id { turn?.status = update.status }
         case .stepStarted(let event), .stepUpdated(let event), .stepEnded(let event):
             record(event.step)
+        case .askStarted(let event), .askEnded(let event):
+            record(event.ask)
         case .messageStarted(let started):
             begin(started.message)
         case .messageDelta(let delta):
@@ -188,6 +213,7 @@ extension Conversation {
         positions = [:]
         reindex(from: 0)
         replaceSteps(with: snapshot.steps)
+        replaceAsks(with: snapshot.asks)
 
         hasEarlierMessages = snapshot.hasMore
         turn = snapshot.turn.map {
@@ -295,6 +321,18 @@ extension Conversation {
         }
     }
 
+    /// The agent asked, or the ask is settled: each event carries the whole ask.
+    private mutating func record(_ ask: Ask) {
+        if ask.outcome != nil { settling[ask.id] = nil }
+        if let index = askIndices[ask.id] {
+            asks[index] = ask
+            return
+        }
+        let index = asks.lastIndex { $0.position < ask.position }.map { $0 + 1 } ?? 0
+        asks.insert(ask, at: index)
+        reindexAsks(from: index)
+    }
+
     /// A step started, or more is known about it: each event carries the whole step, so it replaces
     /// what Ari has.
     private mutating func record(_ step: Step) {
@@ -319,10 +357,27 @@ extension Conversation {
 extension Conversation {
     /// You tapped Send: your message shows at once, below everything the server has, until the server
     /// accepts it. `id` is its permanent id and its retry key; sending the same id again does nothing.
-    public mutating func send(_ id: MessageID, text: String) {
+    ///
+    /// While an ask waits, your message answers it, whether or not it names it, so the ask settles at
+    /// once. A secret keeps no text here at all.
+    public mutating func send(
+        _ id: MessageID, text: String, answers: AskID? = nil, secret: Bool = false
+    ) {
         guard positions[id] == nil else { return }
-        entries.append(Entry(sending: id, text: text))
+        if let waiting = waitingAsk { settling[waiting.id] = .answering(id) }
+        entries.append(Entry(sending: id, text: text, answers: answers, secret: secret))
         positions[id] = entries.count - 1
+    }
+
+    /// You tapped Stop while `ask` waited: it settles at once, until the server confirms.
+    public mutating func cancel(_ ask: AskID) {
+        guard let index = askIndices[ask], asks[index].outcome == nil else { return }
+        settling[ask] = .cancelling
+    }
+
+    /// The server answered a cancel with the ask as it ended.
+    public mutating func confirm(_ result: AskResult) {
+        record(result.ask)
     }
 
     /// The server answered a send (201, or 200 for a repeat): it has your message, so Sending can go.
@@ -371,6 +426,7 @@ extension Conversation {
         insert(contentsOf: earlier, at: 0)
         serverCount += earlier.count
         replaceSteps(with: page.steps.filter { stepIndices[$0.id] == nil } + steps)
+        replaceAsks(with: page.asks.filter { askIndices[$0.id] == nil } + asks)
         hasEarlierMessages = page.hasMore
     }
 
@@ -384,6 +440,7 @@ extension Conversation {
         reindex(from: 0)
         if let first = entries.first?.position {
             replaceSteps(with: steps.filter { $0.position > first })
+            replaceAsks(with: asks.filter { $0.position > first })
         }
         hasEarlierMessages = true
     }
@@ -408,6 +465,17 @@ extension Conversation {
     /// The entry with `id`, if the conversation has it.
     public subscript(id: MessageID) -> Entry? {
         positions[id].map { entries[$0] }
+    }
+
+    /// What the agent asked that still waits for your answer, unless you've just answered or
+    /// cancelled it here.
+    public var waitingAsk: Ask? {
+        asks.last { $0.outcome == nil && settling[$0.id] == nil }
+    }
+
+    /// The ask with `id`, if the conversation has it.
+    public subscript(ask id: AskID) -> Ask? {
+        askIndices[id].map { asks[$0] }
     }
 
     /// The step with `id`, if the conversation has it.
@@ -437,6 +505,17 @@ extension Conversation {
         steps = new.sorted { $0.position < $1.position }
         stepIndices = [:]
         reindexSteps(from: 0)
+    }
+
+    private mutating func replaceAsks(with new: [Ask]) {
+        asks = new.sorted { $0.position < $1.position }
+        askIndices = [:]
+        reindexAsks(from: 0)
+        settling = settling.filter { askIndices[$0.key].map { asks[$0].outcome == nil } ?? false }
+    }
+
+    private mutating func reindexAsks(from start: Int) {
+        for index in start..<asks.count { askIndices[asks[index].id] = index }
     }
 
     private mutating func reindexSteps(from start: Int) {

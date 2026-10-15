@@ -59,7 +59,7 @@ final class Rehearsal {
 
     static func connection() throws -> Connection {
         let server = try JSONValue(
-            json: #"{"name":"studio","version":"0.2.0","protocol":"0.2","agent":{"name":"Ari"}}"#
+            json: #"{"name":"studio","version":"0.3.0","protocol":"0.3","agent":{"name":"Ari"}}"#
         ).decode(ServerInfo.self)
         return Connection(
             address: try ServerAddress("https://studio.example"), token: token, server: server)
@@ -103,6 +103,9 @@ final class Rehearsal {
         case .event(let logged):
             try await server.push(logged)
             await settle()
+        case .push:
+            // A notification reaches the phone's notification extension, not the session.
+            break
         case .world(let world):
             switch world.marker {
             case "offline":
@@ -137,7 +140,11 @@ final class Rehearsal {
                 !sent.contains(MessageID(id))
             else { return }
             sent.insert(MessageID(id))
-            session.send(text, id: MessageID(id))
+            let answers = request.body?["answers"]?.string.map(AskID.init(rawValue:))
+            let secret = answers.flatMap { session.conversation[ask: $0]?.secret } ?? false
+            session.send(text, id: MessageID(id), answers: answers, secret: secret)
+        case .cancelAsk(let ask):
+            session.cancel(ask)
         case .stop:
             let cut = try? request.body?["cut"]?.decode(Cut.self)
             session.stop(cut: cut)

@@ -11,6 +11,8 @@ import Observation
 ///   once the stream is live, retrying with the same id until the server has it.
 /// - **Stop** has its own lane: never behind the outbox or a reconnect.
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
+/// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
+///   A secret answer goes from memory only, never through the outbox on disk.
 @MainActor
 @Observable
 public final class Session {
@@ -55,6 +57,9 @@ public final class Session {
     @ObservationIgnored private var queue: [SendMessage] = []
     @ObservationIgnored private var stopRequest: (turn: TurnID?, cut: Cut?)?
     @ObservationIgnored private var retries: [TurnID] = []
+    @ObservationIgnored private var cancels: [AskID] = []
+    /// Secret answers waiting to go: kept in memory only, never in the outbox on disk.
+    @ObservationIgnored private var secrets: Set<MessageID> = []
     @ObservationIgnored private var isOnline = true
     @ObservationIgnored private var wantsSnapshot = false
     @ObservationIgnored private var lastHeard: Duration = .zero
@@ -102,6 +107,7 @@ public final class Session {
                 Task { await self.runOutbox() },
                 Task { await self.runStops() },
                 Task { await self.runRetries() },
+                Task { await self.runCancels() },
             ]
         }
         guard streamTask == nil else { return }
@@ -129,19 +135,39 @@ public final class Session {
     /// can. Returns its id, or `nil` if there's nothing to send or it's longer than the server takes.
     ///
     /// - Parameter id: Its permanent id and retry key; a new random UUID unless a test chooses one.
+    /// While an ask waits, any message answers it.
+    ///
+    /// - Parameters:
+    ///   - id: Its permanent id and retry key; a new random UUID unless a test chooses one.
+    ///   - answers: The ask it answers, named when you tap one of its options or answer a secret.
+    ///   - secret: A secret answer, such as a code: it goes from memory only, never saved on the
+    ///     device, and the conversation keeps nothing of it.
     @discardableResult
-    public func send(_ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()))
-        -> MessageID?
-    {
+    public func send(
+        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
+        answers: AskID? = nil, secret: Bool = false
+    ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text)
-        conversation.send(id, text: text)
-        try? outbox.add(message)
+        let message = SendMessage(id: id, text: text, answers: answers)
+        conversation.send(id, text: text, answers: answers, secret: secret)
+        if secret {
+            secrets.insert(id)
+        } else {
+            try? outbox.add(message)
+        }
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
+    }
+
+    /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
+    public func cancel(_ ask: AskID) {
+        guard conversation[ask: ask]?.outcome == nil, !cancels.contains(ask) else { return }
+        conversation.cancel(ask)
+        cancels.append(ask)
+        wake(.cancel)
     }
 
     /// You tapped Stop. What's on screen holds there at once; the request goes on its own lane, even
@@ -322,7 +348,7 @@ public final class Session {
 
     private func finish(_ message: SendMessage) {
         queue.removeAll { $0.id == message.id }
-        try? outbox.remove(message.id)
+        if secrets.remove(message.id) == nil { try? outbox.remove(message.id) }
     }
 
     private func runStops() async {
@@ -379,6 +405,33 @@ public final class Session {
         }
     }
 
+    private func runCancels() async {
+        var failures = 0
+        while !Task.isCancelled {
+            guard let ask = cancels.first else {
+                await nap(until: .cancel)
+                continue
+            }
+            guard isOnline else {
+                await nap(until: [.network, .cancel])
+                continue
+            }
+            do {
+                let result = try await client.cancelAsk(ask)
+                conversation.confirm(result)
+                cancels.removeFirst()
+                failures = 0
+            } catch {
+                if error.isTemporary {
+                    failures += 1
+                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
+                } else {
+                    cancels.removeFirst()
+                }
+            }
+        }
+    }
+
     // MARK: - Waiting
 
     /// What a lane waits for, so it can be woken early when it changes.
@@ -389,6 +442,7 @@ public final class Session {
         static let outbox = Wake(rawValue: 1 << 2)
         static let stop = Wake(rawValue: 1 << 3)
         static let retry = Wake(rawValue: 1 << 4)
+        static let cancel = Wake(rawValue: 1 << 5)
     }
 
     /// Waits for `duration`, or, without one, until woken; anything in `reasons` wakes it early.

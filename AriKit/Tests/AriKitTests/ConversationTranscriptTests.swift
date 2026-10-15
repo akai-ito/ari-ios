@@ -323,6 +323,85 @@ struct ConversationTranscriptTests {
         #expect(report.url == "https://github.com/akai-ito/ito-core/issues/42")
     }
 
+    @Test("Scenario 19: Ari asks and waits; a tapped option answers it, settling it at once")
+    func askBeforeActing() throws {
+        var replay = Replay(try Fixtures.transcript("19-ari-asks-before-acting"))
+        let ask: AskID = "a_0001_32034"
+        let clapham: MessageID = "5ce13252-2fa3-4462-a97b-c341b244f5f5"
+        // Asking ends the turn; the ask waits.
+        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_01740")
+        #expect(replay.conversation.turn == nil)
+        let waiting = try #require(replay.conversation.waitingAsk)
+        #expect(waiting.id == ask && waiting.kind == .question && !waiting.options.isEmpty)
+        #expect(waiting.question == "Which Juno did you mean?")
+
+        // You tap Clapham: the ask settles before the server says so.
+        try replay.play(throughLine: 22, expecting: "POST /v0/messages")
+        #expect(replay.conversation.waitingAsk == nil)
+        #expect(replay.conversation.settling[ask] == .answering(clapham))
+
+        try replay.play(throughLine: 24, expecting: "ask.ended e_0018_21843")
+        #expect(replay.conversation[ask: ask]?.outcome == .answered)
+        #expect(replay.conversation[ask: ask]?.answer == clapham)
+        #expect(replay.conversation.settling.isEmpty)
+        #expect(replay.conversation[clapham]?.answers == ask)
+    }
+
+    @Test("Scenario 20: an approval shows what would happen, and one option goes ahead")
+    func approval() throws {
+        var replay = Replay(try Fixtures.transcript("20-an-approval"))
+        try replay.play()
+        let ask = try #require(replay.conversation.asks.last)
+        #expect(ask.kind == .approval && ask.preview?.isEmpty == false)
+        #expect(ask.options.filter(\.acts).map(\.label) == ["Book it"])
+        #expect(ask.outcome == .answered)
+    }
+
+    @Test("Scenario 22: an ask waits through the app closing and a restart; Stop cancels it")
+    func waiting() throws {
+        var replay = Replay(try Fixtures.transcript("22-waiting"))
+        let ask: AskID = "a_0001_05580"
+        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_10629")
+        #expect(replay.conversation.waitingAsk?.id == ask)
+        try replay.play(throughLine: 26, expecting: "200")
+        #expect(replay.conversation.waitingAsk?.id == ask)
+
+        try replay.play(throughLine: 27, expecting: "POST /v0/asks/a_0001_05580/cancel")
+        #expect(replay.conversation.settling[ask] == .cancelling)
+        #expect(replay.conversation.waitingAsk == nil)
+        try replay.play(throughLine: 28, expecting: "ask.ended e_0017_61169")
+        #expect(replay.conversation[ask: ask]?.outcome == .cancelled)
+        #expect(replay.conversation.settling.isEmpty)
+    }
+
+    @Test("Scenario 23: whatever you send answers the ask; then Stop cancels the next one")
+    func yourOwnWay() throws {
+        var replay = Replay(try Fixtures.transcript("23-your-own-way-then-stop"))
+        let typed: MessageID = "40364441-f13e-436f-9303-730eb0ad286a"
+        try replay.play(throughLine: 24, expecting: "ask.ended e_0018_83796")
+        #expect(replay.conversation[ask: "a_0001_57535"]?.answer == typed)
+        try replay.play(throughLine: 31, expecting: "turn.ended e_0024_07382")
+        #expect(replay.conversation.waitingAsk?.question == "Same time, Saturday at 7:30?")
+        try replay.play()
+        #expect(replay.conversation[ask: "a_0002_64299"]?.outcome == .cancelled)
+        #expect(replay.conversation.waitingAsk == nil)
+    }
+
+    @Test("Scenario 25: a secret answer keeps no text, here or on the server")
+    func secret() throws {
+        var replay = Replay(try Fixtures.transcript("25-a-secret"))
+        let code: MessageID = "07fa34b1-a387-4687-bf4a-a9a7a40cc10f"
+        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_73484")
+        #expect(replay.conversation.waitingAsk?.secret == true)
+        try replay.play(throughLine: 22, expecting: "POST /v0/messages")
+        #expect(
+            replay.conversation[code]?.isSecret == true && replay.conversation[code]?.text == "")
+        try replay.play(throughLine: 23, expecting: "message.accepted e_0017_04913")
+        #expect(
+            replay.conversation[code]?.isSecret == true && replay.conversation[code]?.text == "")
+        #expect(replay.conversation[code]?.answers == "a_0001_49834")
+    }
+
     private func visible(_ id: MessageID, in replay: Replay) throws -> String {
         replay.conversation.visibleText(of: try #require(replay.conversation[id]))
     }
@@ -505,6 +584,71 @@ extension ConversationTranscriptTests {
             saturdayReply("m_0003_11459"),
             you("835616aa-d801-4a42-a976-cd02a6569b27", "And Sunday?"),
             reply("m_0004_67083", 0, "", .failed),
+        ],
+        "18-a-reply-while-you-re-away": [
+            you("dfbbdf74-22ad-485a-8020-e54a243e67c9", bike), bikeReply("m_0001_81220"),
+            you("d147cf4e-fc32-4395-aab9-f7b64c29be07", saturday),
+            you(
+                "0052f675-d6e7-42ef-8a4f-6c744e9b9f17",
+                "Also, does the 37 bus run before 7 on Saturdays?"),
+            saturdayReply("m_0002_88780"),
+            reply("m_0003_13830", 0, "", .failed),
+        ],
+        "19-ari-asks-before-acting": [
+            you("602d18e0-95e6-459a-9af4-9642703308e5", bike), bikeReply("m_0001_38572"),
+            you(
+                "bb0c651c-6f43-4f10-acb9-8956565e139a",
+                "Book a table at Juno for Saturday at 7:30, for two."),
+            you("5ce13252-2fa3-4462-a97b-c341b244f5f5", "Clapham"),
+            reply("m_0002_19614", 73, "for two at 7:30 on Saturday. Shall I book it?"),
+        ],
+        "20-an-approval": [
+            you("3209efd3-339f-4a33-a8be-dd3739ad0cb8", bike), bikeReply("m_0001_44818"),
+            you(
+                "68af8cd8-fbb9-4bd0-9cdf-9be2e3296d11",
+                "Book Juno in Clapham for Saturday at 7:30, for two."),
+            you("24cc9b91-dd36-4eba-8f55-b143861efea9", "Book it"),
+            reply("m_0002_03242", 84, "30, a table for two. The reference is JC4821."),
+        ],
+        "21-an-ask-while-you-re-away": [
+            you("1bd73a2b-843b-434b-8684-07a7bdf3a934", bike), bikeReply("m_0001_14784"),
+            you(
+                "de757056-edc5-4f6e-b5f8-b925c606fb15",
+                "Book a table at Juno for Friday at 8, for two."),
+            you("c2432f00-720f-4baf-bdd8-2d81439ca44f", "Soho"),
+            reply("m_0002_06693", 51, ": Juno in Soho, Friday at 8, a table for two."),
+        ],
+        "22-waiting": [
+            you("67d73edd-9fdd-4e0f-9681-cd1b4fc585e5", bike), bikeReply("m_0001_68901"),
+            you("f23059bc-e46e-436e-99ec-e17a564b3587", "Book Juno for Saturday."),
+        ],
+        "23-your-own-way-then-stop": [
+            you("ee60f6f5-f932-4d5f-9bb2-e954e533f662", bike), bikeReply("m_0001_04514"),
+            you("e48048f8-e56f-4955-8ab8-7d976827fd7f", "Book Juno for Saturday."),
+            you(
+                "40364441-f13e-436f-9303-730eb0ad286a",
+                "Actually, find somewhere new in Brixton instead."),
+        ],
+        "24-the-reminder": [
+            you("a38ab63f-cd53-4185-8787-854cc00ddc02", bike), bikeReply("m_0001_16750"),
+            you("d46a7bdd-6b3f-4d81-94a4-2393b548433b", "Book Juno for Saturday at 7:30, for two."),
+            you("3c2171f0-3504-49fc-a75a-f7e7b7371229", "Clapham"),
+            reply("m_0002_20811", 73, "for two at 7:30 on Saturday. Shall I book it?"),
+        ],
+        "25-a-secret": [
+            you("3c745eaf-6fe9-43b0-8cd5-6d3e9027ecc8", bike), bikeReply("m_0001_44119"),
+            you(
+                "837231c9-ee97-474f-9657-13e0de8086cb",
+                "Book Juno in Clapham for Saturday at 7:30, for two."),
+            you("07fa34b1-a387-4687-bf4a-a9a7a40cc10f", ""),
+            reply("m_0002_69009", 59, "n Clapham, Saturday at 7:30, a table for two."),
+        ],
+        "26-turning-on-notifications": [
+            you("e650397d-2de5-4f6d-b54c-30865f70c9e6", bike), bikeReply("m_0001_63846"),
+            you(
+                "ec4d4743-f528-44cc-802c-c1c326b96ee5",
+                "Go through my notes and tidy up the packing lists for the weekend."),
+            reply("m_0002_07750", 95, "t and the bus card, and the old list is gone."),
         ],
         "17-reporting-a-gap": [
             you("61fffc2c-5f33-47dc-b94a-55c3dc0b0969", bike), bikeReply("m_0001_85723"),

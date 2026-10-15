@@ -120,6 +120,25 @@ struct TimelineTests {
         #expect(timeline.items.map(\.id)[2] == "m_1")
     }
 
+    @Test("what Ari asks sits on the trail, and the trail stays open while it waits")
+    func asks() throws {
+        var replay = Replay(try Fixtures.transcript("19-ari-asks-before-acting"))
+        try replay.play(throughLine: 21)
+        let waiting = try #require(trails(caughtUp(replay.conversation)).last)
+        guard case .ask(let ask) = waiting.parts.last else {
+            throw TranscriptError("the ask isn't on the trail")
+        }
+        #expect(ask.outcome == nil && ask.question == "Which Juno did you mean?")
+        #expect(waiting.parts.compactMap(\.run).allSatisfy { !$0.isFolded })
+
+        try replay.play()
+        let parts = trails(caughtUp(replay.conversation)).flatMap(\.parts)
+        let settled = parts.compactMap { part -> Ask? in
+            if case .ask(let ask) = part { ask } else { nil }
+        }
+        #expect(settled.map(\.outcome) == [.answered])
+    }
+
     // MARK: - Helpers
 
     /// The timeline with every message already on screen.

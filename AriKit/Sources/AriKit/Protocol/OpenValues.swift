@@ -184,3 +184,27 @@ public struct PlanItemState: OpenValue {
     public static let done = PlanItemState(rawValue: "done")
     public static let known = [pending, inProgress, done]
 }
+
+/// What an ask is for. Ari treats a kind it doesn't know as a question.
+public struct AskKind: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Information or a choice.
+    public static let question = AskKind(rawValue: "question")
+    /// Before the agent does something consequential, with a preview of what would happen.
+    public static let approval = AskKind(rawValue: "approval")
+    public static let known = [question, approval]
+}
+
+/// How an ask ended. An outcome Ari doesn't know means only that it ended.
+public struct AskOutcome: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// A message answered it.
+    public static let answered = AskOutcome(rawValue: "answered")
+    /// You cancelled it, or the agent asked something else.
+    public static let cancelled = AskOutcome(rawValue: "cancelled")
+    public static let known = [answered, cancelled]
+}

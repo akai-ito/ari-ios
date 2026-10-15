@@ -103,9 +103,15 @@ struct ConversationView: View {
             if let problem = session.problem {
                 ProblemNotice(problem: problem, connectAgain: connectAgain)
             } else {
-                Composer(draft: $draft, role: role(working: working), send: send, stop: stop)
-                    .frame(maxWidth: Rhythm.column)
-                    .frame(maxWidth: .infinity)
+                // While Ari waits for your answer, the composer takes it, as a secret if asked.
+                let asking = revealing ? nil : conversation.waitingAsk
+                Composer(
+                    draft: $draft, role: role(working: working, asking: asking != nil),
+                    prompt: asking == nil ? "Message Ari" : "Answer Ari",
+                    secret: asking?.secret ?? false, send: send, stop: stop
+                )
+                .frame(maxWidth: Rhythm.column)
+                .frame(maxWidth: .infinity)
             }
         }
         .background(.ariBackground)
@@ -191,7 +197,9 @@ struct ConversationView: View {
         case .day(let date):
             DayLabel(date: date)
         case .yours(let entry):
-            YourMessage(text: entry.text, tag: tag(for: entry, in: conversation))
+            YourMessage(
+                text: entry.isSecret ? "••••••" : entry.text, tag: tag(for: entry, in: conversation)
+            )
         case .ari(let entry):
             let text = conversation.visibleText(of: entry)
             let shown = reveal.position(of: entry)
@@ -210,7 +218,9 @@ struct ConversationView: View {
                 ShareLink(item: entry.text)
             }
         case .trail(let trail):
-            TrailView(trail: trail, conversation: conversation, reveal: reveal, opened: $opened)
+            TrailView(
+                trail: trail, conversation: conversation, reveal: reveal, opened: $opened,
+                answer: answer)
         case .failure(let turn, let error):
             failureLine(turn: turn, error: error, in: conversation)
         }
@@ -222,6 +232,7 @@ struct ConversationView: View {
         if entry.delivery == .sending {
             return session.link == .live ? "Sending" : "Waiting to send"
         }
+        if entry.isSecret { return "Hidden from your history" }
         switch entry.mark {
         case .next: return "Next"
         case .read:
@@ -267,15 +278,26 @@ struct ConversationView: View {
 
     // MARK: - What you do
 
-    private func role(working: Bool) -> Composer.Role {
+    private func role(working: Bool, asking: Bool) -> Composer.Role {
         if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .send }
         if working, session.conversation.pendingStop == nil { return .stop }
-        return .idle
+        // Stop while Ari waits for you cancels what it asked.
+        return asking ? .stop : .idle
     }
 
+    /// Whatever you send while Ari waits answers it. A secret names the ask, and keeps no text.
     private func send() {
-        guard session.send(draft) != nil else { return }
+        let asking = session.conversation.waitingAsk
+        let secret = asking?.secret ?? false
+        guard session.send(draft, answers: secret ? asking?.id : nil, secret: secret) != nil
+        else { return }
         draft = ""
+        scrollToEnd()
+    }
+
+    /// You tapped one of an ask's options: its label is your answer.
+    private func answer(_ ask: Ask, _ option: Ask.Option) {
+        guard session.send(option.label, answers: ask.id) != nil else { return }
         scrollToEnd()
     }
 
@@ -290,7 +312,14 @@ struct ConversationView: View {
 
     /// Stop names the message the server is still writing, at how much of it is on screen.
     private func stop() {
-        session.stop(cut: reveal.stop(in: session.conversation))
+        let conversation = session.conversation
+        if conversation.turn == nil, !reveal.isRevealing(conversation),
+            let ask = conversation.waitingAsk
+        {
+            session.cancel(ask.id)
+            return
+        }
+        session.stop(cut: reveal.stop(in: conversation))
     }
 
     private func loadEarlier() {
@@ -306,7 +335,8 @@ struct ConversationView: View {
             if session.conversation.pendingStop != nil { return .stopping }
             return turn.status.map { Pose(kind: $0.kind) } ?? .thinking
         }
-        return revealing ? .writing : .resting
+        if revealing { return .writing }
+        return session.conversation.waitingAsk == nil ? .resting : .asking
     }
 
     private func liveStatus(revealing: Bool) -> StatusText? {
@@ -317,6 +347,7 @@ struct ConversationView: View {
             return turn.status.map { .status($0.label, detail: $0.detail) }
         }
         if revealing { return .status("Writing", detail: nil) }
+        if conversation.waitingAsk != nil { return .status("Waiting for you", detail: nil) }
         return stopped ? .quiet("Stopped") : nil
     }
 

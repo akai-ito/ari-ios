@@ -53,6 +53,8 @@ struct Transcript: Sendable, CustomTestStringConvertible {
         case event(LoggedEvent)
         /// Something happens outside the API, such as the network dropping.
         case world(World)
+        /// The server pushes a notification to a device: what the phone shows once it decrypts it.
+        case push(Push)
 
         /// When it happens, in milliseconds from the start.
         var at: Int {
@@ -61,6 +63,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
             case .server(let response): response.at
             case .event(let event): event.at ?? 0
             case .world(let world): world.at
+            case .push(let push): push.at
             }
         }
 
@@ -70,6 +73,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
             case .server(let response): response.line
             case .event(let event): event.line
             case .world(let world): world.line
+            case .push(let push): push.line
             }
         }
 
@@ -81,8 +85,15 @@ struct Transcript: Sendable, CustomTestStringConvertible {
             case .server(let response): "\(response.status)\(response.lost ? " lost" : "")"
             case .event(let event): "\(event.event.type) \(event.event.id?.rawValue ?? "")"
             case .world(let world): world.marker
+            case .push(let push): "push \(push.json["notification"]?["kind"]?.string ?? "")"
             }
         }
+    }
+
+    struct Push: Sendable {
+        let line: Int
+        let at: Int
+        let json: JSONValue
     }
 
     struct Request: Sendable {
@@ -151,11 +162,13 @@ struct Transcript: Sendable, CustomTestStringConvertible {
                         headers: Self.headers(response["headers"]), body: response["body"],
                         lost: json["lost"] == .bool(true))
                     steps.append(.server(answer))
+                } else if let push = json["push"] {
+                    steps.append(.push(Push(line: line, at: json["at"]?.int ?? 0, json: push)))
                 } else if let marker = json["world"]?.string {
                     steps.append(
                         .world(World(line: line, at: json["at"]?.int ?? 0, marker: marker)))
                 } else {
-                    throw TranscriptError("no given, event, app, server or world")
+                    throw TranscriptError("no given, event, app, server, world or push")
                 }
             }
         }
@@ -206,6 +219,10 @@ enum Route: Equatable {
     case earlierMessages(before: MessageID, limit: Int?)
     case stop(TurnID)
     case retry(TurnID)
+    case cancelAsk(AskID)
+    /// Registering a device for notifications, or forgetting it.
+    case device
+    case presence
     case other
 
     init(method: String, path: String) {
@@ -226,6 +243,13 @@ enum Route: Equatable {
             self = .stop(TurnID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "retry":
             self = .retry(TurnID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "asks" && parts[3] == "cancel":
+            self = .cancelAsk(AskID(parts[2]))
+        case ("PUT", 3),
+            ("DELETE", 3) where parts[0] == "v0" && parts[1] == "devices":
+            self = .device
+        case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "presence":
+            self = .presence
         default: self = .other
         }
     }

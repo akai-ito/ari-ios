@@ -40,10 +40,14 @@ public struct SendMessage: Sendable, Equatable, Codable {
     /// The random UUID Ari made when you tapped Send: the message's id and its retry key.
     public let id: MessageID
     public let text: String
+    /// The ask it answers, named when you tap one of its options or answer a secret. Any message
+    /// sent while an ask waits answers it anyway.
+    public let answers: AskID?
 
-    public init(id: MessageID, text: String) {
+    public init(id: MessageID, text: String, answers: AskID? = nil) {
         self.id = id
         self.text = text
+        self.answers = answers
     }
 }
 
@@ -57,11 +61,13 @@ public struct MessagePage: Sendable, Equatable, Decodable {
     public let messages: [Message]
     /// Every step from the first of these messages up to the message the page ends before.
     public let steps: [Step]
+    /// Every ask in the same span.
+    public let asks: [Ask]
     /// Whether even older messages exist.
     public let hasMore: Bool
 
     enum CodingKeys: String, CodingKey {
-        case messages, steps
+        case messages, steps, asks
         case hasMore = "has_more"
     }
 }

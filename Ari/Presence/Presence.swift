@@ -4,6 +4,8 @@ import SwiftUI
 /// What the character is doing, from the turn's status kind and the connection.
 enum Pose: Equatable {
     case resting, thinking, searching, writing, adjusting, waiting, stopping
+    /// Ari asked you something and waits for your answer.
+    case asking
     /// The connection is down: Ari can't hear the server, so the character doesn't pretend to work.
     case offline
 
@@ -170,6 +172,8 @@ struct PresenceView: View {
         case .adjusting: CGPoint(x: 3.2, y: 2.9 + 0.3 * sin(since * 2))
         case .waiting: CGPoint(x: -1.8 + 0.6 * sin(t * 0.5), y: -2.0)
         case .stopping: CGPoint(x: 0, y: 3.0)
+        // Down toward you and the composer, with a slow, patient sway.
+        case .asking: CGPoint(x: 0.9 * sin(t * 0.55), y: 3.6 + 0.25 * sin(t * 0.9))
         case .offline: CGPoint(x: 0, y: 1.6)
         }
     }
@@ -179,6 +183,8 @@ struct PresenceView: View {
         switch pose {
         case .adjusting: 1.12
         case .waiting: 0.62
+        // Open and attentive: it's your turn.
+        case .asking: 1.08
         case .offline: 0.5
         case .stopping:
             since < 0.1

@@ -21,6 +21,11 @@ public struct Message: Hashable, Sendable, Codable {
     public var outcome: Outcome?
     /// Present when the outcome is failed.
     public var error: ServerError?
+    /// Your messages only: the ask this message answered.
+    public var answers: AskID?
+    /// Your messages only: a secret answer, such as a code. Its text is always empty: the agent
+    /// received what you typed, and the conversation keeps nothing of it.
+    public var secret: Bool?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -40,7 +45,7 @@ public struct Message: Hashable, Sendable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, role, kind, turn, text, at, position, outcome, error
+        case id, role, kind, turn, text, at, position, outcome, error, answers, secret
         case endedAt = "ended_at"
     }
 }

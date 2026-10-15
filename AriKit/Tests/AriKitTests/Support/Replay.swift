@@ -65,7 +65,7 @@ struct Replay {
         case .server(let response):
             try answer(response)
             request = nil
-        case .world:
+        case .world, .push:
             break
         }
         check(after: step, before: before)
@@ -77,13 +77,17 @@ struct Replay {
         switch request.route {
         case .send:
             let message = try #require(request.body).decode(SendMessage.self)
-            conversation.send(message.id, text: message.text)
+            let secret = message.answers.flatMap { conversation[ask: $0]?.secret } ?? false
+            conversation.send(
+                message.id, text: message.text, answers: message.answers, secret: secret)
         case .stop(let turn):
             let cut = try request.body?.decode(StopTurn.self).cut
             if let cut, conversation.turn?.id == turn { tapped = (turn, cut) }
             conversation.stop(turn: turn, cut: cut)
         case .retry(let turn):
             conversation.retry(turn: turn)
+        case .cancelAsk(let ask):
+            conversation.cancel(ask)
         default:
             break
         }
@@ -105,6 +109,8 @@ struct Replay {
             conversation.confirm(result)
         case .retry:
             conversation.confirm(try body.decode(RetryResult.self))
+        case .cancelAsk:
+            conversation.confirm(try body.decode(AskResult.self))
         case .earlierMessages(let before, _):
             conversation.insertEarlier(try body.decode(MessagePage.self), before: before)
         default:

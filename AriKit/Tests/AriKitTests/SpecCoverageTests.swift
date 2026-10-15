@@ -44,6 +44,8 @@ struct SpecCoverageTests {
         let role = try #require(spec.definitions["Message"]?["properties"]?["role"]?["enum"]?.array)
         #expect(role.compactMap(\.string) == Role.known.map(\.rawValue))
         #expect(try spec.values(of: "StepKind") == StepKind.known.map(\.rawValue))
+        #expect(try spec.values(of: "AskKind") == AskKind.known.map(\.rawValue))
+        #expect(try spec.values(of: "AskOutcome") == AskOutcome.known.map(\.rawValue))
         let step = try #require(spec.definitions["Step"]?["properties"])
         func values(_ field: String, _ key: String) throws -> [String] {
             try #require(step[field]?["items"]?["properties"]?[key]?["enum"]?.array).compactMap(

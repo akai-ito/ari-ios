@@ -11,14 +11,17 @@ struct TrailView: View {
     let reveal: Reveal
     /// The runs and steps you've opened, by ``key(run:)`` and ``key(line:)``.
     @Binding var opened: Set<String>
+    /// You tapped one of an ask's options.
+    var answer: (Ask, Ask.Option) -> Void = { _, _ in }
 
     var body: some View {
         let rows = rows
-        let newest = rows.last { $0.isRunning }?.id
+        let newest = rows.last { $0.isRunning || isWaiting($0) }?.id
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 RailRow(
-                    dot: row.dot, breathing: row.id == newest, starts: index == 0,
+                    dot: isWaiting(row) ? .live : row.dot, breathing: row.id == newest,
+                    starts: index == 0,
                     continues: index < rows.count - 1
                 ) {
                     content(for: row)
@@ -38,12 +41,14 @@ struct TrailView: View {
         case note(Conversation.Entry)
         case summary(StepRun, isOpen: Bool)
         case line(StepLine)
+        case ask(Ask)
 
         var id: String {
             switch self {
             case .note(let entry): entry.id.rawValue
             case .summary(let run, _): TrailView.key(run: run)
             case .line(let line): TrailView.key(line: line)
+            case .ask(let ask): "ask " + ask.id.rawValue
             }
         }
 
@@ -54,7 +59,7 @@ struct TrailView: View {
         var dot: RailDot {
             switch self {
             case .note: .none
-            case .summary: .done
+            case .summary, .ask: .done
             case .line(let line): line.isRunning ? .live : .done
             }
         }
@@ -65,6 +70,8 @@ struct TrailView: View {
             switch part {
             case .note(let entry):
                 return [.note(entry)]
+            case .ask(let ask):
+                return [.ask(ask)]
             case .steps(let run):
                 guard run.isFolded else { return run.lines.map(Row.line) }
                 let isOpen = isOpen(Self.key(run: run))
@@ -97,6 +104,10 @@ struct TrailView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint(isOpen ? "Folds the steps" : "Shows each step")
+        case .ask(let ask):
+            AskView(ask: ask, settling: conversation.settling[ask.id]) { option in
+                answer(ask, option)
+            }
         case .line(let line):
             StepLineView(
                 line: line,
@@ -104,6 +115,12 @@ struct TrailView: View {
                     get: { isOpen(Self.key(line: line)) },
                     set: { _ in toggle(Self.key(line: line)) }))
         }
+    }
+
+    /// An ask that waits for your answer, lit like a running step.
+    private func isWaiting(_ row: Row) -> Bool {
+        guard case .ask(let ask) = row else { return false }
+        return ask.outcome == nil && conversation.settling[ask.id] == nil
     }
 
     private func isOpen(_ key: String) -> Bool {
@@ -448,5 +465,158 @@ private struct Chevron: View {
             .foregroundStyle(.ariTertiary)
             .rotationEffect(isOpen ? .degrees(90) : .zero)
             .accessibilityHidden(true)
+    }
+}
+
+/// Something Ari asked you. While it waits, the question is Ari's own words to you (the serif, full
+/// colour), with its options to tap, and room to type below; the option that goes ahead is filled
+/// like Send. Once answered or cancelled, it settles into a quiet line on the trail, and your answer
+/// is your own message below it.
+private struct AskView: View {
+    let ask: Ask
+    let settling: Conversation.Settling?
+    let answer: (Ask.Option) -> Void
+
+    var body: some View {
+        if ask.outcome == nil && settling == nil {
+            open
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Asked: \(ask.question)")
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                if ask.outcome == .cancelled || settling == .cancelling {
+                    Tag(text: "Stopped before you answered")
+                }
+            }
+        }
+    }
+
+    private var open: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(ask.question)
+                .font(.ariBody)
+                .foregroundStyle(.ariText)
+                .lineSpacing(Rhythm.ariLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+            if let preview = ask.preview {
+                Text(preview)
+                    .font(.subheadline)
+                    .foregroundStyle(.ariSecondary)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.ariLine, lineWidth: 1)
+                    }
+                    .textSelection(.enabled)
+            }
+            if !ask.options.isEmpty {
+                WrappingStack(spacing: 8) {
+                    ForEach(ask.options, id: \.label) { option in
+                        OptionButton(option: option) { answer(option) }
+                    }
+                }
+                let described = ask.options.filter { $0.description != nil }
+                if !described.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(described, id: \.label) { option in
+                            Text("\(option.label): \(option.description ?? "")")
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+                }
+            }
+            if let hint {
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+            }
+        }
+        .padding(.top, 1)
+    }
+
+    private var hint: String? {
+        if ask.secret { return "Type it below. It stays out of your history in Ari." }
+        if ask.options.isEmpty { return "Type your answer below." }
+        return ask.allowsText ? "Or type your own answer." : nil
+    }
+}
+
+/// An option under an ask: outlined, in your hand (SF Pro), or filled like Send when it's the
+/// option that goes ahead.
+private struct OptionButton: View {
+    let option: Ask.Option
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(option.label)
+                .font(.subheadline.weight(option.acts ? .semibold : .regular))
+                .foregroundStyle(option.acts ? Color.ariBackground : .ariText)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background {
+                    if option.acts {
+                        Capsule().fill(.ariText)
+                    } else {
+                        Capsule().strokeBorder(.ariLine, lineWidth: 1)
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Lays its views out in rows, starting a new row when the next one wouldn't fit.
+private struct WrappingStack: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = rows(for: subviews, width: proposal.width ?? .infinity)
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        let width = rows.map(\.width).max() ?? 0
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
+        var y = bounds.minY
+        for row in rows(for: subviews, width: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func rows(for subviews: Subviews, width: CGFloat) -> [Row] {
+        var rows: [Row] = [Row()]
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let needed = rows[rows.count - 1].indices.isEmpty ? size.width : size.width + spacing
+            if rows[rows.count - 1].width + needed > width, !rows[rows.count - 1].indices.isEmpty {
+                rows.append(Row())
+            }
+            let gap = rows[rows.count - 1].indices.isEmpty ? 0 : spacing
+            rows[rows.count - 1].indices.append(index)
+            rows[rows.count - 1].width += size.width + gap
+            rows[rows.count - 1].height = max(rows[rows.count - 1].height, size.height)
+        }
+        return rows
     }
 }

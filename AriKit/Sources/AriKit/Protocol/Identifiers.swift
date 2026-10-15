@@ -38,3 +38,9 @@ public struct StepID: OpaqueIdentifier {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 }
+
+/// Something the agent asked you. The server makes it when the agent asks.
+public struct AskID: OpaqueIdentifier {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+}

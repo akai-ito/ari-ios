@@ -18,6 +18,8 @@ public struct Event: Sendable, Equatable, Decodable {
         case stepStarted(StepEvent)
         case stepUpdated(StepEvent)
         case stepEnded(StepEvent)
+        case askStarted(AskEvent)
+        case askEnded(AskEvent)
         case messageStarted(MessageStarted)
         case messageDelta(MessageDelta)
         case messageEnded(MessageEnded)
@@ -29,7 +31,7 @@ public struct Event: Sendable, Equatable, Decodable {
     /// Every type this version of Ari decodes, as named on the wire.
     public static let knownTypes = [
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
-        "turn.status", "step.started", "step.updated", "step.ended",
+        "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "turn.ended",
     ]
 
@@ -52,6 +54,8 @@ public struct Event: Sendable, Equatable, Decodable {
             case "step.started": .stepStarted(try StepEvent(from: decoder))
             case "step.updated": .stepUpdated(try StepEvent(from: decoder))
             case "step.ended": .stepEnded(try StepEvent(from: decoder))
+            case "ask.started": .askStarted(try AskEvent(from: decoder))
+            case "ask.ended": .askEnded(try AskEvent(from: decoder))
             case "message.started": .messageStarted(try MessageStarted(from: decoder))
             case "message.delta": .messageDelta(try MessageDelta(from: decoder))
             case "message.ended": .messageEnded(try MessageEnded(from: decoder))
@@ -71,6 +75,8 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     /// Every step from the first of those messages on, the running turn's included, in position
     /// order.
     public let steps: [Step]
+    /// Every ask from the first of those messages on, the one waiting for your answer included.
+    public let asks: [Ask]
     /// Whether older messages exist.
     public let hasMore: Bool
     /// The running turn, or `nil` when the agent is idle.
@@ -79,7 +85,7 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let next: [MessageID]
 
     enum CodingKeys: String, CodingKey {
-        case at, reason, messages, steps, turn, next
+        case at, reason, messages, steps, asks, turn, next
         case hasMore = "has_more"
     }
 }
@@ -137,6 +143,13 @@ public struct TurnStatus: Sendable, Equatable, Decodable {
 public struct StepEvent: Sendable, Equatable, Decodable {
     public let at: Timestamp
     public let step: Step
+}
+
+/// The agent asks you something (and its turn ends next), or the ask is settled: answered by a
+/// message, which `message.accepted` brings first, or cancelled. Each carries the whole ask.
+public struct AskEvent: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let ask: Ask
 }
 
 /// The agent begins a message, with empty text and no outcome; `message.delta` events follow.
