@@ -53,10 +53,6 @@ struct HeaderView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([name, status?.spoken].compactMap(\.self).joined(separator: ", "))
-        #if os(iOS)
-            // Until Ari has settings, a long press on the header is where the icon is chosen.
-            .contextMenu { AppIconPicker() }
-        #endif
     }
 }
 

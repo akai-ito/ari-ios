@@ -9,6 +9,8 @@ final class AppModel {
     private(set) var session: Session?
     /// The address to suggest on the connect screen, such as after the token stopped working.
     private(set) var lastAddress: String = ""
+    /// Who answered at the address: the server's name, version and protocol, for Settings.
+    private(set) var server: ServerInfo?
 
     @ObservationIgnored private let tokens: any TokenStore
     @ObservationIgnored private let defaults: UserDefaults
@@ -20,6 +22,7 @@ final class AppModel {
         guard let saved = Saved.load(from: defaults) else { return }
         address = saved.address
         lastAddress = saved.address.description
+        server = saved.server
         if let token = try? tokens.token(for: saved.address) {
             session = Self.session(
                 for: Connection(address: saved.address, token: token, server: saved.server))
@@ -32,6 +35,7 @@ final class AppModel {
         Saved(address: connection.address, server: connection.server).save(to: defaults)
         address = connection.address
         lastAddress = connection.address.description
+        server = connection.server
         session?.close()
         session = Self.session(for: connection)
         session?.start()
