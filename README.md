@@ -46,6 +46,9 @@
   has it. Photos go as JPEG, about 2048 pixels on the long edge, without their location. A message
   waits for its attachments, and `AttachmentCache` keeps their bytes, so each is fetched at most
   once.
+- **Share to Ari.** From any app's share sheet, photos, files, links and text go to Ari with a
+  note. The extension sends them at once when it can, reaching the server with the address and
+  token Ari keeps in its app group; otherwise they wait there, and Ari sends them when it opens.
 - **Reading at a person's pace.** `Reveal` shows a reply at a steady reading pace, catching up
   when the screen falls more than a couple of seconds behind the server. `ReplyDocument` reads its
   Markdown with Apple's [swift-markdown](https://github.com/swiftlang/swift-markdown) and keeps

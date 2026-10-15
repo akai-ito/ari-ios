@@ -35,14 +35,22 @@ final class AppModel {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var address: ServerAddress?
 
-    init(tokens: any TokenStore = KeychainTokenStore(), defaults: UserDefaults = .standard) {
-        self.tokens = tokens
+    /// Shared with the extensions: on the iPhone, the share extension reads the address and token.
+    @ObservationIgnored private let group = AppGroup.forThisApp()
+
+    init(tokens: (any TokenStore)? = nil, defaults: UserDefaults = .standard) {
+        #if os(iOS)
+            self.tokens = tokens ?? group.tokens
+        #else
+            self.tokens = tokens ?? KeychainTokenStore()
+        #endif
         self.defaults = defaults
         guard let saved = Saved.load(from: defaults) else { return }
+        group.address = saved.address
         address = saved.address
         lastAddress = saved.address.description
         server = saved.server
-        if let token = try? tokens.token(for: saved.address) {
+        if let token = try? self.tokens.token(for: saved.address) {
             session = Self.session(
                 for: Connection(address: saved.address, token: token, server: saved.server))
         }
@@ -53,6 +61,7 @@ final class AppModel {
         pairing = nil
         try? tokens.save(connection.token, for: connection.address)
         Saved(address: connection.address, server: connection.server).save(to: defaults)
+        group.address = connection.address
         address = connection.address
         lastAddress = connection.address.description
         server = connection.server
@@ -66,6 +75,20 @@ final class AppModel {
     func open(_ url: URL) {
         guard let link = Connector.pairing(from: url) else { return }
         pairing = PairingLink(address: link.address, code: link.code)
+    }
+
+    /// Shares the share extension couldn't send, as when the phone was offline: they go now, in
+    /// the order you shared them.
+    func collectShares() {
+        guard let session, let shares = group.shares() else { return }
+        for attachment in shares.attachments() {
+            session.attach(attachment)
+            shares.removeAttachment(attachment.id)
+        }
+        for message in (try? shares.load()) ?? [] {
+            session.send(message.text, id: message.id, attachments: message.attachments ?? [])
+            try? shares.remove(message.id)
+        }
     }
 
     /// Asks the server who it is again, so Settings shows what it runs now rather than what it ran
@@ -83,6 +106,7 @@ final class AppModel {
     /// Back to the connect screen, forgetting the token, as when the server stopped accepting it.
     func connectAgain() {
         if let address { try? tokens.delete(for: address) }
+        group.address = nil
         session?.close()
         session = nil
     }

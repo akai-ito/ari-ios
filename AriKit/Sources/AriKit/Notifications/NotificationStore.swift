@@ -27,11 +27,7 @@ public struct NotificationStore: Sendable {
     /// The store for this app, or for one of its extensions: the group named after the app's
     /// bundle identifier.
     public static func forThisApp(_ bundle: Bundle = .main) -> NotificationStore {
-        var identifier = bundle.bundleIdentifier ?? "io.github.akai-ito.ari"
-        if bundle.bundleURL.pathExtension == "appex", let dot = identifier.lastIndex(of: ".") {
-            identifier = String(identifier[..<dot])
-        }
-        return NotificationStore(group: "group." + identifier)
+        NotificationStore(group: AppGroup.forThisApp(bundle).identifier)
     }
 
     /// This install's id, made once. The server keeps one registration per device, and seals each
