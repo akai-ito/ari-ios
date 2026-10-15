@@ -49,6 +49,10 @@
   short notes where it wrote them. `Timeline` merges messages and steps by position, groups
   similar steps ("Read 3 files"), and folds each run once the turn is over; tap a step to open
   its specifics (the command and its output, the pages, the files, the plan) in place.
+- **Three places, and Settings.** Chat, Goals and Library, as the design map plans them, in the
+  iOS 26 tab bar (a sidebar on the Mac); Goals and Library say plainly what they'll hold. Settings
+  open from the corner: the server (with "Connect to another server…"), notifications, and the
+  app icon, Rest or Peeking.
 - **The look.** A cool slate dark with soft white text and no accent colour. Ari writes in New
   York, Apple's serif; you write in SF Pro, in a thin outline. Ari's presence is a small pebble of
   bone-coloured dots with two eyes that follow what it's doing: up while thinking, aside while
@@ -73,7 +77,8 @@ demo engine on the same Mac (`node bin/ito.ts serve --engine demo` in an
 [ito-core](https://github.com/akai-ito/ito-core) clone) and connect to `http://127.0.0.1:8787` with
 the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen,
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
-`ARI_DRAFT` fills in the composer, and `ARI_OPEN_TRAIL` opens every step on the trail, which is
+`ARI_DRAFT` fills in the composer, `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_PLACE`
+opens a tab and `ARI_SETTINGS` opens Settings, which is
 handy from `xcrun simctl launch` (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout.

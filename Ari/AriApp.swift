@@ -10,7 +10,7 @@ struct AriApp: App {
         WindowGroup {
             Group {
                 if let session = model.session {
-                    ConversationView(session: session, connectAgain: model.connectAgain)
+                    MainView(session: session, model: model)
                 } else {
                     ConnectView(address: model.lastAddress, connected: model.connected)
                 }
