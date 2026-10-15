@@ -15,13 +15,14 @@ where the protocol has to make it possible, marked *App*.
 | G4 | **Exact resume.** Every event carries a cursor. Reconnecting with the last cursor the app applied delivers every later event once: nothing missing, nothing repeated, including reply text streamed in the meantime. | 2, 11, 13 |
 | G5 | **An honest reset.** When the server can't continue from a cursor (too old, restored from a backup, a different server), it says so and sends a fresh snapshot. It never resumes from the wrong place. Ids are never reused, even after a restore. | 14 |
 | G6 | **Turns outlive connections.** A turn runs to its end whether or not any app is connected. Only Stop, a failure or a restart ends it early. | 13 |
-| G7 | **Text only grows.** Reply text streams as appended pieces and is never revised. A finished message's text is exactly what was streamed, or exactly what was on screen when you tapped Stop. | 5, 7, 8, 11 |
-| G8 | **Every turn ends, with a reason.** Completed, stopped, interrupted by a restart, or failed with a typed error. Nothing is left "still writing", and live status never outlives its turn. | 4, 6, 14, 15 |
+| G7 | **Text only grows.** Reply text streams as appended pieces and is never revised. A finished message's text is exactly what was streamed, or exactly what was on screen when you tapped Stop. Stop cuts only a message still being written; one that already finished keeps all its text. | 5, 7, 8, 11 |
+| G8 | **Every turn ends, with a reason.** Completed, stopped, interrupted by a restart, or failed with a typed error. Nothing is left "still writing", and live status never outlives its turn. A turn that fails or is cut off before writing a reply still leaves one, empty and carrying the reason, so the conversation itself shows what happened. | 4, 6, 14, 15 |
 | G9 | **Stop jumps every queue.** Stop is a command of its own, addressed to one turn, safe to repeat, and handled ahead of everything else on both sides: never behind a send, a steer or a reconnect. It is confirmed only once the agent has really stopped. | 7 |
-| G10 | **Plain words, typed errors.** Live status is plain words from a known vocabulary. Errors carry a stable code, a plain sentence and a technical detail. | 4, 15 |
+| G10 | **Plain words, typed errors.** Every status label and step title is plain words written by the server, safe to show as it is. Specifics (commands, paths, queries, URLs, tool names, output) travel in typed fields, exactly as the agent used them, and the app decides what to show. Errors carry a stable code, a plain sentence and a technical detail. | 4, 15, 16 |
 | G11 | **The token stays secret.** It travels only over HTTPS (loopback excepted, for development), is never logged and is never sent back. | 1 |
 | G12 | **Versioned and tolerant.** The server states its protocol version before asking for the token. Both sides ignore what they don't recognise. A major mismatch says which side to update. | 1 |
 | G13 | **Several apps, one conversation.** An iPhone and a Mac can be connected at once. Every app receives every event, and a send or a Stop from either applies to the one shared conversation. | 2 |
+| G14 | **The agent's steps are kept.** Every step the agent takes (thinking, a search, a command, an edit, a tool, a plan) streams as it happens and is stored in the conversation, in order with the messages, so it comes back in snapshots, in history and on every app. Every step ends with an outcome; a step still running when its turn ends, ends with the turn. | 4, 7, 9, 15, 16 |
 
 ## Scenario by scenario
 
@@ -54,10 +55,13 @@ where the protocol has to make it possible, marked *App*.
 
 - When a message starts a turn, the server announces the turn at once, with its id (so Stop works
   immediately), without waiting for the model.
-- Live status uses a known vocabulary (thinking, working, writing…) with a label in plain words:
-  never a tool name, a command or JSON. (G10)
-- Status belongs to a turn: it changes as the work changes and ends with the turn. Nothing about the
-  turn arrives after its end. (G8)
+- Live status has a coarse kind (thinking, working, writing…) for the agent's presence and a label
+  in plain words; while a step runs, the label is that step's title. (G10)
+- Each step the agent takes streams as it happens: `step.started` with a present-tense title,
+  `step.updated` as more is known, `step.ended` with its outcome, duration and past-tense title.
+  Its specifics (the search query, the command, the files) travel in typed fields. (G10, G14)
+- Status and steps belong to a turn: they change as the work changes and end with the turn.
+  Nothing about the turn arrives after its end. (G8)
 
 ### 5 · [The reply streams](transcripts/05-the-reply-streams.jsonl)
 
@@ -82,6 +86,11 @@ where the protocol has to make it possible, marked *App*.
   the server forces it.
 - A message sent while a turn is stopping waits, and starts the next turn. (G3)
 - A Stop that arrives after the reply already finished changes nothing.
+- When the screen lags behind the server, Stop cuts the message still being written, at as much of
+  it as was on screen (nothing, if it hadn't appeared yet). A reply that already finished keeps all
+  its text, so every app, snapshot and history page agrees. (G7)
+- A Stop while a step runs ends the step too, as stopped. A step that didn't complete keeps its
+  present-tense title. (G14)
 
 ### 8 · [Copy and share](transcripts/08-copy-and-share.jsonl)
 
@@ -132,7 +141,8 @@ where the protocol has to make it possible, marked *App*.
 ### 14 · [The server restarts, or is restored](transcripts/14-the-server-restarts-or-is-restored.jsonl)
 
 - Restart: on startup the server ends any turn that was cut off. Its text is kept and marked
-  interrupted, and apps learn it through the normal replay. (G8)
+  interrupted, and apps learn it through the normal replay. A turn cut off before it wrote a reply
+  leaves an empty reply marked interrupted. (G8)
 - Restore: a cursor the server doesn't know triggers an explicit reset and a fresh snapshot, so the
   app shows exactly what the server has, and no copies. (G5)
 
@@ -145,6 +155,18 @@ where the protocol has to make it possible, marked *App*.
   timeout instead of spinning forever.
 - Try again is a command keyed by the failed turn: it starts one new attempt and never sends your
   message twice.
+- A turn that fails before writing a reply still leaves one: empty, carrying the error. The failure
+  stays in the conversation, in a snapshot, in history and on every app, with its Try again. (G8)
+
+### 16 · [Working through a task](transcripts/16-working-through-a-task.jsonl)
+
+- Each step has a plain title written by the server and its specifics in typed fields: a command's
+  line, folder, actions, exit code and output; a file change's files and line counts; a tool's
+  capability, operation and arguments; a wait's length. (G10, G14)
+- A command that runs is completed whatever its exit code: a search that finds nothing exits 1 and
+  is still completed. Failed means a step couldn't run, or a tool reported an error. (G14)
+- A plan is a step that stays open while the agent works through it. Each update carries every
+  item's state, and the plan ends with the turn. (G14)
 
 ## Not in this version
 

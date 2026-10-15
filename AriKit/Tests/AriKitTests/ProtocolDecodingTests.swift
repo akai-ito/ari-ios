@@ -96,7 +96,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 2) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 3) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
@@ -118,6 +118,9 @@ extension Event.Payload {
         case .messageRead: "message.read"
         case .turnStarted: "turn.started"
         case .turnStatus: "turn.status"
+        case .stepStarted: "step.started"
+        case .stepUpdated: "step.updated"
+        case .stepEnded: "step.ended"
         case .messageStarted: "message.started"
         case .messageDelta: "message.delta"
         case .messageEnded: "message.ended"

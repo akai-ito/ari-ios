@@ -55,11 +55,13 @@ public struct MessageResult: Sendable, Equatable, Decodable {
 /// The answer to `GET /v0/messages?before=…`: older messages, oldest first.
 public struct MessagePage: Sendable, Equatable, Decodable {
     public let messages: [Message]
+    /// Every step from the first of these messages up to the message the page ends before.
+    public let steps: [Step]
     /// Whether even older messages exist.
     public let hasMore: Bool
 
     enum CodingKeys: String, CodingKey {
-        case messages
+        case messages, steps
         case hasMore = "has_more"
     }
 }

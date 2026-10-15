@@ -4,10 +4,10 @@ import Testing
 @Suite("The pinned protocol")
 struct FixturesTests {
     /// Every parameterized test runs once per transcript, and an empty list would pass silently.
-    @Test("holds all fifteen transcripts, each named for its scenario")
+    @Test("holds all sixteen transcripts, each named for its scenario")
     func allTranscripts() throws {
         let transcripts = try Fixtures.transcripts()
-        #expect(transcripts.map(\.header.scenario) == Array(1...15))
+        #expect(transcripts.map(\.header.scenario) == Array(1...16))
         for transcript in transcripts {
             #expect(transcript.header.transcript == transcript.name)
             #expect(transcript.name.hasPrefix(String(format: "%02d-", transcript.header.scenario)))

@@ -11,6 +11,9 @@ public struct Conversation: Sendable, Equatable {
     /// The messages, oldest first: the server's order, then your messages it hasn't accepted yet, in
     /// the order you sent them.
     public private(set) var entries: [Entry] = []
+    /// The agent's steps from the oldest message on, in conversation order: merged with the messages
+    /// by position, each sits exactly where it happened.
+    public private(set) var steps: [Step] = []
     /// Whether older messages exist on the server, to page back to.
     public private(set) var hasEarlierMessages = false
     /// The turn the agent is working on, if any.
@@ -25,6 +28,8 @@ public struct Conversation: Sendable, Equatable {
 
     /// Each entry's index in `entries`.
     private var positions: [MessageID: Int] = [:]
+    /// Each step's index in `steps`.
+    private var stepIndices: [StepID: Int] = [:]
     /// How many entries, from the start, the server has put in its order. The rest are yours, still on
     /// their way.
     private var serverCount = 0
@@ -45,6 +50,8 @@ extension Conversation {
         public internal(set) var length: Int
         /// When it began, by the server's clock; `nil` while your message is only on this device.
         public internal(set) var at: Timestamp?
+        /// Its place in the server's order, shared with the steps; `nil` until the server accepts it.
+        public internal(set) var position: Int?
         public internal(set) var endedAt: Timestamp?
         /// How the agent's message ended; `nil` while it's being written.
         public internal(set) var outcome: Outcome?
@@ -80,6 +87,7 @@ extension Conversation {
             text = message.text
             length = message.text.utf16.count
             at = message.at
+            position = message.position
             endedAt = message.endedAt
             outcome = message.outcome
             error = message.error
@@ -147,6 +155,8 @@ extension Conversation {
         case .turnStatus(let update):
             // A status replaces the last one completely, and only the running turn has one.
             if update.turn == turn?.id { turn?.status = update.status }
+        case .stepStarted(let event), .stepUpdated(let event), .stepEnded(let event):
+            record(event.step)
         case .messageStarted(let started):
             begin(started.message)
         case .messageDelta(let delta):
@@ -177,6 +187,7 @@ extension Conversation {
         serverCount = snapshot.messages.count
         positions = [:]
         reindex(from: 0)
+        replaceSteps(with: snapshot.steps)
 
         hasEarlierMessages = snapshot.hasMore
         turn = snapshot.turn.map {
@@ -276,6 +287,25 @@ extension Conversation {
                 entries[index].endedAt = ended.at
             }
         }
+        // And so has any step it left running; its title stays as it was, in the present tense.
+        for index in steps.indices
+        where steps[index].turn == ended.turn && steps[index].outcome == nil {
+            steps[index].outcome = ended.outcome
+            steps[index].endedAt = ended.at
+        }
+    }
+
+    /// A step started, or more is known about it: each event carries the whole step, so it replaces
+    /// what Ari has.
+    private mutating func record(_ step: Step) {
+        if let index = stepIndices[step.id] {
+            steps[index] = step
+            return
+        }
+        // Steps nearly always arrive in order; one that doesn't still finds its place.
+        let index = steps.lastIndex { $0.position < step.position }.map { $0 + 1 } ?? 0
+        steps.insert(step, at: index)
+        reindexSteps(from: index)
     }
 
     private mutating func mark(_ id: MessageID, _ mark: Entry.Mark) {
@@ -340,6 +370,7 @@ extension Conversation {
         let earlier = page.messages.filter { positions[$0.id] == nil }.map(Entry.init)
         insert(contentsOf: earlier, at: 0)
         serverCount += earlier.count
+        replaceSteps(with: page.steps.filter { stepIndices[$0.id] == nil } + steps)
         hasEarlierMessages = page.hasMore
     }
 
@@ -351,6 +382,9 @@ extension Conversation {
         entries.removeFirst(index)
         serverCount -= index
         reindex(from: 0)
+        if let first = entries.first?.position {
+            replaceSteps(with: steps.filter { $0.position > first })
+        }
         hasEarlierMessages = true
     }
 }
@@ -375,6 +409,11 @@ extension Conversation {
     public subscript(id: MessageID) -> Entry? {
         positions[id].map { entries[$0] }
     }
+
+    /// The step with `id`, if the conversation has it.
+    public subscript(step id: StepID) -> Step? {
+        stepIndices[id].map { steps[$0] }
+    }
 }
 
 // MARK: - Bookkeeping
@@ -392,6 +431,16 @@ extension Conversation {
 
     private mutating func reindex(from start: Int) {
         for index in start..<entries.count { positions[entries[index].id] = index }
+    }
+
+    private mutating func replaceSteps(with new: [Step]) {
+        steps = new.sorted { $0.position < $1.position }
+        stepIndices = [:]
+        reindexSteps(from: 0)
+    }
+
+    private mutating func reindexSteps(from start: Int) {
+        for index in start..<steps.count { stepIndices[steps[index].id] = index }
     }
 }
 

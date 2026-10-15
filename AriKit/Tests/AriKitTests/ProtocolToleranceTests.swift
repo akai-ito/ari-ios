@@ -47,7 +47,7 @@ struct ProtocolToleranceTests {
             throw TranscriptError("not a status")
         }
         #expect(update.kind == StatusKind(rawValue: "dreaming") && !update.kind.isKnown)
-        #expect(update.label == "Thinking")
+        #expect(update.label == "Thinking it through")
 
         let ended = try changed("05-the-reply-streams", "message.ended") {
             $0["outcome"] = .string("abandoned")
@@ -161,7 +161,9 @@ extension JSONValue {
     func addingUnknownFields() -> JSONValue {
         switch self {
         case .object(let object):
+            // A tool's arguments are the agent's own JSON, carried as they are, so they stay as sent.
             var extended = object.mapValues { $0.addingUnknownFields() }
+            extended["arguments"] = object["arguments"]
             extended["x_from_the_future"] = .object([
                 "nested": .array([.int(1), .string("two"), .null])
             ])

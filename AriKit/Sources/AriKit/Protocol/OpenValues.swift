@@ -127,3 +127,60 @@ public struct ErrorCode: OpenValue {
         unavailable, `internal`,
     ]
 }
+
+/// What kind of thing the agent did in a step. For a kind Ari doesn't know, the step's title is
+/// still shown.
+public struct StepKind: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let thinking = StepKind(rawValue: "thinking")
+    public static let webSearch = StepKind(rawValue: "web_search")
+    /// A command, and what it did as far as the engine could tell: read, search, list, run.
+    public static let command = StepKind(rawValue: "command")
+    public static let fileChange = StepKind(rawValue: "file_change")
+    public static let tool = StepKind(rawValue: "tool")
+    public static let plan = StepKind(rawValue: "plan")
+    public static let wait = StepKind(rawValue: "wait")
+    public static let imageView = StepKind(rawValue: "image_view")
+    /// Tidying up its notes, so the conversation fits.
+    public static let compacting = StepKind(rawValue: "compacting")
+    public static let known = [
+        thinking, webSearch, command, fileChange, tool, plan, wait, imageView, compacting,
+    ]
+}
+
+/// What a command did, as far as the engine could tell. For one Ari doesn't know, treat it as run.
+public struct ActionType: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let read = ActionType(rawValue: "read")
+    public static let search = ActionType(rawValue: "search")
+    public static let list = ActionType(rawValue: "list")
+    public static let run = ActionType(rawValue: "run")
+    public static let known = [read, search, list, run]
+}
+
+/// How a file changed. For one Ari doesn't know, treat it as modified.
+public struct FileChangeKind: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let added = FileChangeKind(rawValue: "added")
+    public static let modified = FileChangeKind(rawValue: "modified")
+    public static let deleted = FileChangeKind(rawValue: "deleted")
+    public static let moved = FileChangeKind(rawValue: "moved")
+    public static let known = [added, modified, deleted, moved]
+}
+
+/// Where a plan's item stands. For one Ari doesn't know, treat it as pending.
+public struct PlanItemState: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let pending = PlanItemState(rawValue: "pending")
+    public static let inProgress = PlanItemState(rawValue: "in_progress")
+    public static let done = PlanItemState(rawValue: "done")
+    public static let known = [pending, inProgress, done]
+}

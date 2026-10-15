@@ -32,3 +32,9 @@ public struct TurnID: OpaqueIdentifier {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 }
+
+/// One thing the agent did while working on a turn. The server makes it when the step starts.
+public struct StepID: OpaqueIdentifier {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+}
