@@ -18,6 +18,8 @@ final class AppModel {
     private(set) var server: ServerInfo?
     /// Whether Ari tells you when it's done or needs you: you allowed it, and haven't turned it off.
     private(set) var notificationsOn = false
+    /// Why iOS wouldn't register for notifications, such as a build without the push entitlement.
+    private(set) var notificationProblem: String?
     /// Whether Ari may still offer notifications: never asked, never answered.
     private(set) var offersNotifications = false
     /// A reply to open the conversation at, from a tapped notification.
@@ -167,8 +169,14 @@ final class AppModel {
 
     /// The push service gave this device its token.
     func didRegister(token: Data) {
+        notificationProblem = nil
         pushToken = token.map { String(format: "%02x", $0) }.joined()
         registerDevice()
+    }
+
+    /// iOS wouldn't register for notifications. Settings says why, rather than nothing arriving.
+    func failedToRegister(_ error: any Error) {
+        notificationProblem = error.localizedDescription
     }
 
     /// The conversation came on screen here, or left it. The server forgets this when it restarts,

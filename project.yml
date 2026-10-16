@@ -83,6 +83,19 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER).pair
             CFBundleURLSchemes: [ito]
+    # Ari.xcodeproj isn't in git: a project generated before project.yml last changed builds fine
+    # but quietly lacks its newer settings, such as entitlements. Stop and say so instead.
+    preBuildScripts:
+      - name: Check the project is up to date
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/project.yml
+          - $(PROJECT_FILE_PATH)/project.pbxproj
+        script: |
+          if [ "$SRCROOT/project.yml" -nt "$PROJECT_FILE_PATH/project.pbxproj" ]; then
+            echo "error: project.yml has changed since Ari.xcodeproj was made. Run xcodegen generate."
+            exit 1
+          fi
     scheme:
       testTargets:
         - package: AriKit/AriKitTests

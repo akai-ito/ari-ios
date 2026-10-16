@@ -111,7 +111,9 @@ struct SettingsView: View {
             } header: {
                 Text("Notifications")
             } footer: {
-                if model.server?.setup?.notifications == false {
+                if model.notificationsOn, let problem = model.notificationProblem {
+                    Text("Notifications couldn't start on this iPhone: \(problem)")
+                } else if model.server?.setup?.notifications == false {
                     Text(
                         "Your server can't send notifications yet. Run ito push setup on it, and "
                             + "they start.")
