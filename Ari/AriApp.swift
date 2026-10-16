@@ -27,6 +27,9 @@ struct AriApp: App {
                 }
             }
             .onOpenURL { model.open($0) }
+            #if os(macOS)
+                .frame(minWidth: 440, minHeight: 560)
+            #endif
             #if DEBUG
                 .task { if let url = DebugScript.openURL { model.open(url) } }
             #endif
@@ -44,5 +47,42 @@ struct AriApp: App {
                 }
             }
         }
+        #if os(macOS)
+            .defaultSize(width: 760, height: 880)
+            .commands { ConversationCommands() }
+        #endif
+
+        #if os(macOS)
+            // ⌘, opens Settings in a window of its own, as on any Mac app.
+            Settings {
+                Group {
+                    if let session = model.session {
+                        SettingsView(model: model, session: session)
+                    } else {
+                        Text("Connect Ari to your server first.")
+                            .foregroundStyle(.ariSecondary)
+                            .padding(40)
+                    }
+                }
+                .frame(width: 460, height: 560)
+                .preferredColorScheme(.dark)
+                .tint(.ariText)
+            }
+        #endif
     }
 }
+
+#if os(macOS)
+    /// The Conversation menu: Stop, with ⌘. as on any Mac.
+    private struct ConversationCommands: Commands {
+        @FocusedValue(\.stop) private var stop
+
+        var body: some Commands {
+            CommandMenu("Conversation") {
+                Button("Stop") { stop?() }
+                    .keyboardShortcut(".", modifiers: .command)
+                    .disabled(stop == nil)
+            }
+        }
+    }
+#endif

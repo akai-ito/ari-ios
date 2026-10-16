@@ -16,7 +16,8 @@ struct ConversationView: View {
 
     @State private var reveal = Reveal()
     @State private var poses = PoseHistory()
-    @State private var draft = ""
+    /// What you're writing, kept if Ari closes before you send it.
+    @AppStorage("draft") private var draft = ""
     /// Photos and files on the message you're writing, uploading as you write.
     @State private var attached: [PendingAttachment] = []
     /// Something you picked that can't be attached, said for a few seconds.
@@ -37,12 +38,67 @@ struct ConversationView: View {
     @State private var stopped = false
     /// A turn has run long enough that a nudge when it's done would help.
     @State private var offering = false
+    /// A linked page, open in place.
+    @State private var browsing: WebPage?
+    /// Each send and each Stop, for a light tap you can feel.
+    @State private var sent = 0
+    @State private var stops = 0
 
     var body: some View {
         let conversation = session.conversation
+        let working = conversation.turn != nil || reveal.isRevealing(conversation)
+        let canStop = role(working: working, asking: conversation.waitingAsk != nil) == .stop
+        let stopAction: (() -> Void)? = canStop ? { stop() } : nil
+        screen
+            // Files dropped on the conversation attach to the message you're writing.
+            .dropDestination(for: URL.self) { urls, _ in drop(urls) }
+            .sensoryFeedback(.impact(weight: .light), trigger: sent)
+            .sensoryFeedback(.impact(weight: .medium), trigger: stops)
+            .focusedSceneValue(\.stop, stopAction)
+            #if os(iOS)
+                // Links in replies open in place, over the conversation.
+                .environment(
+                    \.openURL,
+                    OpenURLAction { url in
+                        guard WebPage.opens(url) else { return .systemAction }
+                        browsing = WebPage(url: url)
+                        return .handled
+                    }
+                )
+                .sheet(item: $browsing) { page in
+                    BrowserView(page: page).ignoresSafeArea()
+                }
+            #endif
+            .sheet(item: $sheet) { item in
+                switch item {
+                case .details(let error): DetailsSheet(error: error)
+                case .selecting(let text): SelectTextSheet(text: text)
+                }
+            }
+            #if DEBUG
+                .task {
+                    if let draft = DebugScript.draft { self.draft = draft }
+                    for url in DebugScript.attachments {
+                        if let attachment = try? await AttachmentMaker.file(at: url) {
+                            attach(attachment)
+                        }
+                    }
+                    await DebugScript.run(
+                        in: session,
+                        send: { message in
+                            draft = message
+                            send()
+                        }, stop: stop)
+                }
+            #endif
+    }
+
+    /// The conversation itself, the composer, and what follows the session and the screen.
+    private var screen: some View {
+        let conversation = session.conversation
         let revealing = reveal.isRevealing(conversation)
         let working = conversation.turn != nil || revealing
-        VStack(spacing: 0) {
+        return VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Rhythm.messageGap) {
                     if conversation.entries.isEmpty {
@@ -180,28 +236,6 @@ struct ConversationView: View {
             }
             opening.wrappedValue = nil
         }
-        .sheet(item: $sheet) { item in
-            switch item {
-            case .details(let error): DetailsSheet(error: error)
-            case .selecting(let text): SelectTextSheet(text: text)
-            }
-        }
-        #if DEBUG
-            .task {
-                if let draft = DebugScript.draft { self.draft = draft }
-                for url in DebugScript.attachments {
-                    if let attachment = try? await AttachmentMaker.file(at: url) {
-                        attach(attachment)
-                    }
-                }
-                await DebugScript.run(
-                    in: session,
-                    send: { message in
-                        draft = message
-                        send()
-                    }, stop: stop)
-            }
-        #endif
     }
 
     // MARK: - Rows
@@ -371,7 +405,26 @@ struct ConversationView: View {
         else { return }
         draft = ""
         attached = []
+        sent += 1
         scrollToEnd()
+    }
+
+    /// Files dropped on the conversation: each attaches, as if picked with the +.
+    private func drop(_ urls: [URL]) -> Bool {
+        let room = AttachmentMaker.mostPerMessage - attached.count
+        guard room > 0, session.problem == nil else { return false }
+        Task {
+            for url in urls.prefix(room) where url.isFileURL {
+                do {
+                    attach(try await AttachmentMaker.file(at: url))
+                } catch let error as AttachmentMaker.TooLarge {
+                    attachProblem = "\(error.name) is larger than Ito accepts: up to 20 MB."
+                } catch {
+                    attachProblem = "Couldn't read \(url.lastPathComponent)."
+                }
+            }
+        }
+        return true
     }
 
     /// A photo or file you picked: it starts uploading at once.
@@ -416,6 +469,7 @@ struct ConversationView: View {
 
     /// Stop names the message the server is still writing, at how much of it is on screen.
     private func stop() {
+        stops += 1
         let conversation = session.conversation
         if conversation.turn == nil, !reveal.isRevealing(conversation),
             let ask = conversation.waitingAsk

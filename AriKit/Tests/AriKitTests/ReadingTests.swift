@@ -46,6 +46,17 @@ struct ReplyDocumentTests {
         #expect(blocks[1].runs.first?.style == .strong)
     }
 
+    @Test("a task list's items are boxes, ticked when done, their words where the source has them")
+    func taskList() {
+        let markdown = "Packing:\n\n- [x] Shoes\n- [ ] Rain jacket"
+        let blocks = ReplyDocument(markdown: markdown).blocks
+        #expect(blocks.map(\.marker) == [nil, "☑", "☐"])
+        #expect(blocks[2].runs.first?.text == "Rain jacket")
+        let start = markdown.utf16.index(
+            markdown.utf16.startIndex, offsetBy: blocks[2].runs.first?.start ?? 0)
+        #expect(markdown[start...].hasPrefix("Rain jacket"))
+    }
+
     @Test("as plain text: no Markdown, paragraphs apart, list items under their markers")
     func plainText() {
         let document = ReplyDocument(
