@@ -63,6 +63,18 @@ public final class Session {
     @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
     /// Whether the conversation is on screen here, as the server should next hear it.
     @ObservationIgnored private var presenceRequest: (device: String, looking: Bool)?
+    /// Attachments still to upload, in the order you attached them.
+    @ObservationIgnored private var uploadQueue: [PendingAttachment] = []
+
+    /// Each attachment's upload, by id, for the composer to show.
+    public private(set) var uploads: [AttachmentID: Upload] = [:]
+
+    public enum Upload: Sendable, Equatable {
+        case uploading
+        case uploaded(Attachment)
+        /// The server refused it, such as for being too large; its message says why.
+        case refused(RequestError)
+    }
     /// Secret answers waiting to go: kept in memory only, never in the outbox on disk.
     @ObservationIgnored private var secrets: Set<MessageID> = []
     @ObservationIgnored private var isOnline = true
@@ -73,19 +85,27 @@ public final class Session {
     @ObservationIgnored private var lanes: [Task<Void, Never>] = []
     @ObservationIgnored private var sleepers: [Int: (reasons: Wake, task: Task<Void, Never>)] = [:]
     @ObservationIgnored private var nextSleeper = 0
+    @ObservationIgnored private let cache: AttachmentCache?
+    /// Attachments being fetched, so two views asking at once make one request.
+    @ObservationIgnored private var fetches: [AttachmentID: Task<Data?, Never>] = [:]
+    /// Messages whose attachments went again because the server no longer had them, once each.
+    @ObservationIgnored private var uploadedAgain: Set<MessageID> = []
 
     /// - Parameters:
     ///   - conversation: Where to start: the cached conversation, or an empty one.
     ///   - outbox: Where waiting messages are saved. Messages left from an earlier run are sent
     ///     after ``start()``.
+    ///   - cache: Where attachments' bytes are kept once fetched or attached; with none, they're
+    ///     fetched each time.
     public init(
         connection: Connection, conversation: Conversation = Conversation(), outbox: OutboxStore,
-        transport: any Transport = URLSessionTransport(),
+        cache: AttachmentCache? = nil, transport: any Transport = URLSessionTransport(),
         network: any NetworkPath = SystemNetworkPath(),
         clock: some Clock<Duration> = ContinuousClock()
     ) {
         self.conversation = conversation
         self.outbox = outbox
+        self.cache = cache
         self.network = network
         ticker = Ticker(clock)
         client = ItoClient(
@@ -97,8 +117,23 @@ public final class Session {
     /// Ari is on screen: connect, keep the stream live, and send whatever is waiting.
     public func start() {
         if lanes.isEmpty {
-            for message in (try? outbox.load()) ?? [] where !queue.contains(message) {
-                conversation.send(message.id, text: message.text)
+            let waiting = (try? outbox.load()) ?? []
+            let named = Set(waiting.flatMap { $0.attachments ?? [] })
+            for attachment in outbox.attachments() where uploads[attachment.id] == nil {
+                // A draft doesn't survive a restart, so what no waiting message names goes.
+                guard named.contains(attachment.id) else {
+                    outbox.removeAttachment(attachment.id)
+                    continue
+                }
+                uploads[attachment.id] = .uploading
+                uploadQueue.append(attachment)
+            }
+            for message in waiting where !queue.contains(message) {
+                // Photos already uploaded show once the server accepts the message.
+                let waiting = (message.attachments ?? []).compactMap { id in
+                    uploadQueue.first { $0.id == id }?.attachment
+                }
+                conversation.send(message.id, text: message.text, attachments: waiting)
                 queue.append(message)
             }
             let network = network
@@ -115,6 +150,7 @@ public final class Session {
                 Task { await self.runCancels() },
                 Task { await self.runDevice() },
                 Task { await self.runPresence() },
+                Task { await self.runUploads() },
             ]
         }
         guard streamTask == nil else { return }
@@ -149,16 +185,22 @@ public final class Session {
     ///   - answers: The ask it answers, named when you tap one of its options or answer a secret.
     ///   - secret: A secret answer, such as a code: it goes from memory only, never saved on the
     ///     device, and the conversation keeps nothing of it.
+    ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
+    ///     they're all on the server; the text may then be empty.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil, secret: Bool = false
+        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = []
     ) -> MessageID? {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, answers: answers)
-        conversation.send(id, text: text, answers: answers, secret: secret)
+        let message = SendMessage(id: id, text: text, answers: answers, attachments: attachments)
+        let shown = attachments.compactMap { attachment -> Attachment? in
+            if case .uploaded(let uploaded) = uploads[attachment] { return uploaded }
+            return uploadQueue.first { $0.id == attachment }?.attachment
+        }
+        conversation.send(id, text: text, answers: answers, secret: secret, attachments: shown)
         if secret {
             secrets.insert(id)
         } else {
@@ -167,6 +209,39 @@ public final class Session {
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
+    }
+
+    /// You attached a photo or file: it starts uploading at once, while you write, saved on the
+    /// device until the server has it.
+    public func attach(_ attachment: PendingAttachment) {
+        guard uploads[attachment.id] == nil else { return }
+        try? outbox.add(attachment)
+        cache?.keep(attachment.bytes, for: attachment.id)
+        uploads[attachment.id] = .uploading
+        uploadQueue.append(attachment)
+        wake(.upload)
+    }
+
+    /// You removed an attachment before sending. It may already be on the server, unused; the
+    /// server forgets unused uploads after a day.
+    public func detach(_ attachment: AttachmentID) {
+        uploadQueue.removeAll { $0.id == attachment }
+        uploads[attachment] = nil
+        outbox.removeAttachment(attachment)
+    }
+
+    /// An attachment's bytes, for showing it: kept on this device, or fetched once and kept.
+    public func bytes(of attachment: AttachmentID) async -> Data? {
+        if let kept = cache?.bytes(of: attachment) { return kept }
+        if let waiting = uploadQueue.first(where: { $0.id == attachment }) { return waiting.bytes }
+        if let fetching = fetches[attachment] { return await fetching.value }
+        let client = client
+        let fetching = Task { try? await client.attachmentBytes(attachment) }
+        fetches[attachment] = fetching
+        let bytes = await fetching.value
+        fetches[attachment] = nil
+        if let bytes { cache?.keep(bytes, for: attachment) }
+        return bytes
     }
 
     /// You answered from a notification, with Ari closed or in the background: the message goes
@@ -380,6 +455,17 @@ public final class Session {
                 await nap(until: .live)
                 continue
             }
+            // A message goes once its attachments are on the server.
+            let attached = message.attachments ?? []
+            if let refused = attached.lazy.compactMap({ self.refusal(of: $0) }).first {
+                refusedMessages[message.id] = refused
+                finish(message)
+                continue
+            }
+            if attached.contains(where: { uploads[$0] == .uploading }) {
+                await nap(until: .upload)
+                continue
+            }
             do {
                 let result = try await client.send(message)
                 conversation.confirm(result)
@@ -391,6 +477,11 @@ public final class Session {
                     await nap(Self.sendDelay(after: failures, error), until: [.network, .live])
                 } else if error.status == 401 {
                     problem = .tokenRejected(nil)
+                } else if error.serverError?.code == .attachmentMissing,
+                    uploadedAgain.insert(message.id).inserted, uploadAgain(message)
+                {
+                    // An upload left a day before sending is gone: it goes again, then the message.
+                    continue
                 } else {
                     refusedMessages[message.id] = error
                     finish(message)
@@ -399,9 +490,25 @@ public final class Session {
         }
     }
 
+    /// Uploads a message's attachments again, under the same ids, from the bytes kept in the
+    /// outbox. Those the server still has answer at once and change nothing.
+    private func uploadAgain(_ message: SendMessage) -> Bool {
+        let named = message.attachments ?? []
+        let kept = outbox.attachments().filter { named.contains($0.id) }
+        guard kept.count == named.count else { return false }
+        for attachment in kept where !uploadQueue.contains(where: { $0.id == attachment.id }) {
+            uploads[attachment.id] = .uploading
+            uploadQueue.append(attachment)
+        }
+        wake(.upload)
+        return true
+    }
+
+    /// The message went, or can't: it, and the bytes of its attachments, leave the outbox.
     private func finish(_ message: SendMessage) {
         queue.removeAll { $0.id == message.id }
         if secrets.remove(message.id) == nil { try? outbox.remove(message.id) }
+        for attachment in message.attachments ?? [] { outbox.removeAttachment(attachment) }
     }
 
     private func runStops() async {
@@ -456,6 +563,51 @@ public final class Session {
                 }
             }
         }
+    }
+
+    private func refusal(of attachment: AttachmentID) -> RequestError? {
+        if case .refused(let error) = uploads[attachment] { return error }
+        return nil
+    }
+
+    private func runUploads() async {
+        var failures = 0
+        while !Task.isCancelled {
+            guard let attachment = uploadQueue.first else {
+                await nap(until: .upload)
+                continue
+            }
+            guard isOnline else {
+                await nap(until: [.network, .upload])
+                continue
+            }
+            do {
+                let result = try await client.upload(
+                    attachment.id, name: attachment.name, mediaType: attachment.mediaType,
+                    bytes: attachment.bytes)
+                uploads[attachment.id] = .uploaded(result.attachment)
+                // Its bytes stay until its message is accepted, in case the upload expires first.
+                finishUpload(attachment.id, keepingBytes: true)
+                failures = 0
+            } catch {
+                if error.isTemporary {
+                    failures += 1
+                    await nap(Self.sendDelay(after: failures, error), until: [.network, .upload])
+                } else if error.status == 401 {
+                    problem = .tokenRejected(nil)
+                    await nap(until: .upload)
+                } else {
+                    uploads[attachment.id] = .refused(error)
+                    finishUpload(attachment.id, keepingBytes: false)
+                }
+            }
+        }
+    }
+
+    private func finishUpload(_ attachment: AttachmentID, keepingBytes: Bool) {
+        uploadQueue.removeAll { $0.id == attachment }
+        if !keepingBytes { outbox.removeAttachment(attachment) }
+        wake(.upload)
     }
 
     private func runCancels() async {
@@ -561,6 +713,7 @@ public final class Session {
         static let cancel = Wake(rawValue: 1 << 5)
         static let device = Wake(rawValue: 1 << 6)
         static let presence = Wake(rawValue: 1 << 7)
+        static let upload = Wake(rawValue: 1 << 8)
     }
 
     /// Waits for `duration`, or, without one, until woken; anything in `reasons` wakes it early.

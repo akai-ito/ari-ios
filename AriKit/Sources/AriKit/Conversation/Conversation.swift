@@ -71,6 +71,8 @@ extension Conversation {
         /// Your messages: a secret answer. Its text is empty: the agent has it, the conversation
         /// keeps nothing of it.
         public internal(set) var isSecret = false
+        /// Your messages: the photos and files attached, in order.
+        public internal(set) var attachments: [Attachment] = []
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -105,9 +107,13 @@ extension Conversation {
             delivery = message.role == .user ? .delivered : nil
             answers = message.answers
             isSecret = message.secret ?? false
+            attachments = message.attachments ?? []
         }
 
-        init(sending id: MessageID, text: String, answers: AskID?, secret: Bool) {
+        init(
+            sending id: MessageID, text: String, answers: AskID?, secret: Bool,
+            attachments: [Attachment]
+        ) {
             self.id = id
             role = .user
             self.text = secret ? "" : text
@@ -115,6 +121,7 @@ extension Conversation {
             delivery = .sending
             self.answers = answers
             isSecret = secret
+            self.attachments = attachments
         }
     }
 
@@ -361,11 +368,15 @@ extension Conversation {
     /// While an ask waits, your message answers it, whether or not it names it, so the ask settles at
     /// once. A secret keeps no text here at all.
     public mutating func send(
-        _ id: MessageID, text: String, answers: AskID? = nil, secret: Bool = false
+        _ id: MessageID, text: String, answers: AskID? = nil, secret: Bool = false,
+        attachments: [Attachment] = []
     ) {
         guard positions[id] == nil else { return }
         if let waiting = waitingAsk { settling[waiting.id] = .answering(id) }
-        entries.append(Entry(sending: id, text: text, answers: answers, secret: secret))
+        entries.append(
+            Entry(
+                sending: id, text: text, answers: answers, secret: secret, attachments: attachments)
+        )
         positions[id] = entries.count - 1
     }
 

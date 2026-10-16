@@ -70,6 +70,12 @@ struct SettingsView: View {
             if let server = model.server {
                 LabeledContent("Version", value: server.version)
                 LabeledContent("Protocol", value: server.protocolVersion.description)
+                if let engine = server.agent.model {
+                    LabeledContent("Model", value: engine)
+                }
+                if let account = server.agent.account {
+                    LabeledContent("Signed in with", value: Self.describe(account))
+                }
             }
             Button("Connect to another server…") { confirmingSwitch = true }
         } header: {
@@ -102,10 +108,16 @@ struct SettingsView: View {
             } header: {
                 Text("Notifications")
             } footer: {
-                Text(
-                    "Ari tells you when it's done or needs you, and only while you're not looking. "
-                        + "Questions are time-sensitive, so they can reach you during Focus; choose "
-                        + "in iOS Settings.")
+                if model.server?.setup?.notifications == false {
+                    Text(
+                        "Your server can't send notifications yet. Run ito push setup on it, and "
+                            + "they start.")
+                } else {
+                    Text(
+                        "Ari tells you when it's done or needs you, and only while you're not "
+                            + "looking. Questions are time-sensitive, so they can reach you during "
+                            + "Focus; choose in iOS Settings.")
+                }
             }
             .listRowBackground(Color.ariSurface)
         #endif
@@ -118,6 +130,18 @@ struct SettingsView: View {
             }
         }
     #endif
+
+    /// How the agent is signed in, in a few words: "ChatGPT Plus · example.com".
+    private static func describe(_ account: ServerInfo.Agent.Account) -> String {
+        let kind =
+            switch account.kind {
+            case "chatgpt":
+                ["ChatGPT", account.plan?.capitalized].compactMap(\.self).joined(separator: " ")
+            case "api_key": "An API key"
+            default: "Another account"
+            }
+        return [kind, account.emailDomain].compactMap(\.self).joined(separator: " · ")
+    }
 
     private static func describe(_ link: Session.Link) -> String {
         switch link {

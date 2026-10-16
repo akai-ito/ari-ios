@@ -95,9 +95,73 @@ struct ConnectorTests {
         #expect(connection.token == right)
     }
 
+    @Test("scenario 31: a pairing code becomes a token of this device's own, and works once")
+    func pairing() async throws {
+        let transcript = try Fixtures.transcript("31-pair-with-a-qr-code")
+        let server = ScriptedServer()
+        let connector = Connector(transport: server)
+        var steps = transcript.steps[...]
+        guard case .world(let shown) = steps.removeFirst(),
+            let code = shown.json?["code"]?.string
+        else {
+            throw TranscriptError("expected the pairing code first")
+        }
+        func play(_ count: Int) async throws {
+            for _ in 0..<count {
+                guard case .app(let expected) = steps.removeFirst(),
+                    case .server(let response) = steps.removeFirst()
+                else { throw TranscriptError("expected a request and its answer") }
+                var made: HTTPRequest?
+                for _ in 0..<1_000 where made == nil {
+                    made = await server.takeRequest()
+                    await Task.yield()
+                }
+                let request = try #require(made)
+                #expect(request.path == expected.path)
+                #expect(request.headers["Authorization"] == expected.headers["Authorization"])
+                #expect(try request.body.map { try JSONValue(data: $0) } == expected.body)
+                try await server.answer(response)
+            }
+        }
+
+        #expect(Connector.isPairingCode(code))
+        let pairing = Task {
+            try await connector.pair(address: "studio.example", code: code, deviceName: "iPhone")
+        }
+        try await play(3)
+        let connection = try await pairing.value
+        #expect(connection.token == Token("ito_paired_example_not_a_real_token_000000000000000"))
+        #expect(connection.server.setup?.notifications == false)
+
+        let again = Task {
+            try await connector.pair(
+                code: code, deviceName: "iPad", at: try ServerAddress("studio.example"))
+        }
+        try await play(1)
+        let result = await again.result
+        guard case .failure(let error as ConnectError) = result,
+            case .pairingCodeRejected(let refusal) = error
+        else {
+            Issue.record("expected the used code to be refused, not \(result)")
+            return
+        }
+        #expect(refusal?.code == .pairingCodeRejected)
+    }
+
+    @Test("a pairing link from the QR code gives the address and the code")
+    func pairingLink() throws {
+        let link = try #require(
+            URL(string: "ito://pair?address=studio.tail1234.ts.net&code=7F3K-92QD"))
+        let pairing = try #require(Connector.pairing(from: link))
+        #expect(pairing.address == "studio.tail1234.ts.net" && pairing.code == "7F3K-92QD")
+        #expect(Connector.pairing(from: try #require(URL(string: "https://studio.example"))) == nil)
+        #expect(Connector.isPairingCode("7f3k92qd"))
+        #expect(!Connector.isPairingCode("ito_example_not_a_real_token_00000000000000000000"))
+    }
+
     @Test("a protocol mismatch says which side to update")
     func mismatch() async throws {
-        for (versions, side) in [(#"["0.4"]"#, ProtocolMismatch.Side.ari), (#"["0.2"]"#, .server)] {
+        for (versions, side) in [(#"["0.5"]"#, ProtocolMismatch.Side.ari), (#"["0.3"]"#, .server)] {
             let server = ScriptedServer()
             let discovering = Task {
                 try await Connector(transport: server).discover("studio.example")

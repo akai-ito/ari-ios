@@ -23,13 +23,41 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     public let protocolVersion: ProtocolVersion
     public let agent: Agent
 
+    /// What's set up on the server, so Settings can say what isn't yet.
+    public let setup: Setup?
+
     public struct Agent: Sendable, Equatable, Codable {
         /// What the agent is called; Ari until you choose another name.
         public let name: String
+        /// The model the agent last ran on, such as `demo` for the demo engine; absent until it has
+        /// run once.
+        public let model: String?
+        /// How the engine is signed in, as of its last session.
+        public let account: Account?
+
+        public struct Account: Sendable, Equatable, Codable {
+            /// `chatgpt`, `api_key` or `other`.
+            public let kind: String
+            public let plan: String?
+            /// Only the domain of the account's email address.
+            public let emailDomain: String?
+
+            enum CodingKeys: String, CodingKey {
+                case kind, plan
+                case emailDomain = "email_domain"
+            }
+        }
+    }
+
+    public struct Setup: Sendable, Equatable, Codable {
+        /// `ito push setup` has run.
+        public let notifications: Bool
+        /// `ito reports token` has run.
+        public let reports: Bool
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, version, agent
+        case name, version, agent, setup
         case protocolVersion = "protocol"
     }
 }
@@ -43,11 +71,16 @@ public struct SendMessage: Sendable, Equatable, Codable {
     /// The ask it answers, named when you tap one of its options or answer a secret. Any message
     /// sent while an ask waits answers it anyway.
     public let answers: AskID?
+    /// Photos and files already uploaded, in order. The text may then be empty.
+    public let attachments: [AttachmentID]?
 
-    public init(id: MessageID, text: String, answers: AskID? = nil) {
+    public init(
+        id: MessageID, text: String, answers: AskID? = nil, attachments: [AttachmentID] = []
+    ) {
         self.id = id
         self.text = text
         self.answers = answers
+        self.attachments = attachments.isEmpty ? nil : attachments
     }
 }
 

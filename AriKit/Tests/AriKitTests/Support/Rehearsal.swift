@@ -54,14 +54,16 @@ final class Rehearsal {
         }
         session = Session(
             connection: try Self.connection(), conversation: Replay(transcript).conversation,
-            outbox: OutboxStore(directory: self.outboxDirectory), transport: server,
+            outbox: OutboxStore(directory: self.outboxDirectory),
+            cache: AttachmentCache(directory: self.outboxDirectory.appending(path: "cache")),
+            transport: server,
             network: network,
             clock: clock)
     }
 
     static func connection() throws -> Connection {
         let server = try JSONValue(
-            json: #"{"name":"studio","version":"0.3.0","protocol":"0.3","agent":{"name":"Ari"}}"#
+            json: #"{"name":"studio","version":"0.4.0","protocol":"0.4","agent":{"name":"Ari"}}"#
         ).decode(ServerInfo.self)
         return Connection(
             address: try ServerAddress("https://studio.example"), token: token, server: server)
@@ -154,7 +156,22 @@ final class Rehearsal {
                 return
             }
             let secret = answers.flatMap { session.conversation[ask: $0]?.secret } ?? false
-            session.send(text, id: MessageID(id), answers: answers, secret: secret)
+            let attachments = request.body?["attachments"]?.array?.compactMap(\.string)
+                .map(AttachmentID.init(rawValue:))
+            session.send(
+                text, id: MessageID(id), answers: answers, secret: secret,
+                attachments: attachments ?? [])
+        case .upload(let attachment, let name):
+            // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
+            guard let bytes = try? request.uploadBytes() else { return }
+            session.attach(
+                PendingAttachment(
+                    id: attachment, name: name, mediaType: request.headers["Content-Type"] ?? "",
+                    bytes: bytes))
+        case .attachment(let attachment):
+            // The photo comes into view.
+            let session = session
+            Task { _ = await session.bytes(of: attachment) }
         case .cancelAsk(let ask):
             session.cancel(ask)
         case .device:
@@ -214,6 +231,14 @@ final class Rehearsal {
         }
         guard made.headers["Authorization"] == "Bearer \(Self.token.secret)" else {
             throw TranscriptError("\(summary) didn't carry the token")
+        }
+        if let bytes = try expected.uploadBytes() {
+            guard made.body == bytes,
+                made.headers["Content-Type"] == expected.headers["Content-Type"]
+            else {
+                throw TranscriptError("\(summary) uploaded different bytes, or another type")
+            }
+            return
         }
         let body = try made.body.map { try JSONValue(data: $0) }
         guard body == expected.body || (body == .object([:]) && expected.body == nil) else {

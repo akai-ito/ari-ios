@@ -44,3 +44,10 @@ public struct AskID: OpaqueIdentifier {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 }
+
+/// A photo or file you attach. Ari makes it (a random UUID) before uploading; it's also the
+/// upload's retry key.
+public struct AttachmentID: OpaqueIdentifier {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+}

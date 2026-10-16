@@ -112,9 +112,13 @@ public struct ErrorCode: OpenValue {
     // A refused command.
     public static let invalidRequest = ErrorCode(rawValue: "invalid_request")
     public static let tokenRejected = ErrorCode(rawValue: "token_rejected")
+    public static let pairingCodeRejected = ErrorCode(rawValue: "pairing_code_rejected")
     public static let notFound = ErrorCode(rawValue: "not_found")
     public static let idConflict = ErrorCode(rawValue: "id_conflict")
     public static let tooLarge = ErrorCode(rawValue: "too_large")
+    /// A message names an attachment the server doesn't have, as when an upload waited more than a
+    /// day for its message: upload it again, under the same id, and send again.
+    public static let attachmentMissing = ErrorCode(rawValue: "attachment_missing")
     public static let slowDown = ErrorCode(rawValue: "slow_down")
     public static let unavailable = ErrorCode(rawValue: "unavailable")
     // Either.
@@ -122,7 +126,8 @@ public struct ErrorCode: OpenValue {
 
     public static let known = [
         modelTimeout, modelUnavailable, usageLimit, engineSignedOut, contextFull, engineFailed,
-        serverDiskFull, refused, invalidRequest, tokenRejected, notFound, idConflict, tooLarge,
+        serverDiskFull, refused, invalidRequest, tokenRejected, pairingCodeRejected, notFound,
+        idConflict, tooLarge, attachmentMissing,
         slowDown,
         unavailable, `internal`,
     ]
@@ -207,4 +212,16 @@ public struct AskOutcome: OpenValue {
     /// You cancelled it, or the agent asked something else.
     public static let cancelled = AskOutcome(rawValue: "cancelled")
     public static let known = [answered, cancelled]
+}
+
+/// What an attachment is. Ari treats a kind it doesn't know as a file.
+public struct AttachmentKind: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// A JPEG, PNG, GIF or WebP photo, which the agent sees.
+    public static let image = AttachmentKind(rawValue: "image")
+    /// Anything else, which lands in the agent's workspace.
+    public static let file = AttachmentKind(rawValue: "file")
+    public static let known = [image, file]
 }

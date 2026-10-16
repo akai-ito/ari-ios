@@ -103,8 +103,22 @@ struct Transcript: Sendable, CustomTestStringConvertible {
         let path: String
         let headers: [String: String]
         let body: JSONValue?
+        /// An upload's bytes: a file in protocol/transcripts/files.
+        var bodyFile: String? = nil
+        /// An upload's bytes, where only their number matters.
+        var bodySize: Int? = nil
 
         var route: Route { Route(method: method, path: path) }
+
+        /// The bytes an upload sends, or `nil` for any other request.
+        func uploadBytes() throws -> Data? {
+            if let bodyFile {
+                return try Data(
+                    contentsOf: Fixtures.protocolDirectory().appending(
+                        path: "transcripts/files/\(bodyFile)"))
+            }
+            return bodySize.map { Data(count: $0) }
+        }
     }
 
     struct Response: Sendable {
@@ -121,6 +135,8 @@ struct Transcript: Sendable, CustomTestStringConvertible {
         let line: Int
         let at: Int
         let marker: String
+        /// The rest of the line, such as the code `ito pair` showed.
+        var json: JSONValue? = nil
     }
 
     init(contentsOf url: URL) throws {
@@ -154,7 +170,8 @@ struct Transcript: Sendable, CustomTestStringConvertible {
                         method: request["method"]?.string ?? "",
                         path: request["path"]?.string ?? "",
                         headers: Self.headers(request["headers"]),
-                        body: request["body"])
+                        body: request["body"], bodyFile: request["body_file"]?.string,
+                        bodySize: request["body_size"]?.int)
                     steps.append(.app(sent))
                 } else if let response = json["server"] {
                     let answer = Response(
@@ -166,7 +183,9 @@ struct Transcript: Sendable, CustomTestStringConvertible {
                     steps.append(.push(Push(line: line, at: json["at"]?.int ?? 0, json: push)))
                 } else if let marker = json["world"]?.string {
                     steps.append(
-                        .world(World(line: line, at: json["at"]?.int ?? 0, marker: marker)))
+                        .world(
+                            World(
+                                line: line, at: json["at"]?.int ?? 0, marker: marker, json: json)))
                 } else {
                     throw TranscriptError("no given, event, app, server, world or push")
                 }
@@ -223,6 +242,11 @@ enum Route: Equatable {
     /// Registering a device for notifications, or forgetting it.
     case device
     case presence
+    /// Uploading a photo or file's bytes.
+    case upload(AttachmentID, name: String)
+    /// Fetching an attachment's bytes.
+    case attachment(AttachmentID)
+    case pair
     case other
 
     init(method: String, path: String) {
@@ -245,9 +269,14 @@ enum Route: Equatable {
             self = .retry(TurnID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "asks" && parts[3] == "cancel":
             self = .cancelAsk(AskID(parts[2]))
-        case ("PUT", 3),
+        case ("PUT", 3) where parts[0] == "v0" && parts[1] == "devices",
             ("DELETE", 3) where parts[0] == "v0" && parts[1] == "devices":
             self = .device
+        case ("PUT", 3) where parts[0] == "v0" && parts[1] == "attachments":
+            self = .upload(AttachmentID(parts[2]), name: query["name"] ?? "")
+        case ("GET", 3) where parts[0] == "v0" && parts[1] == "attachments":
+            self = .attachment(AttachmentID(parts[2]))
+        case ("POST", 2) where parts == ["v0", "pair"]: self = .pair
         case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "presence":
             self = .presence
         default: self = .other

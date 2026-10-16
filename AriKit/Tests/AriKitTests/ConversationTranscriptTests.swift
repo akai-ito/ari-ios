@@ -431,10 +431,13 @@ private struct Expected {
     var ending: String?
     var outcome: Outcome?
     var shown = true
+    /// The names of the photos and files it carries.
+    var attachments: [String] = []
 }
 
-private func you(_ id: MessageID, _ text: String) -> Expected {
-    Expected(id: id, text: text)
+private func you(_ id: MessageID, _ text: String, attaching attachments: [String] = []) -> Expected
+{
+    Expected(id: id, text: text, attachments: attachments)
 }
 
 private func reply(
@@ -473,6 +476,9 @@ private func expect(
         }
         #expect(entry.outcome == want.outcome, "\(name)", sourceLocation: sourceLocation)
         #expect(entry.isShown == want.shown, "\(name)", sourceLocation: sourceLocation)
+        #expect(
+            entry.attachments.map(\.name) == want.attachments, "\(name)",
+            sourceLocation: sourceLocation)
         #expect(entry.mark == nil, "\(name)", sourceLocation: sourceLocation)
         if entry.role == .user {
             #expect(entry.delivery == .delivered, "\(name)", sourceLocation: sourceLocation)
@@ -657,6 +663,38 @@ extension ConversationTranscriptTests {
                 "What time does the Battersea parkrun start?"),
             reply("m_0002_17163", 140, "Check the page before you go."),
         ],
+        "27-send-a-photo": [
+            you("b4f6841a-5ec9-401f-8bf7-1e043e7a49cb", bike), bikeReply("m_0001_24748"),
+            you(
+                "83d78220-f45e-449d-91b1-956a87478344",
+                "Is this the Thames Path, near Hampton Court?", attaching: ["riverside.jpg"]),
+            reply("m_0002_62579", 151, "you'll reach the bridge in about ten minutes."),
+        ],
+        "28-send-a-file": [
+            you("91756d49-f3dc-45be-a919-b4b39f3b7ee0", bike), bikeReply("m_0001_95876"),
+            you(
+                "841b74ac-4148-43bd-b493-322ef3b1b956", "How far did I run this month?",
+                attaching: ["running-log.csv"]),
+            reply("m_0002_32098", 71, "he longest was 18 km on the 11th, in 1:39:37."),
+        ],
+        "29-an-upload-that-fails": [
+            you("2a1ada6b-0c5c-4b94-ab31-9516bdaa2ec8", bike), bikeReply("m_0001_22838"),
+            // Only the photo; the video was refused before anything was sent.
+            you("772b92e3-c8ff-4820-8f79-9ff49401af20", "", attaching: ["riverside.jpg"]),
+            reply("m_0002_60075", 81, "r morning. Want me to plan a walk from there?"),
+            // Two days later the log's upload has expired: it goes again, then the message.
+            you(
+                "52be1db8-52e1-435f-82bd-a6b1849bca39", "Which of these runs had my fastest pace?",
+                attaching: ["running-log.csv"]),
+            reply("m_0003_46823", 49, "about 5:17 a kilometre."),
+        ],
+        "30-another-device-sees-an-attachment": [
+            you(
+                "bf204a91-5277-451f-96a9-c74349606d63",
+                "Is this the Thames Path, near Hampton Court?", attaching: ["riverside.jpg"]),
+            reply("m_0001_95267", 72, "the Surrey bank, just upstream of the palace."),
+        ],
+        "31-pair-with-a-qr-code": [],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),
             you(

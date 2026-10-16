@@ -56,7 +56,12 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(DeviceResult.self).device.keyID.count == 8, "\(place)")
                 case .presence:
                     continue
-                case .events, .other:
+                case .upload(let attachment, let name):
+                    let uploaded = try body.decode(AttachmentResult.self).attachment
+                    #expect(uploaded.id == attachment && uploaded.name == name, "\(place)")
+                case .pair:
+                    #expect(try !body.decode(PairResult.self).token.isEmpty, "\(place)")
+                case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
             default:
@@ -77,7 +82,8 @@ struct ProtocolDecodingTests {
             case .send:
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
-                    id: message.id, text: message.text, answers: message.answers)
+                    id: message.id, text: message.text, answers: message.answers,
+                    attachments: message.attachments ?? [])
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .stop:
                 let stop = try body.decode(StopTurn.self)
@@ -85,6 +91,10 @@ struct ProtocolDecodingTests {
             case .device:
                 let registration = try body.decode(RegisterDevice.self)
                 #expect(try JSONValue(encoding: registration) == body, "\(place)")
+            case .pair:
+                let pairing = try body.decode(PairDevice.self)
+                let encoded = PairDevice(code: pairing.code, deviceName: pairing.deviceName)
+                #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .presence:
                 let presence = try body.decode(Presence.self)
                 #expect(
@@ -110,7 +120,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 4) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 5) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
