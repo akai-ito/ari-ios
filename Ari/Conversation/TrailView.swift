@@ -8,7 +8,7 @@ import SwiftUI
 struct TrailView: View {
     let trail: Trail
     let conversation: Conversation
-    let reveal: Reveal
+    let reveal: RevealModel
     /// The runs and steps you've opened, by ``key(run:)`` and ``key(line:)``.
     @Binding var opened: Set<String>
     /// You tapped one of an ask's options.
@@ -85,10 +85,10 @@ struct TrailView: View {
         switch row {
         case .note(let entry):
             let text = conversation.visibleText(of: entry)
-            let shown = reveal.position(of: entry)
-            ReplyView(
-                document: ReplyDocument(markdown: text),
-                position: shown >= Double(text.utf16.count) ? .infinity : shown, tone: .note)
+            let document = ReplyDocument(markdown: text)
+            Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
+                ReplyView(document: document, position: position, tone: .note)
+            }
         case .summary(let run, let isOpen):
             Button {
                 withAnimation(.smooth(duration: 0.35)) { toggle(Self.key(run: run)) }
@@ -234,7 +234,9 @@ private struct StepLineView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(line.title)
                 .multilineTextAlignment(.leading)
-                .contentTransition(.opacity)
+                // The words change in place as the tense does; a cross-fade showed both titles
+                // on top of each other mid-change ("Searching the web" over "2 times").
+                .contentTransition(.interpolate)
             if let mark = line.mark { Tag(text: mark) }
             if chevron { Chevron(isOpen: isOpen) }
         }

@@ -14,7 +14,7 @@ struct ConversationView: View {
     var offersNotifications = false
     var answerOffer: (Bool) -> Void = { _ in }
 
-    @State private var reveal = Reveal()
+    @State private var reveal = RevealModel()
     @State private var poses = PoseHistory()
     /// Photos and files on the message you're writing, uploading as you write.
     @State private var attached: [PendingAttachment] = []
@@ -26,6 +26,11 @@ struct ConversationView: View {
     // Scrolled by message, not by edge: scrolling to an edge also shifts the content sideways.
     @State private var position = ScrollPosition(idType: String.self)
     @State private var distanceFromEnd = Distance.atEnd
+    /// Whether your finger is on the conversation.
+    @State private var scrolling = false
+    /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
+    /// latest.
+    @State private var firstShown: String?
     /// Whether the conversation follows what arrives. It does while you're at the end, stops once
     /// you scroll up, and starts again when you come back to the end, send, or tap the pill.
     @State private var following = true
@@ -48,7 +53,7 @@ struct ConversationView: View {
 
     var body: some View {
         let conversation = session.conversation
-        let working = conversation.turn != nil || reveal.isRevealing(conversation)
+        let working = conversation.turn != nil || reveal.isRevealing
         // Stop while Ari works, or while it waits for you, which cancels what it asked.
         let canStop =
             (working && conversation.pendingStop == nil)
@@ -98,11 +103,15 @@ struct ConversationView: View {
     /// The conversation itself, the composer, and what follows the session and the screen.
     private var screen: some View {
         let conversation = session.conversation
-        let revealing = reveal.isRevealing(conversation)
+        let revealing = reveal.isRevealing
         let working = conversation.turn != nil || revealing
         let rows = rows(conversation)
+        let shown = shownRows(rows)
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: Rhythm.messageGap) {
+            // A plain stack of the latest rows, not a lazy one: a lazy stack guesses the heights of
+            // rows it hasn't drawn, and when the guesses were wrong the conversation jumped, or
+            // scrolled past its end into blank space.
+            VStack(spacing: Rhythm.messageGap) {
                 if conversation.entries.isEmpty {
                     Text("Nothing here yet. Say hello.")
                         .font(.ariBody)
@@ -110,57 +119,63 @@ struct ConversationView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 120)
                 }
-                ForEach(rows) { row in
+                ForEach(shown) { row in
                     rowView(row, in: conversation)
+                        // A comfortable reading width on a wide Mac window, inside a row as wide as
+                        // the screen: scrolling to a row lines up its edge with the screen's, so a
+                        // row starting at its margin slid the whole conversation sideways.
+                        .frame(maxWidth: Rhythm.column, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity)
                         .id(row.id)
                         .onAppear {
-                            if row.id == rows.first?.id { loadEarlier() }
+                            if row.id == shown.first?.id { showEarlier(rows) }
                         }
                 }
+                // The end, exactly: what following and the pill scroll to.
+                Color.clear.frame(maxWidth: .infinity).frame(height: 1).id(Self.end)
             }
             .scrollTargetLayout()
-            .padding(.horizontal, 20)
             .padding(.top, 14)
             .padding(.bottom, 24)
-            // A comfortable reading width on a wide Mac window, inside exactly the scroll view's
-            // width: content even a fraction wider let scrolling to a message nudge the whole
-            // conversation sideways.
-            .frame(maxWidth: Rhythm.column)
-            .containerRelativeFrame(.horizontal)
         }
         .scrollIndicators(.hidden)
         // Drag the conversation down and the keyboard follows your finger away.
         .scrollDismissesKeyboard(.interactively)
         .scrollPosition($position)
-        // Anchored at the leading edge: a centred anchor can shift everything sideways when
-        // the composer grows or the keyboard moves.
-        .defaultScrollAnchor(.bottomLeading)
+        .defaultScrollAnchor(.bottom)
         // Following, the end stays in view as the reply grows; scrolled up, your place stays.
-        .defaultScrollAnchor(following ? .bottomLeading : .topLeading, for: .sizeChanges)
+        .defaultScrollAnchor(following ? .bottom : .top, for: .sizeChanges)
         // Only how far from the end, roughly: a value that changed on every scrolled point
         // redrew the whole conversation each time.
         .onScrollGeometryChange(for: Distance.self) { geometry in
             Distance(geometry.contentSize.height - geometry.visibleRect.maxY)
         } action: { _, distance in
             distanceFromEnd = distance
+            // Back at the end without a finger on the screen, as a fling comes to rest: follow.
+            if distance == .atEnd, !scrolling { follow() }
         }
         // A new row while following: settle at the end, at once. Following every change in
         // height, with an animation, fed itself in a long conversation (each scroll measured
         // more rows, changing the height again) and froze the screen.
-        .onChange(of: rows.last?.id) { _, last in
-            guard following, let last else { return }
-            var settle = Transaction(animation: nil)
-            settle.disablesAnimations = true
-            withTransaction(settle) { position.scrollTo(id: last, anchor: .bottomLeading) }
+        .onChange(of: rows.last?.id) { _, _ in
+            guard following else { return }
+            withoutAnimation { position.scrollTo(id: Self.end, anchor: .bottom) }
         }
-        // Scrolling yourself stops the following; coming to rest at the end starts it again.
+        // Older rows shown above yours: your place stays where it was.
+        .onChange(of: shown.first?.id) { previous, _ in
+            guard !following, let previous, shown.contains(where: { $0.id == previous }) else {
+                return
+            }
+            withoutAnimation { position.scrollTo(id: previous, anchor: .top) }
+        }
+        // Scrolling yourself stops the following; letting go at the end starts it again.
         .onScrollPhaseChange { _, phase in
-            switch phase {
-            case .tracking, .interacting: following = false
-            case .idle where distanceFromEnd == .atEnd:
-                following = true
-                repliedWhileAway = false
-            default: break
+            scrolling = phase == .tracking || phase == .interacting
+            if scrolling {
+                following = false
+            } else if distanceFromEnd == .atEnd {
+                follow()
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -197,15 +212,11 @@ struct ConversationView: View {
             .background(.ariBackground)
         }
         .background(.ariBackground)
-        .background {
-            // The reading pace moves on 30 times a second, only while something is being revealed:
-            // each step redraws the screen, and 60 cost too much in long conversations.
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !revealing)) { context in
-                Color.clear.onChange(of: context.date) { previous, now in
-                    reveal.advance(
-                        by: min(now.timeIntervalSince(previous), 0.1), in: session.conversation)
-                }
-            }
+        // The reading pace, moving on in a view of its own.
+        .background { RevealDriver(model: reveal, session: session) }
+        // New words to reveal, or a message that ended: the pace's state catches up.
+        .onChange(of: conversation.revision, initial: true) { _, _ in
+            reveal.sync(session.conversation)
         }
         .onChange(of: pose(revealing: revealing), initial: true) { _, pose in show(pose) }
         .onChange(of: liveStatus(revealing: revealing), initial: true) { _, next in hold(next) }
@@ -233,16 +244,22 @@ struct ConversationView: View {
 
     /// How far you are from the end, in the three bands the screen cares about.
     private enum Distance: Equatable {
-        /// Within 40 points: following resumes here.
+        /// Within 100 points: following resumes here, even while a reply grows.
         case atEnd
         case near
         /// More than 600 points up: far enough for the Latest pill.
         case far
 
         init(_ points: CGFloat) {
-            self = points < 40 ? .atEnd : points > 600 ? .far : .near
+            self = points < 100 ? .atEnd : points > 600 ? .far : .near
         }
     }
+
+    /// The marker after the last row.
+    private static let end = "end"
+    /// How many rows show at first, and how many more each time you reach the top.
+    private static let window = 60
+    private static let more = 40
 
     // MARK: - Rows
 
@@ -266,7 +283,7 @@ struct ConversationView: View {
     /// start of each day.
     private func rows(_ conversation: Conversation) -> [Row] {
         let key = RowsCache.Key(
-            revision: conversation.revision, held: Timeline.held(conversation, reveal: reveal),
+            revision: conversation.revision, held: reveal.held,
             offering: offering && offersNotifications)
         if cache.key == key { return cache.rows }
         let rows = makeRows(conversation)
@@ -278,7 +295,7 @@ struct ConversationView: View {
     private func makeRows(_ conversation: Conversation) -> [Row] {
         var rows: [Row] = []
         var day: Date?
-        for item in Timeline(conversation, reveal: reveal).items {
+        for item in Timeline(conversation, reveal: reveal.reveal).items {
             guard case .message(let entry) = item else {
                 if case .trail(let trail) = item {
                     rows.append(Row(id: trail.id, kind: .trail(trail)))
@@ -321,13 +338,14 @@ struct ConversationView: View {
             }
         case .ari(let entry):
             let text = conversation.visibleText(of: entry)
-            let shown = reveal.position(of: entry)
-            let position = shown >= Double(text.utf16.count) ? .infinity : shown
-            VStack(alignment: .leading, spacing: 8) {
-                if !text.isEmpty {
-                    ReplyView(document: cache.document(entry.id, text), position: position)
+            let document = cache.document(entry.id, text)
+            Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
+                VStack(alignment: .leading, spacing: 8) {
+                    if !text.isEmpty {
+                        ReplyView(document: document, position: position)
+                    }
+                    if position == .infinity { footer(for: entry, in: conversation) }
                 }
-                if position == .infinity { footer(for: entry, in: conversation) }
             }
             .contextMenu {
                 Button("Copy", systemImage: "doc.on.doc") { Pasteboard.copy(entry.text) }
@@ -462,11 +480,55 @@ struct ConversationView: View {
     }
 
     private func scrollToEnd() {
-        guard let last = rows(session.conversation).last?.id else { return }
+        follow()
+        withAnimation(.smooth(duration: 0.4)) {
+            position.scrollTo(id: Self.end, anchor: .bottom)
+        }
+    }
+
+    private func follow() {
         following = true
         repliedWhileAway = false
-        withAnimation(.smooth(duration: 0.4)) {
-            position.scrollTo(id: last, anchor: .bottomLeading)
+        // Back at the end, the older rows shown on the way up can go.
+        firstShown = nil
+    }
+
+    private func withoutAnimation(_ change: () -> Void) {
+        var settle = Transaction(animation: nil)
+        settle.disablesAnimations = true
+        withTransaction(settle, change)
+    }
+
+    /// The rows on screen: the latest ones, from `firstShown` on. More are shown as you scroll up
+    /// (see ``showEarlier(_:)``), and the oldest are let go again once you're back at the end.
+    private func shownRows(_ rows: [Row]) -> ArraySlice<Row> {
+        if let firstShown, let start = rows.firstIndex(where: { $0.id == firstShown }) {
+            return rows[start...]
+        }
+        return rows.suffix(Self.window)
+    }
+
+    /// You reached the top of what's shown: show more of what Ari has, then ask the server for
+    /// what came before.
+    private func showEarlier(_ rows: [Row]) {
+        let first = shownRows(rows).first?.id
+        let start = rows.firstIndex(where: { $0.id == first }) ?? 0
+        if start > 0 {
+            firstShown = rows[max(0, start - Self.more)].id
+            return
+        }
+        firstShown = first
+        // Only once you've scrolled up: at the end, a short screen would otherwise page back
+        // through the whole history by itself.
+        guard !following, session.conversation.hasEarlierMessages, !session.isLoadingEarlier
+        else { return }
+        Task {
+            await session.loadEarlier()
+            // The page arrives above what you're reading: show some of it, keeping your place.
+            let now = self.rows(session.conversation)
+            if let index = now.firstIndex(where: { $0.id == first }), index > 0 {
+                firstShown = now[max(0, index - Self.more)].id
+            }
         }
     }
 
@@ -474,21 +536,13 @@ struct ConversationView: View {
     private func stop() {
         stops += 1
         let conversation = session.conversation
-        if conversation.turn == nil, !reveal.isRevealing(conversation),
+        if conversation.turn == nil, !reveal.isRevealing,
             let ask = conversation.waitingAsk
         {
             session.cancel(ask.id)
             return
         }
         session.stop(cut: reveal.stop(in: conversation))
-    }
-
-    private func loadEarlier() {
-        // Only once you've scrolled up: at the end, a short screen would otherwise page back
-        // through the whole history by itself.
-        guard !following, session.conversation.hasEarlierMessages, !session.isLoadingEarlier
-        else { return }
-        Task { await session.loadEarlier() }
     }
 
     // MARK: - Status and poses
@@ -537,7 +591,7 @@ struct ConversationView: View {
         }
         Task {
             try? await Task.sleep(for: .seconds(wait))
-            let latest = pose(revealing: reveal.isRevealing(session.conversation))
+            let latest = pose(revealing: reveal.isRevealing)
             if latest != poses.current {
                 poses.set(latest)
                 poseSince = .now
@@ -557,7 +611,7 @@ struct ConversationView: View {
         }
         Task {
             try? await Task.sleep(for: .seconds(wait))
-            let latest = liveStatus(revealing: reveal.isRevealing(session.conversation))
+            let latest = liveStatus(revealing: reveal.isRevealing)
             if latest != status {
                 status = latest
                 statusSince = .now
