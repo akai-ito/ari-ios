@@ -161,3 +161,17 @@ targets:
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+  # The app's interactions, driven as you would on the phone. Opt in: they need ito-core's demo
+  # engine running and Ari connected to it in the Simulator, so CI doesn't run them (see README).
+  AriUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [AriUITests]
+    dependencies:
+      - target: Ari
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Ari
+    scheme:
+      testTargets: [AriUITests]
