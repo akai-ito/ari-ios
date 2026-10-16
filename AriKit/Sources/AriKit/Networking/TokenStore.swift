@@ -22,35 +22,50 @@ public struct KeychainTokenStore: TokenStore {
     }
 
     public func token(for address: ServerAddress) throws -> Token? {
-        if let token = try read(item(for: address)) { return token }
-        guard accessGroup != nil else { return nil }
-        // A token saved before it was shared moves into the group, where the extensions find it.
-        var unshared = item(for: address)
-        unshared[kSecAttrAccessGroup as String] = nil
-        guard let token = try read(unshared) else { return nil }
-        SecItemDelete(unshared as CFDictionary)
-        do {
-            try save(token, for: address)
-        } catch {
-            try KeychainTokenStore(service: service).save(token, for: address)
+        guard let accessGroup else { return try read(item(for: address))?.token }
+        // A build without the app group's entitlement can't read the group at all: look for the
+        // token wherever Ari can.
+        if let found = try? read(item(for: address)) { return found.token }
+        var anywhere = item(for: address)
+        anywhere[kSecAttrAccessGroup as String] = nil
+        guard let found = try read(anywhere) else { return nil }
+        // A token saved before it was shared moves into the group, where the extensions find it,
+        // once it's safely there.
+        if let old = found.group, old != accessGroup, (try? write(found.token, for: address)) != nil
+        {
+            var previous = anywhere
+            previous[kSecAttrAccessGroup as String] = old
+            SecItemDelete(previous as CFDictionary)
         }
-        return token
+        return found.token
     }
 
-    private func read(_ item: [String: Any]) throws -> Token? {
+    private func read(_ item: [String: Any]) throws -> (token: Token, group: String?)? {
         var query = item
         query[kSecReturnData as String] = true
+        query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data,
+        guard status == errSecSuccess, let found = result as? [String: Any],
+            let data = found[kSecValueData as String] as? Data,
             let secret = String(data: data, encoding: .utf8)
         else { throw KeychainError(status: status) }
-        return Token(secret)
+        return (Token(secret), found[kSecAttrAccessGroup as String] as? String)
     }
 
     public func save(_ token: Token, for address: ServerAddress) throws {
+        do {
+            try write(token, for: address)
+        } catch  where accessGroup != nil {
+            // Without the app group, the token still keeps, for Ari alone: you stay connected,
+            // though the share extension can't reach the server.
+            try KeychainTokenStore(service: service).save(token, for: address)
+        }
+    }
+
+    private func write(_ token: Token, for address: ServerAddress) throws {
         let data = Data(token.secret.utf8)
         let update: [String: Any] = [kSecValueData as String: data]
         let status = SecItemUpdate(item(for: address) as CFDictionary, update as CFDictionary)
@@ -64,7 +79,10 @@ public struct KeychainTokenStore: TokenStore {
     }
 
     public func delete(for address: ServerAddress) throws {
-        let status = SecItemDelete(item(for: address) as CFDictionary)
+        // Wherever it is: in the group, or kept for Ari alone.
+        var anywhere = item(for: address)
+        anywhere[kSecAttrAccessGroup as String] = nil
+        let status = SecItemDelete(anywhere as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError(status: status)
         }

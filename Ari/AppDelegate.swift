@@ -31,7 +31,9 @@
         func application(
             _ application: UIApplication,
             didFailToRegisterForRemoteNotificationsWithError error: any Error
-        ) {}
+        ) {
+            model.failedToRegister(error)
+        }
 
         /// While you're looking at the conversation, a notification about it would only repeat it.
         nonisolated func userNotificationCenter(
