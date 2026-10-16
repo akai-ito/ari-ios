@@ -42,6 +42,23 @@ public enum AskActions {
         if asks.count >= 20 { categories.subtract(asks.prefix(asks.count - 19)) }
         categories.insert(category)
         center.setNotificationCategories(categories)
+        // Setting categories returns before iOS has them: wait until it does, or the notification
+        // can show before its buttons exist, and then has none.
+        for _ in 0..<20 {
+            if await center.notificationCategories().contains(where: {
+                $0.identifier == category.identifier
+            }) {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    /// The text an ask's notification shows: the question, then its options, so they can be read
+    /// before the notification is opened for its buttons. A secret's options aren't shown.
+    public static func body(for text: String, ask: PushNotification.AskSummary) -> String {
+        guard !ask.secret, !ask.options.isEmpty else { return text }
+        return text + "\n" + ask.options.joined(separator: " · ")
     }
 
     /// What an action answers with: an option's label, the typed text, or `nil` to open Ari.

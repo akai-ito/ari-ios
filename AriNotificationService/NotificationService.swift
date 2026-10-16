@@ -23,7 +23,9 @@ final class NotificationService: UNNotificationServiceExtension {
             contentHandler(request.content)
             return
         }
-        content.body = notification.text
+        content.body =
+            notification.ask.map { AskActions.body(for: notification.text, ask: $0) }
+            ?? notification.text
         content.threadIdentifier = "conversation"
         var info = content.userInfo
         info["kind"] = notification.kind.rawValue
