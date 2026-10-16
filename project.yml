@@ -111,6 +111,8 @@ targets:
       path: AriNotificationService/Info.plist
       properties:
         CFBundleDisplayName: Ari
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

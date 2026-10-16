@@ -19,8 +19,6 @@ struct WebPage: Identifiable {
 
         func makeUIViewController(context: Context) -> SFSafariViewController {
             let browser = SFSafariViewController(url: page.url)
-            browser.preferredControlTintColor = UIColor(Color.ariText)
-            browser.preferredBarTintColor = UIColor(Color.ariBackground)
             browser.dismissButtonStyle = .close
             return browser
         }
@@ -29,7 +27,15 @@ struct WebPage: Identifiable {
     }
 #endif
 
+/// Stop, while Ari is working or waiting for you, for the Conversation menu on the Mac.
+struct StopCommand: Equatable {
+    /// What Stop would end, a turn or an ask, so the menu updates only when that changes.
+    let target: String
+    let perform: () -> Void
+
+    static func == (a: StopCommand, b: StopCommand) -> Bool { a.target == b.target }
+}
+
 extension FocusedValues {
-    /// Stop, while Ari is working or waiting for you, for the Conversation menu on the Mac.
-    @Entry var stop: (() -> Void)?
+    @Entry var stop: StopCommand?
 }
