@@ -16,8 +16,6 @@ struct ConversationView: View {
 
     @State private var reveal = Reveal()
     @State private var poses = PoseHistory()
-    /// What you're writing, kept if Ari closes before you send it.
-    @AppStorage("draft") private var draft = ""
     /// Photos and files on the message you're writing, uploading as you write.
     @State private var attached: [PendingAttachment] = []
     /// Something you picked that can't be attached, said for a few seconds.
@@ -27,7 +25,7 @@ struct ConversationView: View {
     @State private var opened: Set<String> = []
     // Scrolled by message, not by edge: scrolling to an edge also shifts the content sideways.
     @State private var position = ScrollPosition(idType: String.self)
-    @State private var distanceFromEnd: CGFloat = 0
+    @State private var distanceFromEnd = Distance.atEnd
     /// Whether the conversation follows what arrives. It does while you're at the end, stops once
     /// you scroll up, and starts again when you come back to the end, send, or tap the pill.
     @State private var following = true
@@ -40,6 +38,9 @@ struct ConversationView: View {
     @State private var offering = false
     /// A linked page, open in place.
     @State private var browsing: WebPage?
+    /// Rows and parsed replies, kept between frames: a reply revealing redraws the screen every
+    /// frame, and working the whole conversation out again each time froze long ones.
+    @State private var cache = RowsCache()
     /// Each send and each Stop, for a light tap you can feel.
     @State private var sent = 0
     @State private var stops = 0
@@ -47,14 +48,18 @@ struct ConversationView: View {
     var body: some View {
         let conversation = session.conversation
         let working = conversation.turn != nil || reveal.isRevealing(conversation)
-        let canStop = role(working: working, asking: conversation.waitingAsk != nil) == .stop
-        let stopAction: (() -> Void)? = canStop ? { stop() } : nil
+        // Stop while Ari works, or while it waits for you, which cancels what it asked.
+        let canStop =
+            (working && conversation.pendingStop == nil)
+            || (!working && conversation.waitingAsk != nil)
+        let target = conversation.turn?.id.rawValue ?? conversation.waitingAsk?.id.rawValue ?? ""
+        let stopCommand = canStop ? StopCommand(target: target, perform: { stop() }) : nil
         screen
             // Files dropped on the conversation attach to the message you're writing.
             .dropDestination(for: URL.self) { urls, _ in drop(urls) }
             .sensoryFeedback(.impact(weight: .light), trigger: sent)
             .sensoryFeedback(.impact(weight: .medium), trigger: stops)
-            .focusedSceneValue(\.stop, stopAction)
+            .focusedSceneValue(\.stop, stopCommand)
             #if os(iOS)
                 // Links in replies open in place, over the conversation.
                 .environment(
@@ -77,7 +82,6 @@ struct ConversationView: View {
             }
             #if DEBUG
                 .task {
-                    if let draft = DebugScript.draft { self.draft = draft }
                     for url in DebugScript.attachments {
                         if let attachment = try? await AttachmentMaker.file(at: url) {
                             attach(attachment)
@@ -85,10 +89,7 @@ struct ConversationView: View {
                     }
                     await DebugScript.run(
                         in: session,
-                        send: { message in
-                            draft = message
-                            send()
-                        }, stop: stop)
+                        send: { message in _ = send(message) }, stop: stop)
                 }
             #endif
     }
@@ -98,6 +99,7 @@ struct ConversationView: View {
         let conversation = session.conversation
         let revealing = reveal.isRevealing(conversation)
         let working = conversation.turn != nil || revealing
+        let rows = rows(conversation)
         return VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Rhythm.messageGap) {
@@ -108,11 +110,11 @@ struct ConversationView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 120)
                     }
-                    ForEach(rows(conversation)) { row in
+                    ForEach(rows) { row in
                         rowView(row, in: conversation)
                             .id(row.id)
                             .onAppear {
-                                if row.id == rows(conversation).first?.id { loadEarlier() }
+                                if row.id == rows.first?.id { loadEarlier() }
                             }
                     }
                 }
@@ -133,23 +135,27 @@ struct ConversationView: View {
             .defaultScrollAnchor(.bottomLeading)
             // Following, the end stays in view as the reply grows; scrolled up, your place stays.
             .defaultScrollAnchor(following ? .bottomLeading : .topLeading, for: .sizeChanges)
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                max(0, geometry.contentSize.height - geometry.visibleRect.maxY)
+            // Only how far from the end, roughly: a value that changed on every scrolled point
+            // redrew the whole conversation each time.
+            .onScrollGeometryChange(for: Distance.self) { geometry in
+                Distance(geometry.contentSize.height - geometry.visibleRect.maxY)
             } action: { _, distance in
                 distanceFromEnd = distance
             }
-            // The anchor can slip while a row's height is still an estimate, so whenever the
-            // conversation grows while following, it also settles at the new end.
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentSize.height
-            } action: { old, new in
-                if following, new > old { scrollToEnd() }
+            // A new row while following: settle at the end, at once. Following every change in
+            // height, with an animation, fed itself in a long conversation (each scroll measured
+            // more rows, changing the height again) and froze the screen.
+            .onChange(of: rows.last?.id) { _, last in
+                guard following, let last else { return }
+                var settle = Transaction(animation: nil)
+                settle.disablesAnimations = true
+                withTransaction(settle) { position.scrollTo(id: last, anchor: .bottomLeading) }
             }
             // Scrolling yourself stops the following; coming to rest at the end starts it again.
             .onScrollPhaseChange { _, phase in
                 switch phase {
                 case .tracking, .interacting: following = false
-                case .idle where distanceFromEnd < 40:
+                case .idle where distanceFromEnd == .atEnd:
                     following = true
                     repliedWhileAway = false
                 default: break
@@ -171,43 +177,22 @@ struct ConversationView: View {
                 ProblemNotice(problem: problem, connectAgain: connectAgain)
             } else {
                 // While Ari waits for your answer, the composer takes it, as a secret if asked.
-                let asking = revealing ? nil : conversation.waitingAsk
-                let secret = asking?.secret ?? false
-                Composer(
-                    draft: $draft, role: role(working: working, asking: asking != nil),
-                    prompt: asking.map(Self.takesTypedAnswer) == true
-                        ? "Answer Ari" : "Message Ari",
-                    secret: secret, send: send, stop: stop
-                ) {
-                    // A secret answer is only ever typed.
-                    if !secret {
-                        AttachButton(
-                            room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
-                            problem: { attachProblem = $0 })
-                    }
-                } above: {
-                    if !attached.isEmpty {
-                        AttachedStrip(attached: attached, uploads: session.uploads, remove: detach)
-                    }
-                    if let attachProblem {
-                        Text(attachProblem)
-                            .font(.footnote)
-                            .foregroundStyle(.ariSecondary)
-                            .task(id: attachProblem) {
-                                try? await Task.sleep(for: .seconds(4))
-                                if !Task.isCancelled { self.attachProblem = nil }
-                            }
-                    }
-                }
-                .animation(.easeInOut(duration: 0.25), value: attached)
+                ComposerArea(
+                    session: session, attached: $attached, attachProblem: $attachProblem,
+                    working: working, stopping: conversation.pendingStop != nil,
+                    asking: revealing ? nil : conversation.waitingAsk,
+                    send: send, stop: stop, attach: attach, detach: detach
+                )
+                .equatable()
                 .frame(maxWidth: Rhythm.column)
                 .frame(maxWidth: .infinity)
             }
         }
         .background(.ariBackground)
         .background {
-            // The reading pace moves on with each frame, only while something is being revealed.
-            TimelineView(.animation(paused: !revealing)) { context in
+            // The reading pace moves on 30 times a second, only while something is being revealed:
+            // each step redraws the screen, and 60 cost too much in long conversations.
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !revealing)) { context in
                 Color.clear.onChange(of: context.date) { previous, now in
                     reveal.advance(
                         by: min(now.timeIntervalSince(previous), 0.1), in: session.conversation)
@@ -238,9 +223,22 @@ struct ConversationView: View {
         }
     }
 
+    /// How far you are from the end, in the three bands the screen cares about.
+    private enum Distance: Equatable {
+        /// Within 40 points: following resumes here.
+        case atEnd
+        case near
+        /// More than 600 points up: far enough for the Latest pill.
+        case far
+
+        init(_ points: CGFloat) {
+            self = points < 40 ? .atEnd : points > 600 ? .far : .near
+        }
+    }
+
     // MARK: - Rows
 
-    private struct Row: Identifiable {
+    fileprivate struct Row: Identifiable {
         enum Kind {
             case day(Date)
             case yours(Conversation.Entry)
@@ -259,6 +257,17 @@ struct ConversationView: View {
     /// The conversation as it reads (messages, and Ari's trail between them), with the date at the
     /// start of each day.
     private func rows(_ conversation: Conversation) -> [Row] {
+        let key = RowsCache.Key(
+            revision: conversation.revision, held: Timeline.held(conversation, reveal: reveal),
+            offering: offering && offersNotifications)
+        if cache.key == key { return cache.rows }
+        let rows = makeRows(conversation)
+        cache.key = key
+        cache.rows = rows
+        return rows
+    }
+
+    private func makeRows(_ conversation: Conversation) -> [Row] {
         var rows: [Row] = []
         var day: Date?
         for item in Timeline(conversation, reveal: reveal).items {
@@ -308,7 +317,7 @@ struct ConversationView: View {
             let position = shown >= Double(text.utf16.count) ? .infinity : shown
             VStack(alignment: .leading, spacing: 8) {
                 if !text.isEmpty {
-                    ReplyView(document: ReplyDocument(markdown: text), position: position)
+                    ReplyView(document: cache.document(entry.id, text), position: position)
                 }
                 if position == .infinity { footer(for: entry, in: conversation) }
             }
@@ -385,34 +394,26 @@ struct ConversationView: View {
 
     // MARK: - What you do
 
-    private func role(working: Bool, asking: Bool) -> ComposerRole {
-        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty {
-            return anyRefused ? .idle : .send
-        }
-        if working, session.conversation.pendingStop == nil { return .stop }
-        // Stop while Ari waits for you cancels what it asked.
-        return asking ? .stop : .idle
-    }
-
     /// Whatever you send while Ari waits answers it. A secret names the ask, and keeps no text.
-    private func send() {
+    /// Returns whether it went, so the composer can clear.
+    private func send(_ text: String) -> Bool {
         let asking = session.conversation.waitingAsk
         let secret = asking?.secret ?? false
-        guard !anyRefused,
+        guard !Self.anyRefused(attached, in: session),
             session.send(
-                draft, answers: secret ? asking?.id : nil, secret: secret,
+                text, answers: secret ? asking?.id : nil, secret: secret,
                 attachments: secret ? [] : attached.map(\.id)) != nil
-        else { return }
-        draft = ""
+        else { return false }
         attached = []
         sent += 1
         scrollToEnd()
+        return true
     }
 
     /// Files dropped on the conversation: each attaches, as if picked with the +.
-    private func drop(_ urls: [URL]) -> Bool {
+    private func drop(_ urls: [URL]) {
         let room = AttachmentMaker.mostPerMessage - attached.count
-        guard room > 0, session.problem == nil else { return false }
+        guard room > 0, session.problem == nil else { return }
         Task {
             for url in urls.prefix(room) where url.isFileURL {
                 do {
@@ -424,7 +425,6 @@ struct ConversationView: View {
                 }
             }
         }
-        return true
     }
 
     /// A photo or file you picked: it starts uploading at once.
@@ -440,16 +440,11 @@ struct ConversationView: View {
     }
 
     /// An attachment the server refused holds the message until you take it off.
-    private var anyRefused: Bool {
+    fileprivate static func anyRefused(_ attached: [PendingAttachment], in session: Session) -> Bool
+    {
         attached.contains {
             if case .refused = session.uploads[$0.id] { true } else { false }
         }
-    }
-
-    /// Whether an ask takes a typed answer. Any message still answers it, but the composer only
-    /// invites one when the ask does.
-    private static func takesTypedAnswer(_ ask: Ask) -> Bool {
-        ask.allowsText || ask.options.isEmpty || ask.secret
     }
 
     /// You tapped one of an ask's options: its label is your answer.
@@ -481,7 +476,10 @@ struct ConversationView: View {
     }
 
     private func loadEarlier() {
-        guard session.conversation.hasEarlierMessages, !session.isLoadingEarlier else { return }
+        // Only once you've scrolled up: at the end, a short screen would otherwise page back
+        // through the whole history by itself.
+        guard !following, session.conversation.hasEarlierMessages, !session.isLoadingEarlier
+        else { return }
         Task { await session.loadEarlier() }
     }
 
@@ -551,10 +549,10 @@ struct ConversationView: View {
     }
 
     private func pillText(working: Bool) -> String? {
-        guard !following, distanceFromEnd >= 40 else { return nil }
+        guard !following, distanceFromEnd != .atEnd else { return nil }
         if working { return "Ari is writing" }
         if repliedWhileAway { return "Ari has replied" }
-        return distanceFromEnd > 600 ? "Latest" : nil
+        return distanceFromEnd == .far ? "Latest" : nil
     }
 }
 
@@ -586,5 +584,111 @@ private struct ProblemNotice: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 24)
         .padding(.vertical, 14)
+    }
+}
+
+/// The composer with what you've attached. Its own view, holding the draft, so typing redraws only
+/// the composer and not the whole conversation above it; and equatable, so the conversation's
+/// changes (a step, each word of a reply) don't redraw the composer either. Its text field measures
+/// itself with TextKit on every redraw, which grew costly enough to freeze long conversations.
+private struct ComposerArea: View, Equatable {
+    let session: Session
+    @Binding var attached: [PendingAttachment]
+    @Binding var attachProblem: String?
+    let working: Bool
+    /// Your Stop is on its way.
+    let stopping: Bool
+    /// What Ari waits for you to answer, if anything.
+    let asking: Ask?
+    let send: (String) -> Bool
+    let stop: () -> Void
+    let attach: (PendingAttachment) -> Void
+    let detach: (AttachmentID) -> Void
+
+    /// What you're writing, kept if Ari closes before you send it.
+    @AppStorage("draft") private var draft = ""
+
+    var body: some View {
+        let secret = asking?.secret ?? false
+        Composer(
+            draft: $draft, role: role,
+            prompt: asking.map(Self.takesTypedAnswer) == true ? "Answer Ari" : "Message Ari",
+            secret: secret, send: submit, stop: stop
+        ) {
+            // A secret answer is only ever typed.
+            if !secret {
+                AttachButton(
+                    room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
+                    problem: { attachProblem = $0 })
+            }
+        } above: {
+            if !attached.isEmpty {
+                AttachedStrip(attached: attached, uploads: session.uploads, remove: detach)
+            }
+            if let attachProblem {
+                Text(attachProblem)
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                    .task(id: attachProblem) {
+                        try? await Task.sleep(for: .seconds(4))
+                        if !Task.isCancelled { self.attachProblem = nil }
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: attached)
+        #if DEBUG
+            .task {
+                if let draft = DebugScript.draft { self.draft = draft }
+            }
+        #endif
+    }
+
+    private var role: ComposerRole {
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty {
+            return ConversationView.anyRefused(attached, in: session) ? .idle : .send
+        }
+        if working, !stopping { return .stop }
+        // Stop while Ari waits for you cancels what it asked.
+        return asking != nil ? .stop : .idle
+    }
+
+    private func submit() {
+        if send(draft) { draft = "" }
+    }
+
+    /// Only what the composer shows: the closures are the conversation's own, the same each time.
+    static func == (a: ComposerArea, b: ComposerArea) -> Bool {
+        a.attached == b.attached && a.attachProblem == b.attachProblem && a.working == b.working
+            && a.stopping == b.stopping && a.asking == b.asking
+    }
+
+    /// Whether an ask takes a typed answer. Any message still answers it, but the composer only
+    /// invites one when the ask does.
+    private static func takesTypedAnswer(_ ask: Ask) -> Bool {
+        ask.allowsText || ask.options.isEmpty || ask.secret
+    }
+}
+
+/// What the conversation screen keeps between frames. A class, so filling it in while drawing
+/// doesn't ask SwiftUI to draw again.
+private final class RowsCache {
+    /// What the rows were worked out from: the conversation's changes, where the reveal holds
+    /// steps back, and whether Ari offers notifications.
+    struct Key: Equatable {
+        let revision: Int
+        let held: Int?
+        let offering: Bool
+    }
+
+    var key: Key?
+    var rows: [ConversationView.Row] = []
+    private var documents: [MessageID: (text: String, document: ReplyDocument)] = [:]
+
+    /// A reply's Markdown, read once for each text it has.
+    func document(_ id: MessageID, _ text: String) -> ReplyDocument {
+        if let kept = documents[id], kept.text == text { return kept.document }
+        let document = ReplyDocument(markdown: text)
+        documents[id] = (text, document)
+        return document
     }
 }

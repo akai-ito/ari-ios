@@ -10,25 +10,54 @@ public struct Conversation: Sendable, Equatable {
     public private(set) var needsSnapshot = false
     /// The messages, oldest first: the server's order, then your messages it hasn't accepted yet, in
     /// the order you sent them.
-    public private(set) var entries: [Entry] = []
+    public private(set) var entries: [Entry] = [] {
+        didSet { changes.count &+= 1 }
+    }
     /// The agent's steps from the oldest message on, in conversation order: merged with the messages
     /// by position, each sits exactly where it happened.
-    public private(set) var steps: [Step] = []
+    public private(set) var steps: [Step] = [] {
+        didSet { changes.count &+= 1 }
+    }
     /// What the agent asked, from the oldest message on, in conversation order.
-    public private(set) var asks: [Ask] = []
+    public private(set) var asks: [Ask] = [] {
+        didSet { changes.count &+= 1 }
+    }
     /// Asks you've answered or cancelled here, until the server says they've ended.
-    public private(set) var settling: [AskID: Settling] = [:]
+    public private(set) var settling: [AskID: Settling] = [:] {
+        didSet { changes.count &+= 1 }
+    }
     /// Whether older messages exist on the server, to page back to.
-    public private(set) var hasEarlierMessages = false
+    public private(set) var hasEarlierMessages = false {
+        didSet { changes.count &+= 1 }
+    }
     /// The turn the agent is working on, if any.
-    public private(set) var turn: Turn?
+    public private(set) var turn: Turn? {
+        didSet { changes.count &+= 1 }
+    }
     /// The latest turn that ended, until another starts: for a moment of Stopped, Couldn't finish or
     /// Interrupted.
-    public private(set) var lastEndedTurn: EndedTurn?
+    public private(set) var lastEndedTurn: EndedTurn? {
+        didSet { changes.count &+= 1 }
+    }
     /// Your Stop, from the tap until its turn ends.
-    public private(set) var pendingStop: StopRequest?
+    public private(set) var pendingStop: StopRequest? {
+        didSet { changes.count &+= 1 }
+    }
     /// Failed turns already tried again, so Try again shows only once.
-    public private(set) var retriedTurns: Set<TurnID> = []
+    public private(set) var retriedTurns: Set<TurnID> = [] {
+        didSet { changes.count &+= 1 }
+    }
+
+    /// Goes up with every change to what the conversation shows, so a view can tell cheaply whether
+    /// anything changed. It isn't part of equality: two conversations holding the same things are
+    /// equal however they got there.
+    public var revision: Int { changes.count }
+    private var changes = Changes()
+
+    private struct Changes: Sendable, Equatable {
+        var count = 0
+        static func == (_: Changes, _: Changes) -> Bool { true }
+    }
 
     /// Each entry's index in `entries`.
     private var positions: [MessageID: Int] = [:]
