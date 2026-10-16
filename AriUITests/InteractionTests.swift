@@ -63,15 +63,15 @@ final class InteractionTests: XCTestCase {
 
     func testAFailureCanBeTriedAgainOnce() {
         say("Please fail")
-        let tryAgains = app.buttons.matching(identifier: "Try again")
-        let before = tryAgains.count
+        let retries = app.buttons.matching(identifier: "Try again")
+        let before = retries.count
         XCTAssertTrue(
-            waitUntil(20) { tryAgains.count > before }, "no Try again for the new failure")
+            waitUntil(20) { retries.count > before }, "no Try again for the new failure")
         // The newest failure is the last one; earlier ones may still offer theirs.
-        tryAgains.element(boundBy: tryAgains.count - 1).tap()
+        retries.element(boundBy: retries.count - 1).tap()
         // The attempt fails again in the demo: its own failure offers Try again, the first doesn't.
         XCTAssertTrue(sendButton.waitForExistence(timeout: 20))
-        XCTAssertLessThanOrEqual(tryAgains.count, before + 1, "a failure offered Try again twice")
+        XCTAssertLessThanOrEqual(retries.count, before + 1, "a failure offered Try again twice")
     }
 
     func testTappingAnOptionAnswersTheAskOnce() {
