@@ -37,6 +37,7 @@ struct AriApp: App {
                 // or a Stop still goes.
                 if phase == .active {
                     model.session?.start()
+                    model.collectShares()
                     model.refreshServer()
                 } else {
                     model.session?.pause()

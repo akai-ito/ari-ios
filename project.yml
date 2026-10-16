@@ -33,6 +33,9 @@ targets:
       # The notification service extension decrypts each push on the iPhone.
       - target: AriNotificationService
         destinationFilters: [iOS]
+      # Share to Ari, from any app's share sheet.
+      - target: AriShare
+        destinationFilters: [iOS]
     settings:
       base:
         # Push, time-sensitive asks, and the app group the notification extension shares.
@@ -107,3 +110,39 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         # The system calls the extension off the main thread.
         SWIFT_APPROACHABLE_CONCURRENCY: YES
+  AriShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AriShare
+        excludes: ["*.entitlements"]
+      # Ari's colours.
+      - path: Ari/Assets.xcassets
+    dependencies:
+      - package: AriKit
+    info:
+      path: AriShare/Info.plist
+      properties:
+        CFBundleDisplayName: Ari
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 10
+              NSExtensionActivationSupportsFileWithMaxCount: 10
+              NSExtensionActivationSupportsAttachmentsWithMaxCount: 10
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ARI_BUNDLE_ID).Share
+        CODE_SIGN_ENTITLEMENTS: AriShare/AriShare.entitlements
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
