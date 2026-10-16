@@ -30,9 +30,12 @@ struct SettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
+                #if os(iOS)
+                    // The Mac's Settings window closes like any other.
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                #endif
             }
             .confirmationDialog(
                 "Connect to another server?", isPresented: $confirmingSwitch,

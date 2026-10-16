@@ -21,7 +21,8 @@ public struct ReplyDocument: Sendable, Equatable {
         public var kind: Kind
         /// How many lists deep it sits; 0 outside any.
         public var depth: Int
-        /// The list item's marker, "•" or "1.", on its first block only.
+        /// The list item's marker, "•" or "1.", on its first block only. A task list's items are
+        /// "☐" and "☑".
         public var marker: String?
         /// Inside a block quote.
         public var quoted: Bool
@@ -140,7 +141,7 @@ private struct Reader {
     }
 
     private mutating func readItem(_ item: ListItem, marker: String, depth: Int, quoted: Bool) {
-        self.marker = marker
+        self.marker = item.checkbox.map { $0 == .checked ? "☑" : "☐" } ?? marker
         for child in item.children { read(child, depth: depth, quoted: quoted) }
         self.marker = nil
     }

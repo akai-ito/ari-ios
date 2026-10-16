@@ -10,6 +10,9 @@ struct MainView: View {
     @State private var place = Place.chat
     @State private var showsSettings = false
     @Environment(\.scenePhase) private var scenePhase
+    #if os(macOS)
+        @Environment(\.openSettings) private var openSettings
+    #endif
 
     enum Place: Hashable { case chat, goals, library }
 
@@ -54,9 +57,18 @@ struct MainView: View {
         #if os(iOS)
             .tabBarMinimizeBehavior(.onScrollDown)
         #endif
-        .sheet(isPresented: $showsSettings) {
-            SettingsView(model: model, session: session)
-        }
+        #if os(iOS)
+            .sheet(isPresented: $showsSettings) {
+                SettingsView(model: model, session: session)
+            }
+        #else
+            // On the Mac, Settings is a window of its own.
+            .onChange(of: showsSettings) { _, shows in
+                guard shows else { return }
+                showsSettings = false
+                openSettings()
+            }
+        #endif
         // The server pushes only while you're not looking at the conversation.
         .onChange(of: scenePhase == .active && place == .chat, initial: true) { _, looking in
             model.setLooking(looking)

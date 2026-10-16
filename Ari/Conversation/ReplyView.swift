@@ -119,9 +119,18 @@ private struct BlockView: View {
         let text = text.lineSpacing(Rhythm.ariLineSpacing).foregroundStyle(tone.color)
         if let marker = block.marker {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(marker)
-                    .font(.ariBody.monospacedDigit())
-                    .foregroundStyle(.ariTertiary)
+                switch marker {
+                case "☐", "☑":
+                    // A task list's item, done or not.
+                    Image(systemName: marker == "☑" ? "checkmark.square" : "square")
+                        .font(.ariBody)
+                        .foregroundStyle(.ariTertiary)
+                        .accessibilityLabel(marker == "☑" ? "Done" : "Not done")
+                default:
+                    Text(marker)
+                        .font(.ariBody.monospacedDigit())
+                        .foregroundStyle(.ariTertiary)
+                }
                 text
             }
         } else {
