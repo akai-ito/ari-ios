@@ -86,6 +86,8 @@ public final class Session {
     @ObservationIgnored private var sleepers: [Int: (reasons: Wake, task: Task<Void, Never>)] = [:]
     @ObservationIgnored private var nextSleeper = 0
     @ObservationIgnored private let cache: AttachmentCache?
+    /// The server this session talks to.
+    public let address: ServerAddress
     /// Attachments being fetched, so two views asking at once make one request.
     @ObservationIgnored private var fetches: [AttachmentID: Task<Data?, Never>] = [:]
     /// Messages whose attachments went again because the server no longer had them, once each.
@@ -104,6 +106,7 @@ public final class Session {
         clock: some Clock<Duration> = ContinuousClock()
     ) {
         self.conversation = conversation
+        self.address = connection.address
         self.outbox = outbox
         self.cache = cache
         self.network = network

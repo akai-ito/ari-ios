@@ -133,6 +133,42 @@ ITO_SERVER=http://127.0.0.1:8787 ITO_TOKEN=<token> swift test --package-path Ari
 
 With `ITO_PAIRING_CODE` set to a fresh code from `node bin/ito.ts pair`, they pair too.
 
+The app's own interactions have UI tests in [AriUITests](AriUITests): sending, Stop, Try again,
+answering an ask, a secret answer, links, the trail, the long-press menu, Settings, and the
+conversation's scrolling (margins, following, the keyboard). They drive the app as you would,
+against the demo engine, so they're opt in: connect Ari to a demo server in the Simulator once,
+then run
+
+```sh
+xcodebuild test -project Ari.xcodeproj -scheme AriUITests -destination 'platform=iOS Simulator,name=<simulator>'
+```
+
+## Things that bit us
+
+Each cost a round of bugs on a real phone. The code says why where it matters; this is the list to
+read before changing these parts.
+
+- **Run `xcodegen generate` after pulling.** `Ari.xcodeproj` isn't in git, and a stale one still
+  builds, because the app's sources are a synced folder, but without what `project.yml` added since:
+  entitlements, Info.plist keys, extensions. The build now stops when `project.yml` is newer.
+- **The Simulator hides two classes of bug.** It doesn't enforce Keychain access groups, so the app
+  group's Keychain works there even without the entitlement, and it doesn't run notification
+  service extensions for `simctl push`. Check those on a phone.
+- **Finish iOS's completion handlers on the main thread.** The async forms of
+  `UNUserNotificationCenterDelegate` call them from a background task, and UIKit aborts.
+- **Don't let the conversation redraw on every frame or keystroke.** The reading pace moves 30
+  times a second: only the message being revealed may redraw (`RevealModel`, `Paced`). The
+  composer's text field measures itself with TextKit whenever it redraws, so it lives in its own
+  equatable view (`ComposerArea`).
+- **Scroll to rows as wide as the screen.** Scrolling to a row lines up its edge with the screen's:
+  a row starting at a margin slides everything sideways. And a lazy stack guesses the heights of
+  rows it hasn't drawn, which made the conversation jump or scroll into blank space, so it's a
+  plain stack of the latest rows.
+- **Follow the end on new rows only, without animation.** Following every change in height, with an
+  animation, fed itself in a long conversation and froze the screen.
+- **Keep secrets out of anything saved.** The draft is saved as you type; a secret answer has its
+  own field that never is.
+
 ## The protocol
 
 [protocol](protocol) is ito-core's
