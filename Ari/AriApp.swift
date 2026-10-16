@@ -79,7 +79,7 @@ struct AriApp: App {
 
         var body: some Commands {
             CommandMenu("Conversation") {
-                Button("Stop") { stop?() }
+                Button("Stop") { stop?.perform() }
                     .keyboardShortcut(".", modifiers: .command)
                     .disabled(stop == nil)
             }
