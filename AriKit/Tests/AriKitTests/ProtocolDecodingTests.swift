@@ -52,8 +52,9 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(RetryResult.self).retryOf == turn, "\(place)")
                 case .cancelAsk(let ask):
                     #expect(try body.decode(AskResult.self).ask.id == ask, "\(place)")
-                case .device, .presence:
-                    // Read with notifications.
+                case .device:
+                    #expect(try body.decode(DeviceResult.self).device.keyID.count == 8, "\(place)")
+                case .presence:
                     continue
                 case .events, .other:
                     Issue.record("\(place): an unexpected body")
@@ -81,9 +82,14 @@ struct ProtocolDecodingTests {
             case .stop:
                 let stop = try body.decode(StopTurn.self)
                 #expect(try JSONValue(encoding: StopTurn(cut: stop.cut)) == body, "\(place)")
-            case .device, .presence:
-                // Encoded with notifications.
-                continue
+            case .device:
+                let registration = try body.decode(RegisterDevice.self)
+                #expect(try JSONValue(encoding: registration) == body, "\(place)")
+            case .presence:
+                let presence = try body.decode(Presence.self)
+                #expect(
+                    try JSONValue(encoding: Presence(looking: presence.looking)) == body, "\(place)"
+                )
             default:
                 Issue.record("\(place): an unexpected request body")
             }

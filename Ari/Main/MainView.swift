@@ -9,19 +9,31 @@ struct MainView: View {
 
     @State private var place = Place.chat
     @State private var showsSettings = false
+    @Environment(\.scenePhase) private var scenePhase
 
     enum Place: Hashable { case chat, goals, library }
 
     var body: some View {
         TabView(selection: $place) {
             Tab("Chat", systemImage: "bubble.left", value: .chat) {
-                ConversationView(session: session, connectAgain: model.connectAgain)
-                    // The composer sits at the bottom of the conversation, just above the tab bar.
-                    .overlay(alignment: .topTrailing) {
-                        SettingsButton { showsSettings = true }
-                            .padding(.trailing, 16)
-                            .padding(.top, 2)
+                ConversationView(
+                    session: session, connectAgain: model.connectAgain,
+                    opening: Binding(get: { model.opening }, set: { model.opening = $0 }),
+                    offersNotifications: model.offersNotifications,
+                    answerOffer: { yes in
+                        if yes {
+                            Task { await model.turnOnNotifications() }
+                        } else {
+                            model.declineNotifications()
+                        }
                     }
+                )
+                // The composer sits at the bottom of the conversation, just above the tab bar.
+                .overlay(alignment: .topTrailing) {
+                    SettingsButton { showsSettings = true }
+                        .padding(.trailing, 16)
+                        .padding(.top, 2)
+                }
             }
             Tab("Goals", systemImage: "scope", value: .goals) {
                 ComingPlace(
@@ -44,6 +56,16 @@ struct MainView: View {
         #endif
         .sheet(isPresented: $showsSettings) {
             SettingsView(model: model, session: session)
+        }
+        // The server pushes only while you're not looking at the conversation.
+        .onChange(of: scenePhase == .active && place == .chat, initial: true) { _, looking in
+            model.setLooking(looking)
+        }
+        .onChange(of: session.link) { _, link in
+            if link == .live { model.reconnected() }
+        }
+        .onChange(of: model.opening) { _, message in
+            if message != nil { place = .chat }
         }
         #if DEBUG
             .task {

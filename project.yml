@@ -30,8 +30,13 @@ targets:
         type: syncedFolder
     dependencies:
       - package: AriKit
+      # The notification service extension decrypts each push on the iPhone.
+      - target: AriNotificationService
+        destinationFilters: [iOS]
     settings:
       base:
+        # Push, time-sensitive asks, and the app group the notification extension shares.
+        "CODE_SIGN_ENTITLEMENTS[sdk=iphone*]": Ari/Ari-iOS.entitlements
         # XcodeGen gives a multiplatform target its iOS presets; undo the two that are wrong for
         # the Mac. With the SDK's default identity, the Mac signs to run locally until a team is set.
         CODE_SIGN_IDENTITY: $(inherited)
@@ -65,3 +70,27 @@ targets:
     scheme:
       testTargets:
         - package: AriKit/AriKitTests
+  AriNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AriNotificationService
+        excludes: ["*.entitlements"]
+    dependencies:
+      - package: AriKit
+    info:
+      path: AriNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Ari
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ARI_BUNDLE_ID).NotificationService
+        CODE_SIGN_ENTITLEMENTS: AriNotificationService/AriNotificationService.entitlements
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        # The system calls the extension off the main thread.
+        SWIFT_APPROACHABLE_CONCURRENCY: YES

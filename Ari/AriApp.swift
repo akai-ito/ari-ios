@@ -3,7 +3,12 @@ import SwiftUI
 
 @main
 struct AriApp: App {
-    @State private var model = AppModel()
+    #if os(iOS)
+        @UIApplicationDelegateAdaptor private var delegate: AppDelegate
+        private var model: AppModel { delegate.model }
+    #else
+        @State private var model = AppModel()
+    #endif
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

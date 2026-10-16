@@ -80,20 +80,44 @@ struct SettingsView: View {
         .listRowBackground(Color.ariSurface)
     }
 
+    @ViewBuilder
     private var notifications: some View {
-        Section {
-            Toggle("When I'm away", isOn: .constant(false))
-            Toggle("Questions get through Focus", isOn: .constant(false))
-        } header: {
-            Text("Notifications")
-        } footer: {
-            Text(
-                "Ari will tell you when it's done or needs you. This starts working once your "
-                    + "server is updated to support it.")
-        }
-        .disabled(true)
-        .listRowBackground(Color.ariSurface)
+        #if os(iOS)
+            Section {
+                Toggle(
+                    "When I'm away",
+                    isOn: Binding(
+                        get: { model.notificationsOn },
+                        set: { on in
+                            if on {
+                                Task {
+                                    // Turned off in iOS Settings before: only iOS can turn it back on.
+                                    if !(await model.turnOnNotifications()) { openSystemSettings() }
+                                }
+                            } else {
+                                model.turnOffNotifications()
+                            }
+                        }))
+                Button("Focus and sounds…", action: openSystemSettings)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text(
+                    "Ari tells you when it's done or needs you, and only while you're not looking. "
+                        + "Questions are time-sensitive, so they can reach you during Focus; choose "
+                        + "in iOS Settings.")
+            }
+            .listRowBackground(Color.ariSurface)
+        #endif
     }
+
+    #if os(iOS)
+        private func openSystemSettings() {
+            if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        }
+    #endif
 
     private static func describe(_ link: Session.Link) -> String {
         switch link {

@@ -10,9 +10,7 @@ import Testing
 struct SessionTranscriptTests {
     @Test(
         "makes exactly the transcript's requests and ends with the store's conversation",
-        arguments: try Fixtures.transcripts().filter {
-            $0.name != "01-first-connection" && !$0.registersDevices
-        })
+        arguments: try Fixtures.transcripts().filter { $0.name != "01-first-connection" })
     func plays(_ transcript: Transcript) async throws {
         let rehearsal = try Rehearsal(transcript, sending: Self.sentEarly[transcript.name] ?? [])
         defer { rehearsal.close() }
@@ -25,9 +23,6 @@ struct SessionTranscriptTests {
         )
     }
 
-    /// Scenarios 18, 21, 24 and 26 register the device and say when you're looking, which arrives
-    /// with notifications; until then the store plays them, and the session doesn't.
-
     /// Messages you send before their requests go: in scenario 12, both while offline.
     static let sentEarly: [String: [(id: String, at: Int)]] = [
         "12-send-while-offline": [
@@ -35,14 +30,4 @@ struct SessionTranscriptTests {
             ("0c1566bf-a262-4595-b7a6-dd608ba8c3b0", 6_000),
         ]
     ]
-}
-
-extension Transcript {
-    /// Whether the scenario registers a device or says when you're looking.
-    fileprivate var registersDevices: Bool {
-        steps.contains { step in
-            guard case .app(let request) = step else { return false }
-            return request.route == .device || request.route == .presence
-        }
-    }
 }

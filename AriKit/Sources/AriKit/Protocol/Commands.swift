@@ -128,3 +128,58 @@ public struct RetryResult: Sendable, Equatable, Decodable {
 public struct ErrorResult: Sendable, Equatable, Decodable {
     public let error: ServerError
 }
+
+/// Which Apple push service a build talks to: builds from Xcode use the sandbox, TestFlight and
+/// the App Store production.
+public enum PushEnvironment: String, Sendable, Codable {
+    case sandbox, production
+}
+
+/// The body of `PUT /v0/devices/{device}`.
+public struct RegisterDevice: Sendable, Equatable, Codable {
+    /// The device token from Apple's push service, in lowercase hex.
+    public let apnsToken: String
+    public let environment: PushEnvironment
+    /// The device's notification key, base64; the server encrypts each notification with it.
+    public let notificationKey: String
+
+    public init(apnsToken: String, environment: PushEnvironment, notificationKey: NotificationKey) {
+        self.apnsToken = apnsToken
+        self.environment = environment
+        self.notificationKey = notificationKey.base64
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case environment
+        case apnsToken = "apns_token"
+        case notificationKey = "notification_key"
+    }
+}
+
+/// The answer to `PUT /v0/devices/{device}`.
+public struct DeviceResult: Sendable, Equatable, Decodable {
+    public let device: Device
+
+    public struct Device: Sendable, Equatable, Decodable {
+        public let id: String
+        public let environment: PushEnvironment
+        /// Names the key the server now encrypts with: the first 8 hex characters of its SHA-256.
+        public let keyID: String
+        public let registeredAt: Timestamp
+
+        enum CodingKeys: String, CodingKey {
+            case id, environment
+            case keyID = "key_id"
+            case registeredAt = "registered_at"
+        }
+    }
+}
+
+/// The body of `PUT /v0/devices/{device}/presence`.
+public struct Presence: Sendable, Equatable, Codable {
+    public let looking: Bool
+
+    public init(looking: Bool) {
+        self.looking = looking
+    }
+}

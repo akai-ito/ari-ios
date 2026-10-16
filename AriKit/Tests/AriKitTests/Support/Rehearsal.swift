@@ -21,6 +21,8 @@ final class Rehearsal {
     private var sent: Set<MessageID> = []
     private var early: [(at: Int, id: MessageID, text: String)]
     private var restarting = false
+    /// Whether Ari is closed, so a message sent now was answered from a notification.
+    private var closed = false
 
     static let token = Token("ito_example_not_a_real_token_00000000000000000000")
 
@@ -117,8 +119,10 @@ final class Rehearsal {
                 network.set(true)
             case "app_closed":
                 session.pause()
+                closed = true
                 await server.closeStream()
             case "app_opened":
+                closed = false
                 session.start()
             case "server_restarted", "server_restored":
                 restarting = true
@@ -141,10 +145,30 @@ final class Rehearsal {
             else { return }
             sent.insert(MessageID(id))
             let answers = request.body?["answers"]?.string.map(AskID.init(rawValue:))
+            if closed {
+                // Answered from a notification, with Ari closed.
+                let session = session
+                Task {
+                    await session.sendFromNotification(text, id: MessageID(id), answers: answers)
+                }
+                return
+            }
             let secret = answers.flatMap { session.conversation[ask: $0]?.secret } ?? false
             session.send(text, id: MessageID(id), answers: answers, secret: secret)
         case .cancelAsk(let ask):
             session.cancel(ask)
+        case .device:
+            let device = String(request.path.split(separator: "/").last ?? "")
+            if request.method == "DELETE" {
+                session.unregister(device: device)
+            } else if let registration = try? request.body?.decode(RegisterDevice.self) {
+                session.register(device: device, registration)
+            }
+        case .presence:
+            let device = String(request.path.split(separator: "/").dropLast().last ?? "")
+            if let presence = try? request.body?.decode(Presence.self) {
+                session.setLooking(presence.looking, device: device)
+            }
         case .stop:
             let cut = try? request.body?["cut"]?.decode(Cut.self)
             session.stop(cut: cut)
