@@ -68,7 +68,7 @@ struct YourMessage<Attachments: View>: View {
             attachments
             // A message may be only photos.
             if !text.isEmpty {
-                Text(text)
+                Text(Self.linked(text))
                     .foregroundStyle(.ariText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -92,6 +92,26 @@ struct YourMessage<Attachments: View>: View {
             }
             withAnimation(.easeInOut(duration: 0.3)) { shown = tag }
         }
+    }
+}
+
+extension YourMessage {
+    /// Your words, with any web address in them made a link, as Ari's are.
+    static func linked(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+        guard
+            let detector = try? NSDataDetector(
+                types: NSTextCheckingResult.CheckingType.link.rawValue)
+        else { return result }
+        for match in detector.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let url = match.url, let range = Range(match.range, in: text),
+                let start = AttributedString.Index(range.lowerBound, within: result),
+                let end = AttributedString.Index(range.upperBound, within: result)
+            else { continue }
+            result[start..<end].link = url
+            result[start..<end].underlineStyle = .single
+        }
+        return result
     }
 }
 
@@ -298,5 +318,36 @@ struct ReplyPreview: View {
             .padding(18)
             .frame(width: 340, alignment: .leading)
             .background(.ariBackground)
+    }
+}
+
+/// What needs you before Ari can carry on, in place of the composer.
+struct ProblemNotice: View {
+    let problem: Session.Problem
+    let connectAgain: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            switch problem {
+            case .tokenRejected(let error):
+                Text(error?.message ?? "Your server no longer accepts this token.")
+                    .foregroundStyle(.ariSecondary)
+                Button("Connect again", action: connectAgain)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.ariText)
+            case .protocolMismatch(let mismatch):
+                Text(
+                    mismatch.update == .ari
+                        ? "Your server now speaks a newer protocol. Update Ari."
+                        : "Your server speaks an older protocol. Update Ito on your server."
+                )
+                .foregroundStyle(.ariSecondary)
+            }
+        }
+        .font(.subheadline)
+        .multilineTextAlignment(.center)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
     }
 }

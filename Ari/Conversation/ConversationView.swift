@@ -15,7 +15,8 @@ struct ConversationView: View {
     var answerOffer: (Bool) -> Void = { _ in }
 
     @State private var reveal = RevealModel()
-    @State private var poses = PoseHistory()
+    /// The status line and the character's pose, paced for reading.
+    @State private var header = HeaderState()
     /// Photos and files on the message you're writing, uploading as you write.
     @State private var attached: [PendingAttachment] = []
     /// Something you picked that can't be attached, said for a few seconds.
@@ -35,11 +36,6 @@ struct ConversationView: View {
     /// you scroll up, and starts again when you come back to the end, send, or tap the pill.
     @State private var following = true
     @State private var repliedWhileAway = false
-    @State private var status: StatusText?
-    @State private var statusSince = Date.distantPast
-    @State private var poseSince = Date.distantPast
-    @State private var linkDown = false
-    @State private var stopped = false
     /// A turn has run long enough that a nudge when it's done would help.
     @State private var offering = false
     /// A linked page, open in place.
@@ -179,7 +175,7 @@ struct ConversationView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            HeaderView(poses: poses, name: name, status: status)
+            HeaderView(poses: header.poses, name: name, status: header.status)
         }
         .overlay(alignment: .bottom) {
             if let pill = pillText(working: working) {
@@ -218,10 +214,18 @@ struct ConversationView: View {
         .onChange(of: conversation.revision, initial: true) { _, _ in
             reveal.sync(session.conversation)
         }
-        .onChange(of: pose(revealing: revealing), initial: true) { _, pose in show(pose) }
-        .onChange(of: liveStatus(revealing: revealing), initial: true) { _, next in hold(next) }
-        .onChange(of: session.link, initial: true) { _, link in noticeLink(link) }
-        .onChange(of: conversation.lastEndedTurn?.id) { _, _ in noticeEnd(conversation) }
+        .onChange(of: pose(revealing: revealing), initial: true) { _, pose in
+            header.show(pose: pose) { self.pose(revealing: reveal.isRevealing) }
+        }
+        .onChange(of: liveStatus(revealing: revealing), initial: true) { _, next in
+            header.show(status: next) { liveStatus(revealing: reveal.isRevealing) }
+        }
+        .onChange(of: session.link, initial: true) { _, link in
+            header.notice(link: link) { session.link }
+        }
+        .onChange(of: conversation.lastEndedTurn?.id) { _, _ in
+            if session.conversation.lastEndedTurn?.outcome == .stopped { header.noticeStopped() }
+        }
         .onChange(of: working) { wasWorking, isWorking in
             if wasWorking, !isWorking, !following { repliedWhileAway = true }
         }
@@ -234,11 +238,8 @@ struct ConversationView: View {
         // Tapping a reply's notification opens the conversation at that reply.
         .onChange(of: opening.wrappedValue) { _, message in
             guard let message else { return }
-            following = false
-            withAnimation(.smooth(duration: 0.4)) {
-                position.scrollTo(id: message.rawValue, anchor: .topLeading)
-            }
             opening.wrappedValue = nil
+            open(at: message.rawValue, in: rows)
         }
     }
 
@@ -263,21 +264,7 @@ struct ConversationView: View {
 
     // MARK: - Rows
 
-    fileprivate struct Row: Identifiable {
-        enum Kind {
-            case day(Date)
-            case yours(Conversation.Entry)
-            case ari(Conversation.Entry)
-            case trail(Trail)
-            /// Ari offers to tell you when it's done, once.
-            case offer
-            /// A turn that failed before writing anything.
-            case failure(TurnID, ServerError?)
-        }
-
-        let id: String
-        let kind: Kind
-    }
+    typealias Row = ConversationRow
 
     /// The conversation as it reads (messages, and Ari's trail between them), with the date at the
     /// start of each day.
@@ -286,38 +273,9 @@ struct ConversationView: View {
             revision: conversation.revision, held: reveal.held,
             offering: offering && offersNotifications)
         if cache.key == key { return cache.rows }
-        let rows = makeRows(conversation)
+        let rows = RowsCache.make(conversation, reveal: reveal.reveal, offering: key.offering)
         cache.key = key
         cache.rows = rows
-        return rows
-    }
-
-    private func makeRows(_ conversation: Conversation) -> [Row] {
-        var rows: [Row] = []
-        var day: Date?
-        for item in Timeline(conversation, reveal: reveal.reveal).items {
-            guard case .message(let entry) = item else {
-                if case .trail(let trail) = item {
-                    rows.append(Row(id: trail.id, kind: .trail(trail)))
-                }
-                continue
-            }
-            let date = entry.at?.date ?? .now
-            if day.map({ !Calendar.current.isDate($0, inSameDayAs: date) }) ?? true {
-                rows.append(Row(id: "day \(entry.id)", kind: .day(date)))
-                day = date
-            }
-            rows.append(
-                Row(id: entry.id.rawValue, kind: entry.role == .user ? .yours(entry) : .ari(entry)))
-        }
-        if let ended = conversation.lastEndedTurn, ended.outcome == .failed,
-            !conversation.entries.contains(where: {
-                $0.turn == ended.id && $0.isShown && $0.role == .agent
-            })
-        {
-            rows.append(Row(id: "failure \(ended.id)", kind: .failure(ended.id, ended.error)))
-        }
-        if offering, offersNotifications { rows.append(Row(id: "offer", kind: .offer)) }
         return rows
     }
 
@@ -466,8 +424,7 @@ struct ConversationView: View {
     }
 
     /// An attachment the server refused holds the message until you take it off.
-    fileprivate static func anyRefused(_ attached: [PendingAttachment], in session: Session) -> Bool
-    {
+    static func anyRefused(_ attached: [PendingAttachment], in session: Session) -> Bool {
         attached.contains {
             if case .refused = session.uploads[$0.id] { true } else { false }
         }
@@ -497,6 +454,22 @@ struct ConversationView: View {
         var settle = Transaction(animation: nil)
         settle.disablesAnimations = true
         withTransaction(settle, change)
+    }
+
+    /// Opens the conversation at a row, as from a tapped notification: an older one is shown first,
+    /// since only the latest rows are on screen until you scroll back.
+    private func open(at id: String, in rows: [Row]) {
+        following = false
+        if !shownRows(rows).contains(where: { $0.id == id }),
+            let index = rows.firstIndex(where: { $0.id == id })
+        {
+            firstShown = rows[max(0, index - 2)].id
+        }
+        Task {
+            // A moment for the newly shown rows to be laid out before scrolling to one.
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.smooth(duration: 0.4)) { position.scrollTo(id: id, anchor: .top) }
+        }
     }
 
     /// The rows on screen: the latest ones, from `firstShown` on. More are shown as you scroll up
@@ -548,7 +521,7 @@ struct ConversationView: View {
     // MARK: - Status and poses
 
     private func pose(revealing: Bool) -> Pose {
-        if linkDown { return .offline }
+        if header.linkDown { return .offline }
         if let turn = session.conversation.turn {
             if session.conversation.pendingStop != nil { return .stopping }
             // Writing and adjusting come from the status; anything else from the newest step in the
@@ -569,7 +542,9 @@ struct ConversationView: View {
     }
 
     private func liveStatus(revealing: Bool) -> StatusText? {
-        if linkDown { return .quiet(session.link == .offline ? "No connection" : "Reconnecting") }
+        if header.linkDown {
+            return .quiet(session.link == .offline ? "No connection" : "Reconnecting")
+        }
         let conversation = session.conversation
         if let turn = conversation.turn {
             if conversation.pendingStop != nil { return .status("Stopping", detail: nil) }
@@ -577,67 +552,7 @@ struct ConversationView: View {
         }
         if revealing { return .status("Writing", detail: nil) }
         if conversation.waitingAsk != nil { return .status("Waiting for you", detail: nil) }
-        return stopped ? .quiet("Stopped") : nil
-    }
-
-    /// Each pose stays at least a second, so its prop can be seen: steps can flip faster than that.
-    /// Stopping, going offline and coming to rest show at once.
-    private func show(_ next: Pose) {
-        let wait = 1.1 - Date.now.timeIntervalSince(poseSince)
-        guard wait > 0, ![.stopping, .offline, .resting].contains(next) else {
-            if next != poses.current { poseSince = .now }
-            poses.set(next)
-            return
-        }
-        Task {
-            try? await Task.sleep(for: .seconds(wait))
-            let latest = pose(revealing: reveal.isRevealing)
-            if latest != poses.current {
-                poses.set(latest)
-                poseSince = .now
-            }
-        }
-    }
-
-    /// Each status stays at least a second, so it can be read; a newer one waits its turn, and
-    /// any it replaces meanwhile are skipped. A status never outlives its turn, though: when there's
-    /// nothing to say, the line clears at once.
-    private func hold(_ next: StatusText?) {
-        let wait = 1 - Date.now.timeIntervalSince(statusSince)
-        guard wait > 0, status != nil, next != nil else {
-            status = next
-            statusSince = .now
-            return
-        }
-        Task {
-            try? await Task.sleep(for: .seconds(wait))
-            let latest = liveStatus(revealing: reveal.isRevealing)
-            if latest != status {
-                status = latest
-                statusSince = .now
-            }
-        }
-    }
-
-    /// A connection lost for two seconds shows; a shorter blip never does.
-    private func noticeLink(_ link: Session.Link) {
-        guard link == .reconnecting || link == .offline else {
-            linkDown = false
-            return
-        }
-        Task {
-            try? await Task.sleep(for: .seconds(2))
-            if session.link == .reconnecting || session.link == .offline { linkDown = true }
-        }
-    }
-
-    private func noticeEnd(_ conversation: Conversation) {
-        guard conversation.lastEndedTurn?.outcome == .stopped else { return }
-        stopped = true
-        Task {
-            try? await Task.sleep(for: .seconds(1.6))
-            stopped = false
-        }
+        return header.stopped ? .quiet("Stopped") : nil
     }
 
     private func pillText(working: Bool) -> String? {
@@ -645,157 +560,5 @@ struct ConversationView: View {
         if working { return "Ari is writing" }
         if repliedWhileAway { return "Ari has replied" }
         return distanceFromEnd == .far ? "Latest" : nil
-    }
-}
-
-/// What needs you before Ari can carry on, in place of the composer.
-private struct ProblemNotice: View {
-    let problem: Session.Problem
-    let connectAgain: () -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            switch problem {
-            case .tokenRejected(let error):
-                Text(error?.message ?? "Your server no longer accepts this token.")
-                    .foregroundStyle(.ariSecondary)
-                Button("Connect again", action: connectAgain)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.ariText)
-            case .protocolMismatch(let mismatch):
-                Text(
-                    mismatch.update == .ari
-                        ? "Your server now speaks a newer protocol. Update Ari."
-                        : "Your server speaks an older protocol. Update Ito on your server."
-                )
-                .foregroundStyle(.ariSecondary)
-            }
-        }
-        .font(.subheadline)
-        .multilineTextAlignment(.center)
-        .buttonStyle(.plain)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 14)
-    }
-}
-
-/// The composer with what you've attached. Its own view, holding the draft, so typing redraws only
-/// the composer and not the whole conversation above it; and equatable, so the conversation's
-/// changes (a step, each word of a reply) don't redraw the composer either. Its text field measures
-/// itself with TextKit on every redraw, which grew costly enough to freeze long conversations.
-private struct ComposerArea: View, Equatable {
-    let session: Session
-    @Binding var attached: [PendingAttachment]
-    @Binding var attachProblem: String?
-    let working: Bool
-    /// Your Stop is on its way.
-    let stopping: Bool
-    /// What Ari waits for you to answer, if anything.
-    let asking: Ask?
-    let send: (String) -> Bool
-    let stop: () -> Void
-    let attach: (PendingAttachment) -> Void
-    let detach: (AttachmentID) -> Void
-
-    /// What you're writing. Saved a moment after you stop typing, and when Ari leaves the screen,
-    /// so it survives Ari closing; saved on every keystroke, the field kept waiting on it.
-    @State private var draft = UserDefaults.standard.string(forKey: "draft") ?? ""
-    @Environment(\.scenePhase) private var scenePhase
-
-    var body: some View {
-        let secret = asking?.secret ?? false
-        Composer(
-            draft: $draft, role: role,
-            prompt: asking.map(Self.takesTypedAnswer) == true ? "Answer Ari" : "Message Ari",
-            secret: secret, send: submit, stop: stop
-        ) {
-            // A secret answer is only ever typed.
-            if !secret {
-                AttachButton(
-                    room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
-                    problem: { attachProblem = $0 })
-            }
-        } above: {
-            if !attached.isEmpty {
-                AttachedStrip(attached: attached, uploads: session.uploads, remove: detach)
-            }
-            if let attachProblem {
-                Text(attachProblem)
-                    .font(.footnote)
-                    .foregroundStyle(.ariSecondary)
-                    .task(id: attachProblem) {
-                        try? await Task.sleep(for: .seconds(4))
-                        if !Task.isCancelled { self.attachProblem = nil }
-                    }
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: attached)
-        .task(id: draft) {
-            try? await Task.sleep(for: .milliseconds(600))
-            if !Task.isCancelled { saveDraft() }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { saveDraft() }
-        }
-        #if DEBUG
-            .task {
-                if let draft = DebugScript.draft { self.draft = draft }
-            }
-        #endif
-    }
-
-    private var role: ComposerRole {
-        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty {
-            return ConversationView.anyRefused(attached, in: session) ? .idle : .send
-        }
-        if working, !stopping { return .stop }
-        // Stop while Ari waits for you cancels what it asked.
-        return asking != nil ? .stop : .idle
-    }
-
-    private func submit() {
-        guard send(draft) else { return }
-        draft = ""
-        saveDraft()
-    }
-
-    private func saveDraft() {
-        UserDefaults.standard.set(draft, forKey: "draft")
-    }
-
-    /// Only what the composer shows: the closures are the conversation's own, the same each time.
-    static func == (a: ComposerArea, b: ComposerArea) -> Bool {
-        a.attached == b.attached && a.attachProblem == b.attachProblem && a.working == b.working
-            && a.stopping == b.stopping && a.asking == b.asking
-    }
-
-    /// Whether an ask takes a typed answer. Any message still answers it, but the composer only
-    /// invites one when the ask does.
-    private static func takesTypedAnswer(_ ask: Ask) -> Bool {
-        ask.allowsText || ask.options.isEmpty || ask.secret
-    }
-}
-
-/// What the conversation screen keeps between frames. A class, so filling it in while drawing
-/// doesn't ask SwiftUI to draw again.
-private final class RowsCache {
-    /// What the rows were worked out from: the conversation's changes, where the reveal holds
-    /// steps back, and whether Ari offers notifications.
-    struct Key: Equatable {
-        let revision: Int
-        let held: Int?
-        let offering: Bool
-    }
-
-    var key: Key?
-    var rows: [ConversationView.Row] = []
-    private var documents: [MessageID: (text: String, document: ReplyDocument)] = [:]
-
-    /// A reply's Markdown, read once for each text it has.
-    func document(_ id: MessageID, _ text: String) -> ReplyDocument {
-        if let kept = documents[id], kept.text == text { return kept.document }
-        let document = ReplyDocument(markdown: text)
-        documents[id] = (text, document)
-        return document
     }
 }
