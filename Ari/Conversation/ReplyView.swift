@@ -27,8 +27,15 @@ struct ReplyView: View {
             ForEach(document.blocks.indices, id: \.self) { index in
                 let block = document.blocks[index]
                 if position > Double(block.start) {
-                    BlockView(block: block, position: position, tone: tone)
-                        .padding(.top, index == 0 ? 0 : gap(before: index))
+                    // A block fully on screen gets a position that no longer changes, so only the
+                    // block being revealed redraws as the reveal moves on.
+                    let end = block.runs.last.map { $0.start + $0.text.utf16.count } ?? block.start
+                    BlockView(
+                        block: block,
+                        position: position >= Double(end) + Self.edge ? .infinity : position,
+                        tone: tone
+                    )
+                    .padding(.top, index == 0 ? 0 : gap(before: index))
                 }
             }
         }
@@ -62,13 +69,28 @@ struct ReplyView: View {
                 result += AttributedString(run.text, attributes: attributes)
                 continue
             }
+            // Shown in one piece, the leading edge character by character as it fades in, and the
+            // unread rest in one piece: a piece per character made long paragraphs costly to lay
+            // out on every frame.
             var offset = run.start
+            var piece = ""
+            var pieceAlpha = -1.0
+            func flush() {
+                guard !piece.isEmpty else { return }
+                attributes.foregroundColor = tone.color.opacity(pieceAlpha)
+                result += AttributedString(piece, attributes: attributes)
+                piece = ""
+            }
             for character in run.text {
                 let alpha = clamp((position - Double(offset)) / edge)
-                attributes.foregroundColor = tone.color.opacity(alpha)
-                result += AttributedString(String(character), attributes: attributes)
+                if alpha != pieceAlpha || (alpha > 0 && alpha < 1) {
+                    flush()
+                    pieceAlpha = alpha
+                }
+                piece.append(character)
                 offset += character.utf16.count
             }
+            flush()
         }
         return result
     }
