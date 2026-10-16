@@ -67,6 +67,9 @@ final class AppModel {
         address = connection.address
         lastAddress = connection.address.description
         server = connection.server
+        if let previous = session, previous.address != connection.address {
+            forgetDevice(at: previous.address)
+        }
         session?.close()
         session = Self.session(for: connection)
         session?.start()
@@ -107,7 +110,10 @@ final class AppModel {
 
     /// Back to the connect screen, forgetting the token, as when the server stopped accepting it.
     func connectAgain() {
-        if let address { try? tokens.delete(for: address) }
+        if let address {
+            forgetDevice(at: address)
+            try? tokens.delete(for: address)
+        }
         group.address = nil
         session?.close()
         session = nil
@@ -165,6 +171,15 @@ final class AppModel {
         #if os(iOS)
             UIApplication.shared.unregisterForRemoteNotifications()
         #endif
+    }
+
+    /// You left the server at `address`: it forgets this device, so it stops sending notifications
+    /// here. Straight to the server rather than through the session, which closes at once.
+    private func forgetDevice(at address: ServerAddress) {
+        guard notificationsOn, let token = try? tokens.token(for: address) else { return }
+        let client = ItoClient(address: address, token: token, transport: URLSessionTransport())
+        let device = notifications.deviceID
+        Task { try? await client.removeDevice(device) }
     }
 
     /// The push service gave this device its token.

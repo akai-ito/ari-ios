@@ -36,14 +36,19 @@ struct AriApp: App {
             .preferredColorScheme(.dark)
             .tint(.ariText)
             .onChange(of: scenePhase, initial: true) { _, phase in
-                // On screen, the stream is live; off screen it closes, while a waiting message
-                // or a Stop still goes.
-                if phase == .active {
+                // On screen, the stream is live; in the background it closes, while a waiting
+                // message or a Stop still goes. Only the background: Control Center, a permission
+                // prompt or a call's banner make Ari inactive for a moment, and closing the stream
+                // for each made it reconnect.
+                switch phase {
+                case .active:
                     model.session?.start()
                     model.collectShares()
                     model.refreshServer()
-                } else {
+                case .background:
                     model.session?.pause()
+                default:
+                    break
                 }
             }
         }
