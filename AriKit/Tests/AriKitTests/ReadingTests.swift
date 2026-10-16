@@ -46,6 +46,17 @@ struct ReplyDocumentTests {
         #expect(blocks[1].runs.first?.style == .strong)
     }
 
+    @Test("as plain text: no Markdown, paragraphs apart, list items under their markers")
+    func plainText() {
+        let document = ReplyDocument(
+            markdown:
+                "Here's a **shape**:\n\n- **07:30** Long run.\n- See [the map](https://example.com)."
+                + "\n\nEarly night.")
+        #expect(
+            document.plainText
+                == "Here's a shape:\n\n• 07:30 Long run.\n• See the map.\n\nEarly night.")
+    }
+
     @Test("a code block, its language and inline code")
     func code() {
         let source = """
