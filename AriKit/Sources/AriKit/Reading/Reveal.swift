@@ -37,10 +37,28 @@ public struct Reveal: Sendable, Equatable {
 
     /// Whether anything is still being revealed.
     public func isRevealing(_ conversation: Conversation, at now: Date = .now) -> Bool {
-        conversation.entries.contains { entry in
-            Self.paces(entry)
-                && position(of: entry, at: now)
-                    < Double(conversation.visibleText(of: entry).utf16.count)
+        var revealing = false
+        Self.visitRecent(conversation) { entry, available in
+            if position(of: entry, at: now) < available {
+                revealing = true
+                return false
+            }
+            return available == 0
+        }
+        return revealing
+    }
+
+    /// Visits Ari's messages from the newest back, with how much of each there is to show, until
+    /// `next` returns `false` or a message is fully on screen. Messages reveal in order and an
+    /// ended one never grows, so nothing before that one is still revealing: a long history costs
+    /// nothing on each frame. An empty message, just started, doesn't count as on screen.
+    static func visitRecent(
+        _ conversation: Conversation,
+        _ next: (Conversation.Entry, _ available: Double) -> Bool
+    ) {
+        for entry in conversation.entries.reversed() where paces(entry) {
+            let available = Double(conversation.visibleText(of: entry).utf16.count)
+            guard next(entry, available) else { return }
         }
     }
 
@@ -50,11 +68,12 @@ public struct Reveal: Sendable, Equatable {
         by elapsed: TimeInterval, in conversation: Conversation, at now: Date = .now
     ) -> Bool {
         var pending: [(id: MessageID, available: Double, current: Double)] = []
-        for entry in conversation.entries where Self.paces(entry) {
+        Self.visitRecent(conversation) { entry, available in
             let current = position(of: entry, at: now)
             shown[entry.id] = current
-            let available = Double(conversation.visibleText(of: entry).utf16.count)
-            if current < available { pending.append((entry.id, available, current)) }
+            guard current < available else { return available == 0 }
+            pending.insert((entry.id, available, current), at: 0)
+            return true
         }
         let backlog = pending.reduce(0) { $0 + $1.available - $1.current }
         let speed = max(Self.pace, backlog / Self.catchUp)

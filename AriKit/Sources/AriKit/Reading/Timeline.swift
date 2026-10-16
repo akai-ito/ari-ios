@@ -29,12 +29,7 @@ public struct Timeline: Equatable, Sendable {
     public init(_ conversation: Conversation, reveal: Reveal, at now: Date = .now) {
         let liveTurn = conversation.turn?.id
         let waiting = conversation.waitingAsk?.id
-        // The first of Ari's messages still being revealed: steps after it wait.
-        let held = conversation.entries.first {
-            Reveal.paces($0) && $0.position != nil
-                && reveal.position(of: $0, at: now)
-                    < Double(conversation.visibleText(of: $0).utf16.count)
-        }?.position
+        let held = Self.held(conversation, reveal: reveal, at: now)
 
         var trail: Trail?
         func close() {
@@ -71,6 +66,20 @@ public struct Timeline: Equatable, Sendable {
             }
         }
         close()
+    }
+
+    /// Where the first of Ari's messages still being revealed sits: steps after it wait. Found from
+    /// the newest message back, so it costs the same however long the conversation is.
+    public static func held(_ conversation: Conversation, reveal: Reveal, at now: Date = .now)
+        -> Int?
+    {
+        var held: Int?
+        Reveal.visitRecent(conversation) { entry, available in
+            guard reveal.position(of: entry, at: now) < available else { return available == 0 }
+            if let position = entry.position { held = position }
+            return true
+        }
+        return held
     }
 
     /// A note that's only progress ("Checking what people say."): one short line, which hangs on

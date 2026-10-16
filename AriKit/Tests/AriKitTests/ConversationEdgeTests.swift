@@ -30,6 +30,27 @@ struct ConversationEdgeTests {
         #expect(replay.conversation.retriedTurns == plain.conversation.retriedTurns)
     }
 
+    @Test("every change moves the revision on, but equality looks only at what it holds")
+    func revision() throws {
+        let transcript = try Fixtures.transcript("05-the-reply-streams")
+        var replay = Replay(transcript)
+        var revisions: [Int] = []
+        for step in transcript.steps {
+            try replay.play(throughLine: step.line)
+            revisions.append(replay.conversation.revision)
+        }
+        #expect(revisions == revisions.sorted())
+        #expect(revisions.last ?? 0 > revisions.first ?? 0)
+
+        // The same conversation reached a different way is equal, whatever its revision.
+        var again = Replay(try Fixtures.transcript("05-the-reply-streams"))
+        try again.play()
+        var twice = again.conversation
+        twice.send("6a1d2c38-0f1e-4c5b-9d1f-2b7e4b1c9a10", text: "Hi")
+        #expect(twice.revision > again.conversation.revision)
+        #expect(replay.conversation == again.conversation)
+    }
+
     @Test("your message waits below the server's, even another device's, and appears once")
     func yourMessages() throws {
         var conversation = Conversation()
