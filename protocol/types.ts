@@ -128,13 +128,15 @@ export interface paths {
      *
      *     To attach photos or files, upload each one first with `PUT /v0/attachments/{attachment}`,
      *     then name them in `attachments`; the text may then be empty. An attachment belongs to one
-     *     message.
+     *     message. If one isn't on the server, because no message named it for a day, the message is
+     *     refused with `attachment_missing`: upload its attachments again under the same ids, then
+     *     send the same message again.
      *
      *     While an ask waits, the message answers it, whether or not it names the ask: `message.accepted`
      *     for the message comes first, then `ask.ended`. Name the ask in `answers` when you send a
      *     tapped option or a secret. The text of an answer to a secret ask is never stored, never
      *     streamed and never sent back: the message keeps an empty text, marked `secret`, and only the
-     *     agent's next turn receives what you typed.
+     *     agent's next turn receives what you typed. A secret answer can't carry attachments.
      */
     post: operations["sendMessage"];
     delete?: never;
@@ -694,7 +696,7 @@ export interface components {
       label: components["schemas"]["StatusLabel"];
       detail?: components["schemas"]["StatusDetail"];
     };
-    /** @description Why something failed. A failed turn uses `model_timeout`, `model_unavailable`, `usage_limit`, `engine_signed_out`, `context_full`, `engine_failed`, `server_disk_full`, `refused` or `internal`. A refused command uses `invalid_request`, `token_rejected`, `pairing_code_rejected`, `not_found`, `id_conflict`, `too_large`, `slow_down`, `unavailable` or `internal`. Codes are added over time: show the message of a code you don't recognise. */
+    /** @description Why something failed. A failed turn uses `model_timeout`, `model_unavailable`, `usage_limit`, `engine_signed_out`, `context_full`, `engine_failed`, `server_disk_full`, `refused` or `internal`. A refused command uses `invalid_request`, `token_rejected`, `pairing_code_rejected`, `not_found`, `id_conflict`, `too_large`, `attachment_missing`, `slow_down`, `unavailable` or `internal`. Codes are added over time: show the message of a code you don't recognise. */
     Error: {
       /**
        * @description Stable and snake_case.
@@ -759,7 +761,7 @@ export interface components {
           text?: string;
           /** @description The ask this message answers, when you tap one of its options or answer a secret. When it names a secret ask, the text is never stored, even if the ask has stopped waiting. An ask the server doesn't know is an `invalid_request`. */
           answers?: components["schemas"]["AskId"];
-          /** @description The photos and files to attach, uploaded first, in order. Naming one the server doesn't have, or one another message already carries, is an `invalid_request`. */
+          /** @description The photos and files to attach, uploaded first, in order, each once. Naming one the server doesn't have is an `attachment_missing`. Naming one another message already carries, or attaching anything to a secret answer, is an `invalid_request`. */
           attachments?: components["schemas"]["AttachmentId"][];
         }
       | {
@@ -877,7 +879,7 @@ export interface components {
     AskId: string;
     /**
      * Format: uuid
-     * @description A random UUID the app makes before uploading. It is the attachment's id and its retry key.
+     * @description A random UUID, in lowercase, the app makes before uploading. It is the attachment's id and its retry key.
      */
     AttachmentId: string;
     /**
@@ -1362,7 +1364,25 @@ export interface operations {
           "application/json": components["schemas"]["MessageResult"];
         };
       };
-      400: components["responses"]["InvalidRequest"];
+      /** @description The request is malformed or not possible now (`invalid_request`), or an attachment it names isn't on the server (`attachment_missing`). */
+      400: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "error": {
+           *         "code": "attachment_missing",
+           *         "message": "A photo or file in this message isn't on the server.",
+           *         "detail": "Uploads no message names are deleted after a day. Upload this message's attachments again, then send it again."
+           *       }
+           *     }
+           */
+          "application/json": components["schemas"]["ErrorResult"];
+        };
+      };
       401: components["responses"]["TokenRejected"];
       409: components["responses"]["IdConflict"];
       413: components["responses"]["TooLarge"];
@@ -1498,8 +1518,10 @@ export interface operations {
           "*/*": unknown;
         };
       };
+      400: components["responses"]["InvalidRequest"];
       401: components["responses"]["TokenRejected"];
       404: components["responses"]["NotFound"];
+      429: components["responses"]["SlowDown"];
     };
   };
   uploadAttachment: {

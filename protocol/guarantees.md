@@ -249,10 +249,12 @@ where the protocol has to make it possible, marked *App*.
 
 ### 29 · [An upload that fails](transcripts/29-an-upload-that-fails.jsonl)
 
-- A file over 20 MB is refused as `too_large` before it is stored.
+- A file over 20 MB (20 × 1024 × 1024 bytes) is refused as `too_large` before it is stored.
 - Uploading again under the same id, after an answer was lost, returns the same attachment and
   stores nothing new. (G2, G19)
 - A message may carry only attachments, with empty text. (G19)
+- An upload no message names is deleted after a day. A message naming it later is refused as
+  `attachment_missing`, and accepted once the app uploads it again under the same id. (G19)
 
 ### 30 · [Another device sees an attachment](transcripts/30-another-device-sees-an-attachment.jsonl)
 
@@ -267,5 +269,5 @@ where the protocol has to make it possible, marked *App*.
 
 ## Not in this version
 
-Voice, editing or deleting messages, more than one conversation, reactions, model
-settings, and pairing beyond a pasted token.
+Voice, editing or deleting messages, more than one conversation, reactions, and model
+settings.

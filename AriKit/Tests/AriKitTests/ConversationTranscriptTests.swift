@@ -682,6 +682,11 @@ extension ConversationTranscriptTests {
             // Only the photo; the video was refused before anything was sent.
             you("772b92e3-c8ff-4820-8f79-9ff49401af20", "", attaching: ["riverside.jpg"]),
             reply("m_0002_60075", 81, "r morning. Want me to plan a walk from there?"),
+            // Two days later the log's upload has expired: it goes again, then the message.
+            you(
+                "52be1db8-52e1-435f-82bd-a6b1849bca39", "Which of these runs had my fastest pace?",
+                attaching: ["running-log.csv"]),
+            reply("m_0003_46823", 49, "about 5:17 a kilometre."),
         ],
         "30-another-device-sees-an-attachment": [
             you(

@@ -86,9 +86,10 @@
       "maxLength": 64
     },
     "AttachmentId": {
-      "description": "A random UUID the app makes before uploading. It is the attachment's id and its retry key.",
+      "description": "A random UUID, in lowercase, the app makes before uploading. It is the attachment's id and its retry key.",
       "type": "string",
-      "format": "uuid"
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     },
     "Timestamp": {
       "description": "Server time, RFC 3339 in UTC with milliseconds.",
@@ -107,7 +108,7 @@
       "enum": ["completed", "stopped", "interrupted", "failed"]
     },
     "Error": {
-      "description": "Why something failed. A failed turn uses `model_timeout`, `model_unavailable`, `usage_limit`, `engine_signed_out`, `context_full`, `engine_failed`, `server_disk_full`, `refused` or `internal`. A refused command uses `invalid_request`, `token_rejected`, `pairing_code_rejected`, `not_found`, `id_conflict`, `too_large`, `slow_down`, `unavailable` or `internal`. Codes are added over time: show the message of a code you don't recognise.",
+      "description": "Why something failed. A failed turn uses `model_timeout`, `model_unavailable`, `usage_limit`, `engine_signed_out`, `context_full`, `engine_failed`, `server_disk_full`, `refused` or `internal`. A refused command uses `invalid_request`, `token_rejected`, `pairing_code_rejected`, `not_found`, `id_conflict`, `too_large`, `attachment_missing`, `slow_down`, `unavailable` or `internal`. Codes are added over time: show the message of a code you don't recognise.",
       "type": "object",
       "required": ["code", "message"],
       "properties": {

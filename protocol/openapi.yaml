@@ -191,13 +191,15 @@ paths:
 
         To attach photos or files, upload each one first with `PUT /v0/attachments/{attachment}`,
         then name them in `attachments`; the text may then be empty. An attachment belongs to one
-        message.
+        message. If one isn't on the server, because no message named it for a day, the message is
+        refused with `attachment_missing`: upload its attachments again under the same ids, then
+        send the same message again.
 
         While an ask waits, the message answers it, whether or not it names the ask: `message.accepted`
         for the message comes first, then `ask.ended`. Name the ask in `answers` when you send a
         tapped option or a secret. The text of an answer to a secret ask is never stored, never
         streamed and never sent back: the message keeps an empty text, marked `secret`, and only the
-        agent's next turn receives what you typed.
+        agent's next turn receives what you typed. A secret answer can't carry attachments.
       requestBody:
         required: true
         content:
@@ -221,7 +223,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MessageResult" }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "400":
+          description: >-
+            The request is malformed or not possible now (`invalid_request`), or an attachment it
+            names isn't on the server (`attachment_missing`).
+          headers:
+            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResult" }
+              example:
+                error:
+                  code: attachment_missing
+                  message: A photo or file in this message isn't on the server.
+                  detail: Uploads no message names are deleted after a day. Upload this message's attachments again, then send it again.
         "401": { $ref: "#/components/responses/TokenRejected" }
         "409": { $ref: "#/components/responses/IdConflict" }
         "413": { $ref: "#/components/responses/TooLarge" }
@@ -362,7 +377,7 @@ paths:
         content:
           "*/*":
             schema:
-              description: The file's bytes, at most 20 MB.
+              description: The file's bytes, at most 20 MB (20 × 1024 × 1024 bytes).
       responses:
         "201":
           description: Uploaded.
@@ -399,8 +414,10 @@ paths:
             "*/*":
               schema:
                 description: The file's bytes.
+        "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/TokenRejected" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/SlowDown" }
   /v0/asks/{ask}/cancel:
     post:
       tags: [Asks]
@@ -757,9 +774,10 @@ components:
           $ref: "events.schema.json#/$defs/AskId"
           description: The ask this message answers, when you tap one of its options or answer a secret. When it names a secret ask, the text is never stored, even if the ask has stopped waiting. An ask the server doesn't know is an `invalid_request`.
         attachments:
-          description: The photos and files to attach, uploaded first, in order. Naming one the server doesn't have, or one another message already carries, is an `invalid_request`.
+          description: The photos and files to attach, uploaded first, in order, each once. Naming one the server doesn't have is an `attachment_missing`. Naming one another message already carries, or attaching anything to a secret answer, is an `invalid_request`.
           type: array
           maxItems: 10
+          uniqueItems: true
           items: { $ref: "events.schema.json#/$defs/AttachmentId" }
     MessageResult:
       type: object

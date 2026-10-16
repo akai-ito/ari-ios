@@ -127,7 +127,7 @@ public struct ErrorCode: OpenValue {
     public static let known = [
         modelTimeout, modelUnavailable, usageLimit, engineSignedOut, contextFull, engineFailed,
         serverDiskFull, refused, invalidRequest, tokenRejected, pairingCodeRejected, notFound,
-        idConflict, tooLarge,
+        idConflict, tooLarge, attachmentMissing,
         slowDown,
         unavailable, `internal`,
     ]
