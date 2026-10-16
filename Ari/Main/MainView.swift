@@ -98,9 +98,12 @@ struct SettingsButton: View {
                 .font(.system(size: 17))
                 .foregroundStyle(.ariSecondary)
                 .frame(width: 40, height: 40)
-                .glassEffect(.regular, in: Circle())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        // On the button, and interactive: glass on the label took the touch, so the gear did
+        // nothing when tapped.
+        .glassEffect(.regular.interactive(), in: Circle())
         .accessibilityLabel("Settings")
     }
 }

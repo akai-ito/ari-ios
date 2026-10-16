@@ -127,16 +127,34 @@ struct KeychainKeyStorage: KeyStorage {
     }
 
     func read() -> Data? {
-        for shared in [true, false] {
-            var query = query(shared: shared)
-            query[kSecReturnData as String] = true
-            query[kSecMatchLimit as String] = kSecMatchLimitOne
-            var result: CFTypeRef?
-            if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess {
-                return result as? Data
+        if let shared = copy(query(shared: true)) { return shared.data }
+        guard let found = copy(query(shared: false)) else { return nil }
+        // Kept for Ari alone, by a build without the app group: the notification extension can't
+        // read it there, so every notification fell back to its plain words, and asks had no
+        // buttons. It moves into the group, and the old copy goes once the move has worked.
+        if let old = found.group, old != group {
+            var item = query(shared: true)
+            item[kSecValueData as String] = found.data
+            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            if SecItemAdd(item as CFDictionary, nil) == errSecSuccess {
+                var previous = query(shared: false)
+                previous[kSecAttrAccessGroup as String] = old
+                SecItemDelete(previous as CFDictionary)
             }
         }
-        return nil
+        return found.data
+    }
+
+    private func copy(_ query: [String: Any]) -> (data: Data, group: String?)? {
+        var query = query
+        query[kSecReturnData as String] = true
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+            let found = result as? [String: Any], let data = found[kSecValueData as String] as? Data
+        else { return nil }
+        return (data, found[kSecAttrAccessGroup as String] as? String)
     }
 
     func write(_ data: Data?) {

@@ -37,27 +37,46 @@
 
         /// While you're looking at the conversation, a notification about it would only repeat it.
         nonisolated func userNotificationCenter(
-            _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-        ) async -> UNNotificationPresentationOptions {
-            await model.isLooking ? [] : [.banner, .sound, .list]
+            _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+            withCompletionHandler completionHandler:
+                @escaping (UNNotificationPresentationOptions) -> Void
+        ) {
+            let done = Handler(completionHandler)
+            Task { @MainActor in
+                done.call(model.isLooking ? [] : [.banner, .sound, .list])
+            }
         }
 
         /// An option or a typed answer goes to the server at once; a tap opens the conversation, at
-        /// the reply it was about.
+        /// the reply it was about. iOS's completion handler must be called on the main thread:
+        /// called from the async version's background task, it made UIKit abort, so tapping a
+        /// notification crashed Ari.
         nonisolated func userNotificationCenter(
-            _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
-        ) async {
+            _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+            withCompletionHandler completionHandler: @escaping () -> Void
+        ) {
             let info = response.notification.request.content.userInfo
-            let action = response.actionIdentifier
             let typed = (response as? UNTextInputNotificationResponse)?.userText
-            let options = info["options"] as? [String] ?? []
+            let answer = AskActions.answer(
+                action: response.actionIdentifier, typed: typed,
+                options: info["options"] as? [String] ?? [])
             let ask = (info["ask"] as? String).map(AskID.init(rawValue:))
             let message = (info["message"] as? String).map(MessageID.init(rawValue:))
-            if let answer = AskActions.answer(action: action, typed: typed, options: options) {
-                await model.answer(fromNotification: answer, ask: ask)
-            } else {
-                await MainActor.run { model.opening = message }
+            let done = Handler(completionHandler)
+            Task { @MainActor in
+                if let answer {
+                    await model.answer(fromNotification: answer, ask: ask)
+                } else {
+                    model.opening = message
+                }
+                done.call(())
             }
+        }
+
+        /// A completion handler from iOS, carried to the main actor and called there, once.
+        private nonisolated struct Handler<Value>: @unchecked Sendable {
+            let call: (Value) -> Void
+            init(_ call: @escaping (Value) -> Void) { self.call = call }
         }
     }
 #endif

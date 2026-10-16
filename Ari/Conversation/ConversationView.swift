@@ -100,93 +100,100 @@ struct ConversationView: View {
         let revealing = reveal.isRevealing(conversation)
         let working = conversation.turn != nil || revealing
         let rows = rows(conversation)
-        return VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Rhythm.messageGap) {
-                    if conversation.entries.isEmpty {
-                        Text("Nothing here yet. Say hello.")
-                            .font(.ariBody)
-                            .foregroundStyle(.ariTertiary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 120)
-                    }
-                    ForEach(rows) { row in
-                        rowView(row, in: conversation)
-                            .id(row.id)
-                            .onAppear {
-                                if row.id == rows.first?.id { loadEarlier() }
-                            }
-                    }
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: Rhythm.messageGap) {
+                if conversation.entries.isEmpty {
+                    Text("Nothing here yet. Say hello.")
+                        .font(.ariBody)
+                        .foregroundStyle(.ariTertiary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 120)
                 }
-                .scrollTargetLayout()
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 24)
-                // A comfortable reading width on a wide Mac window.
-                .frame(maxWidth: Rhythm.column)
-                .frame(maxWidth: .infinity)
-            }
-            .scrollIndicators(.hidden)
-            // Drag the conversation down and the keyboard follows your finger away.
-            .scrollDismissesKeyboard(.interactively)
-            .scrollPosition($position)
-            // Anchored at the leading edge: a centred anchor can shift everything sideways when
-            // the composer grows or the keyboard moves.
-            .defaultScrollAnchor(.bottomLeading)
-            // Following, the end stays in view as the reply grows; scrolled up, your place stays.
-            .defaultScrollAnchor(following ? .bottomLeading : .topLeading, for: .sizeChanges)
-            // Only how far from the end, roughly: a value that changed on every scrolled point
-            // redrew the whole conversation each time.
-            .onScrollGeometryChange(for: Distance.self) { geometry in
-                Distance(geometry.contentSize.height - geometry.visibleRect.maxY)
-            } action: { _, distance in
-                distanceFromEnd = distance
-            }
-            // A new row while following: settle at the end, at once. Following every change in
-            // height, with an animation, fed itself in a long conversation (each scroll measured
-            // more rows, changing the height again) and froze the screen.
-            .onChange(of: rows.last?.id) { _, last in
-                guard following, let last else { return }
-                var settle = Transaction(animation: nil)
-                settle.disablesAnimations = true
-                withTransaction(settle) { position.scrollTo(id: last, anchor: .bottomLeading) }
-            }
-            // Scrolling yourself stops the following; coming to rest at the end starts it again.
-            .onScrollPhaseChange { _, phase in
-                switch phase {
-                case .tracking, .interacting: following = false
-                case .idle where distanceFromEnd == .atEnd:
-                    following = true
-                    repliedWhileAway = false
-                default: break
+                ForEach(rows) { row in
+                    rowView(row, in: conversation)
+                        .id(row.id)
+                        .onAppear {
+                            if row.id == rows.first?.id { loadEarlier() }
+                        }
                 }
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                HeaderView(poses: poses, name: name, status: status)
+            .scrollTargetLayout()
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 24)
+            // A comfortable reading width on a wide Mac window, inside exactly the scroll view's
+            // width: content even a fraction wider let scrolling to a message nudge the whole
+            // conversation sideways.
+            .frame(maxWidth: Rhythm.column)
+            .containerRelativeFrame(.horizontal)
+        }
+        .scrollIndicators(.hidden)
+        // Drag the conversation down and the keyboard follows your finger away.
+        .scrollDismissesKeyboard(.interactively)
+        .scrollPosition($position)
+        // Anchored at the leading edge: a centred anchor can shift everything sideways when
+        // the composer grows or the keyboard moves.
+        .defaultScrollAnchor(.bottomLeading)
+        // Following, the end stays in view as the reply grows; scrolled up, your place stays.
+        .defaultScrollAnchor(following ? .bottomLeading : .topLeading, for: .sizeChanges)
+        // Only how far from the end, roughly: a value that changed on every scrolled point
+        // redrew the whole conversation each time.
+        .onScrollGeometryChange(for: Distance.self) { geometry in
+            Distance(geometry.contentSize.height - geometry.visibleRect.maxY)
+        } action: { _, distance in
+            distanceFromEnd = distance
+        }
+        // A new row while following: settle at the end, at once. Following every change in
+        // height, with an animation, fed itself in a long conversation (each scroll measured
+        // more rows, changing the height again) and froze the screen.
+        .onChange(of: rows.last?.id) { _, last in
+            guard following, let last else { return }
+            var settle = Transaction(animation: nil)
+            settle.disablesAnimations = true
+            withTransaction(settle) { position.scrollTo(id: last, anchor: .bottomLeading) }
+        }
+        // Scrolling yourself stops the following; coming to rest at the end starts it again.
+        .onScrollPhaseChange { _, phase in
+            switch phase {
+            case .tracking, .interacting: following = false
+            case .idle where distanceFromEnd == .atEnd:
+                following = true
+                repliedWhileAway = false
+            default: break
             }
-            .overlay(alignment: .bottom) {
-                if let pill = pillText(working: working) {
-                    Pill(text: pill) { scrollToEnd() }
-                        .padding(.bottom, 10)
-                        .transition(.opacity)
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HeaderView(poses: poses, name: name, status: status)
+        }
+        .overlay(alignment: .bottom) {
+            if let pill = pillText(working: working) {
+                Pill(text: pill) { scrollToEnd() }
+                    .padding(.bottom, 10)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: pillText(working: working))
+        // The composer rides in the conversation's bottom inset rather than beside it: when it grows
+        // or shrinks (a long draft deleted), only the inset changes, not the scroll view's frame,
+        // which made the whole conversation lay itself out again.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Group {
+                if let problem = session.problem {
+                    ProblemNotice(problem: problem, connectAgain: connectAgain)
+                } else {
+                    // While Ari waits for your answer, the composer takes it, as a secret if asked.
+                    ComposerArea(
+                        session: session, attached: $attached, attachProblem: $attachProblem,
+                        working: working, stopping: conversation.pendingStop != nil,
+                        asking: revealing ? nil : conversation.waitingAsk,
+                        send: send, stop: stop, attach: attach, detach: detach
+                    )
+                    .equatable()
+                    .frame(maxWidth: Rhythm.column)
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: pillText(working: working))
-
-            if let problem = session.problem {
-                ProblemNotice(problem: problem, connectAgain: connectAgain)
-            } else {
-                // While Ari waits for your answer, the composer takes it, as a secret if asked.
-                ComposerArea(
-                    session: session, attached: $attached, attachProblem: $attachProblem,
-                    working: working, stopping: conversation.pendingStop != nil,
-                    asking: revealing ? nil : conversation.waitingAsk,
-                    send: send, stop: stop, attach: attach, detach: detach
-                )
-                .equatable()
-                .frame(maxWidth: Rhythm.column)
-                .frame(maxWidth: .infinity)
-            }
+            .background(.ariBackground)
         }
         .background(.ariBackground)
         .background {
@@ -605,8 +612,10 @@ private struct ComposerArea: View, Equatable {
     let attach: (PendingAttachment) -> Void
     let detach: (AttachmentID) -> Void
 
-    /// What you're writing, kept if Ari closes before you send it.
-    @AppStorage("draft") private var draft = ""
+    /// What you're writing. Saved a moment after you stop typing, and when Ari leaves the screen,
+    /// so it survives Ari closing; saved on every keystroke, the field kept waiting on it.
+    @State private var draft = UserDefaults.standard.string(forKey: "draft") ?? ""
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let secret = asking?.secret ?? false
@@ -636,6 +645,13 @@ private struct ComposerArea: View, Equatable {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: attached)
+        .task(id: draft) {
+            try? await Task.sleep(for: .milliseconds(600))
+            if !Task.isCancelled { saveDraft() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { saveDraft() }
+        }
         #if DEBUG
             .task {
                 if let draft = DebugScript.draft { self.draft = draft }
@@ -653,7 +669,13 @@ private struct ComposerArea: View, Equatable {
     }
 
     private func submit() {
-        if send(draft) { draft = "" }
+        guard send(draft) else { return }
+        draft = ""
+        saveDraft()
+    }
+
+    private func saveDraft() {
+        UserDefaults.standard.set(draft, forKey: "draft")
     }
 
     /// Only what the composer shows: the closures are the conversation's own, the same each time.
