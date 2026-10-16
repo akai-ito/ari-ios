@@ -1,9 +1,22 @@
 import AriKit
 import SwiftUI
 
-/// What the character is doing, from the turn's status kind and the connection.
+/// What the character is doing: from the step that's running, else the turn's status kind, and the
+/// connection. Most tasks have a prop beside the pebble (see Props.swift).
 enum Pose: Equatable {
     case resting, thinking, searching, writing, adjusting, waiting, stopping
+    /// Searching the web: a magnifying glass.
+    case webSearch
+    /// Reading, listing or searching files: a page.
+    case reading
+    /// Running a command: a prompt.
+    case running
+    /// Changing files: a pencil.
+    case editing
+    /// Making a plan: a checklist.
+    case planning
+    /// Tidying its notes, as the engine compacts: dots settling into a stack.
+    case tidying
     /// Ari asked you something and waits for your answer.
     case asking
     /// The connection is down: Ari can't hear the server, so the character doesn't pretend to work.
@@ -17,6 +30,25 @@ enum Pose: Equatable {
         case .waiting: self = .waiting
         case .stopping: self = .stopping
         default: self = .thinking
+        }
+    }
+
+    /// The pose for a running step, or `nil` for a kind with none of its own, such as a tool.
+    init?(step: Step) {
+        switch step.kind {
+        case .thinking: self = .thinking
+        case .webSearch: self = .webSearch
+        case .command:
+            let looks: [ActionType] = [.read, .list, .search]
+            let actions = step.actions ?? []
+            self =
+                !actions.isEmpty && actions.allSatisfy { looks.contains($0.type) }
+                ? .reading : .running
+        case .fileChange: self = .editing
+        case .plan: self = .planning
+        case .wait: self = .waiting
+        case .compacting: self = .tidying
+        default: return nil
         }
     }
 
@@ -64,13 +96,19 @@ struct PresenceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
-            Canvas { canvas, area in
-                draw(in: &canvas, area: area, at: context.date)
+        // The layout keeps the pebble's size; the canvas is wider and taller, so a prop has room
+        // beside the pebble without moving anything around it.
+        Color.clear
+            .frame(width: size, height: size)
+            .overlay {
+                TimelineView(.animation(paused: reduceMotion)) { context in
+                    Canvas { canvas, area in
+                        draw(in: &canvas, area: area, at: context.date)
+                    }
+                }
+                .frame(width: size * 2.3, height: size * 1.7)
             }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+            .accessibilityHidden(true)
     }
 
     private func draw(in canvas: inout GraphicsContext, area: CGSize, at now: Date) {
@@ -97,6 +135,16 @@ struct PresenceView: View {
         }
 
         let scale = size / 40
+        // The props, beside the pebble and still while it turns its head, each fading with its pose.
+        var props = canvas
+        props.translateBy(x: area.width / 2, y: area.height / 2)
+        props.scaleBy(x: scale, y: scale)
+        for (index, change) in changes.enumerated() where weights[index] > 0 {
+            let since = reduceMotion ? 1.2 : t - starts[index]
+            change.pose.drawProp(
+                in: props, since: since, opacity: weights[index] * Ease.out((since - 0.1) / 0.35))
+        }
+
         canvas.translateBy(
             x: area.width / 2 + gaze.x * 0.2 * scale,
             y: area.height / 2 + (gaze.y * 0.15 - awake * 0.8) * scale)
@@ -170,7 +218,21 @@ struct PresenceView: View {
         case .searching: CGPoint(x: 3.6 * smoothSquare(since / 1.3 + 0.25), y: 0.6)
         case .writing: CGPoint(x: 1.6 * sin(since * 2 * .pi / 1.9), y: 2.8)
         case .adjusting: CGPoint(x: 3.2, y: 2.9 + 0.3 * sin(since * 2))
-        case .waiting: CGPoint(x: -1.8 + 0.6 * sin(t * 0.5), y: -2.0)
+        // Toward the hourglass, sleepily.
+        case .waiting: CGPoint(x: 1.6 + 0.6 * sin(t * 0.6), y: 0.4)
+        // Following the lens, the page's lines, the pencil's tip, the checklist and the stack.
+        case .webSearch:
+            CGPoint(
+                x: 3.0 + (LensProp.position(since).x - 29) * 0.3,
+                y: LensProp.position(since).y * 0.25)
+        case .reading:
+            CGPoint(
+                x: 1.4 + 2.0 * PageProp.line(since).progress,
+                y: -1.2 + Double(PageProp.line(since).index) * 0.9)
+        case .running: CGPoint(x: 2.6, y: 0.4)
+        case .editing: CGPoint(x: 1.2 + (PencilProp.tip(since).x - 23) * 0.15, y: 1.6)
+        case .planning: CGPoint(x: 2.4, y: -1.0 + 1.0 * Double(ChecklistProp.current(since) % 3))
+        case .tidying: CGPoint(x: 2.0, y: 1.2)
         case .stopping: CGPoint(x: 0, y: 3.0)
         // Down toward you and the composer, with a slow, patient sway.
         case .asking: CGPoint(x: 0.9 * sin(t * 0.55), y: 3.6 + 0.25 * sin(t * 0.9))
@@ -182,7 +244,8 @@ struct PresenceView: View {
     static func openness(_ pose: Pose, since: Double) -> Double {
         switch pose {
         case .adjusting: 1.12
-        case .waiting: 0.62
+        case .waiting: 0.5
+        case .tidying: 0.8
         // Open and attentive: it's your turn.
         case .asking: 1.08
         case .offline: 0.5
@@ -237,7 +300,8 @@ struct PresenceView: View {
 
 #Preview("Poses") {
     let poses: [Pose] = [
-        .resting, .thinking, .searching, .writing, .adjusting, .waiting, .stopping, .offline,
+        .resting, .thinking, .webSearch, .reading, .running, .editing, .planning, .waiting,
+        .writing, .tidying, .asking, .adjusting, .stopping, .offline,
     ]
     let start = Date.now.addingTimeInterval(-10)
     return LazyVGrid(columns: Array(repeating: GridItem(), count: 4), spacing: 24) {

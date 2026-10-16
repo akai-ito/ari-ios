@@ -32,6 +32,7 @@ struct ConversationView: View {
     @State private var repliedWhileAway = false
     @State private var status: StatusText?
     @State private var statusSince = Date.distantPast
+    @State private var poseSince = Date.distantPast
     @State private var linkDown = false
     @State private var stopped = false
     /// A turn has run long enough that a nudge when it's done would help.
@@ -206,7 +207,7 @@ struct ConversationView: View {
                 }
             }
         }
-        .onChange(of: pose(revealing: revealing), initial: true) { _, pose in poses.set(pose) }
+        .onChange(of: pose(revealing: revealing), initial: true) { _, pose in show(pose) }
         .onChange(of: liveStatus(revealing: revealing), initial: true) { _, next in hold(next) }
         .onChange(of: session.link, initial: true) { _, link in noticeLink(link) }
         .onChange(of: conversation.lastEndedTurn?.id) { _, _ in noticeEnd(conversation) }
@@ -496,6 +497,17 @@ struct ConversationView: View {
         if linkDown { return .offline }
         if let turn = session.conversation.turn {
             if session.conversation.pendingStop != nil { return .stopping }
+            // Writing and adjusting come from the status; anything else from the newest step in the
+            // turn, running or just ended, with its prop. Not the oldest one still running: a plan
+            // stays open the whole turn and would hide everything after it.
+            if let kind = turn.status?.kind, kind == .writing || kind == .adjusting {
+                return Pose(kind: kind)
+            }
+            if let step = session.conversation.steps.last(where: { $0.turn == turn.id }),
+                let pose = Pose(step: step)
+            {
+                return pose
+            }
             return turn.status.map { Pose(kind: $0.kind) } ?? .thinking
         }
         if revealing { return .writing }
@@ -512,6 +524,25 @@ struct ConversationView: View {
         if revealing { return .status("Writing", detail: nil) }
         if conversation.waitingAsk != nil { return .status("Waiting for you", detail: nil) }
         return stopped ? .quiet("Stopped") : nil
+    }
+
+    /// Each pose stays at least a second, so its prop can be seen: steps can flip faster than that.
+    /// Stopping, going offline and coming to rest show at once.
+    private func show(_ next: Pose) {
+        let wait = 1.1 - Date.now.timeIntervalSince(poseSince)
+        guard wait > 0, ![.stopping, .offline, .resting].contains(next) else {
+            if next != poses.current { poseSince = .now }
+            poses.set(next)
+            return
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(wait))
+            let latest = pose(revealing: reveal.isRevealing(session.conversation))
+            if latest != poses.current {
+                poses.set(latest)
+                poseSince = .now
+            }
+        }
     }
 
     /// Each status stays at least a second, so it can be read; a newer one waits its turn, and
