@@ -7,12 +7,20 @@ struct SettingsView: View {
     let model: AppModel
     let session: Session
 
+    init(model: AppModel, session: Session) {
+        self.model = model
+        self.session = session
+        _capabilities = State(initialValue: model.client().map(Capabilities.init(client:)))
+    }
+
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSwitch = false
+    /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
+    @State private var path = Self.startingPath
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 server
                 capabilitiesSection
@@ -27,13 +35,17 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
-            .task {
-                if capabilities == nil {
-                    capabilities = model.client().map(Capabilities.init(client:))
-                }
-                await capabilities?.refresh()
-            }
+            .task { await capabilities?.refresh() }
             .navigationTitle("Settings")
+            .navigationDestination(for: SettingsRoute.self) { route in
+                if let capabilities {
+                    switch route {
+                    case .capabilities: CapabilitiesView(capabilities: capabilities)
+                    case .capability(let id, let setup):
+                        CapabilityView(capabilities: capabilities, id: id, opensSetup: setup)
+                    }
+                }
+            }
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -101,9 +113,7 @@ struct SettingsView: View {
     private var capabilitiesSection: some View {
         if let capabilities {
             Section {
-                NavigationLink {
-                    CapabilitiesView(capabilities: capabilities)
-                } label: {
+                NavigationLink(value: SettingsRoute.capabilities) {
                     LabeledContent("Capabilities", value: Self.summary(of: capabilities))
                 }
             } footer: {
@@ -113,6 +123,16 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.ariSurface)
         }
+    }
+
+    /// Where Settings opens: at the top, or, in debug builds, wherever `ARI_SETTINGS` says
+    /// (`capabilities`, `capability:<id>` or `setup:<id>`).
+    private static var startingPath: [SettingsRoute] {
+        #if DEBUG
+            DebugScript.settingsPath
+        #else
+            []
+        #endif
     }
 
     /// "2 on", or the one that needs you.

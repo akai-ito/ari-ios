@@ -5,6 +5,7 @@ import SwiftUI
 struct CapabilityView: View {
     let capabilities: Capabilities
     let id: CapabilityID
+    var opensSetup = false
 
     @State private var settingUp = false
     @State private var problem: String?
@@ -13,6 +14,8 @@ struct CapabilityView: View {
         Form {
             if let capability = capabilities.capability(id) {
                 content(capability)
+            } else {
+                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }
         }
         .formStyle(.grouped)
@@ -22,6 +25,9 @@ struct CapabilityView: View {
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Opened straight here, nothing has loaded the list yet.
+        .task { if capabilities.capability(id) == nil { await capabilities.refresh() } }
+        .onAppear { if opensSetup { settingUp = true } }
         .sheet(isPresented: $settingUp) {
             if let capability = capabilities.capability(id) {
                 SetupSheet(capabilities: capabilities, capability: capability)

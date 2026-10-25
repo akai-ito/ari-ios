@@ -60,12 +60,17 @@ struct CapabilitiesView: View {
     }
 
     private func row(_ capability: Capability) -> some View {
-        NavigationLink {
-            CapabilityView(capabilities: capabilities, id: capability.id)
-        } label: {
+        NavigationLink(value: SettingsRoute.capability(capability.id)) {
             CapabilityRow(capability: capability)
         }
     }
+}
+
+/// A place in Settings, for its navigation stack.
+enum SettingsRoute: Hashable {
+    case capabilities
+    /// A capability's page, with its setup sheet open if `setup`.
+    case capability(CapabilityID, setup: Bool = false)
 }
 
 /// A capability's row: its symbol, title and summary (or why it needs you), and its state.
