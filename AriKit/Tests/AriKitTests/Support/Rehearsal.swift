@@ -92,8 +92,15 @@ final class Rehearsal {
         try? FileManager.default.removeItem(at: outboxDirectory)
     }
 
+    private var skippingAnswer = false
+
     private func perform(_ step: Transcript.Step) async throws {
         switch step {
+        case .app(let request) where request.route.isOutsideSession:
+            // Settings or the Library asked, not the session: its answer is skipped too.
+            skippingAnswer = true
+        case .server where skippingAnswer:
+            skippingAnswer = false
         case .app(let request):
             act(on: request)
             if restarting, request.route == .events {

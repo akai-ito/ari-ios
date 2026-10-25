@@ -133,6 +133,40 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.post, "/v0/capabilities/\(Self.segment(id.rawValue))/check", body: body))
     }
 
+    // MARK: - Memory, read-only
+
+    /// `GET /v0/memory/in-mind`: Portrait, Now and How to help you, in full.
+    public func inMind() async throws(RequestError) -> MemoryPages {
+        try await call(HTTPRequest(.get, "/v0/memory/in-mind"))
+    }
+
+    /// `GET /v0/memory/shelves`: each shelf and how many pages it holds.
+    public func shelves() async throws(RequestError) -> ShelfList {
+        try await call(HTTPRequest(.get, "/v0/memory/shelves"))
+    }
+
+    /// `GET /v0/memory/recent`: pages, most recently changed first.
+    public func recentPages() async throws(RequestError) -> PageList {
+        try await call(HTTPRequest(.get, "/v0/memory/recent"))
+    }
+
+    /// `GET /v0/memory/pages?shelf=…`: the pages on a shelf.
+    public func pages(on shelf: String) async throws(RequestError) -> PageList {
+        try await call(HTTPRequest(.get, Self.path("/v0/memory/pages", ["shelf": shelf])))
+    }
+
+    /// `GET /v0/memory/page?address=…`: one page, its Markdown without front matter. A day of the
+    /// journal is a page too, such as `memory:journal/2026-10-25`.
+    public func page(_ address: PageAddress) async throws(RequestError) -> MemoryPage {
+        try await call(
+            HTTPRequest(.get, Self.path("/v0/memory/page", ["address": address.rawValue])))
+    }
+
+    /// `GET /v0/memory/changes/{change}`: what one update did to a page.
+    public func change(_ change: String) async throws(RequestError) -> PageChange {
+        try await call(HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"))
+    }
+
     /// `GET /v0/messages?before=…&limit=…`: older messages, oldest first.
     public func messages(before oldest: MessageID, limit: Int) async throws(RequestError)
         -> MessagePage
@@ -250,6 +284,17 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         } catch {
             throw .unreadable(String(describing: error))
         }
+    }
+
+    /// A path with a query, its values percent-encoded (a `+` too, which servers read as a space).
+    private static func path(_ path: String, _ query: [String: String]) -> String {
+        var components = URLComponents()
+        components.path = path
+        components.queryItems = query.sorted { $0.key < $1.key }.map {
+            URLQueryItem(name: $0.key, value: $0.value)
+        }
+        let encoded = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return path + (encoded.map { "?" + $0 } ?? "")
     }
 
     private static func segment(_ id: String) -> String {

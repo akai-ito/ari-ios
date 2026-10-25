@@ -150,9 +150,25 @@ public struct StepKind: OpenValue {
     public static let imageView = StepKind(rawValue: "image_view")
     /// Tidying up its notes, so the conversation fits.
     public static let compacting = StepKind(rawValue: "compacting")
+    /// Ari's memory: the pages it used, a page it updated, or the journal.
+    public static let memory = StepKind(rawValue: "memory")
     public static let known = [
-        thinking, webSearch, command, fileChange, tool, plan, wait, imageView, compacting,
+        thinking, webSearch, command, fileChange, tool, plan, wait, imageView, compacting, memory,
     ]
+}
+
+/// What a memory step did. Ari shows one it doesn't know by its title alone.
+public struct MemoryAction: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// The pages Ari pulled into this reply, other than the three always in mind.
+    public static let used = MemoryAction(rawValue: "used")
+    /// A page Ari wrote, rewrote or deleted.
+    public static let updated = MemoryAction(rawValue: "updated")
+    /// Something added to today's journal.
+    public static let journaled = MemoryAction(rawValue: "journaled")
+    public static let known = [used, updated, journaled]
 }
 
 /// What a command did, as far as the engine could tell. For one Ari doesn't know, treat it as run.

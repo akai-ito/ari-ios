@@ -245,12 +245,12 @@ actor TranscriptServer: Transport {
     private(set) var mismatches: [String] = []
     private(set) var lastAnswer: Transcript.Response?
 
-    init(_ transcript: Transcript) {
+    init(_ transcript: Transcript, only keep: @Sendable (Route) -> Bool = { _ in true }) {
         var exchanges: [(Transcript.Request, Transcript.Response)] = []
         var pending: Transcript.Request?
         for step in transcript.steps {
             switch step {
-            case .app(let request): pending = request
+            case .app(let request): pending = keep(request.route) ? request : nil
             case .server(let response):
                 if let request = pending { exchanges.append((request, response)) }
                 pending = nil
