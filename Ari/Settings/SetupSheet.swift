@@ -38,16 +38,18 @@ struct SetupSheet: View {
                             } else if let check {
                                 Image(systemName: check.ok ? "checkmark" : "exclamationmark.circle")
                                     .font(.footnote.weight(.semibold))
-                                Text(check.problem ?? "It works")
-                                    .lineLimit(1)
+                                Text(check.ok ? "It works" : "Didn't work")
                             }
                         }
                         .foregroundStyle(.ariSecondary)
                     }
                     .disabled(checking || !isComplete)
                 } footer: {
+                    // What went wrong, in full: a row cut it off.
                     if let problem {
                         Text(problem)
+                    } else if let reason = check?.problem {
+                        Text(reason)
                     } else if !capability.hosts.isEmpty {
                         Text("Reaches \(capability.hosts.joined(separator: ", ")).")
                     }
