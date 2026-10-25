@@ -25,10 +25,17 @@ struct HeaderView: View {
     let name: String
     let status: StatusText?
 
+    @Environment(Memory.self) private var memory: Memory?
+    @State private var showsInMind = false
+
     var body: some View {
         VStack(spacing: 2) {
             PresenceView(history: poses)
                 .padding(.bottom, 6)
+                // Tapping Ari shows what's in its mind.
+                .contentShape(Rectangle())
+                .onTapGesture { if memory != nil { showsInMind = true } }
+                .accessibilityAddTraits(.isButton)
             Text(name)
                 .font(.ariName)
                 .foregroundStyle(.ariText)
@@ -53,6 +60,14 @@ struct HeaderView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([name, status?.spoken].compactMap(\.self).joined(separator: ", "))
+        .accessibilityHint(memory == nil ? "" : "Shows what Ari has in mind")
+        .accessibilityAction { if memory != nil { showsInMind = true } }
+        .sheet(isPresented: $showsInMind) {
+            if let memory {
+                InMindSheet(memory: memory)
+                    .presentationDetents([.fraction(0.82), .large])
+            }
+        }
     }
 }
 
