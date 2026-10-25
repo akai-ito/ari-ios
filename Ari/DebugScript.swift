@@ -6,7 +6,8 @@ import SwiftUI
     /// `ARI_TOKEN` fill in and submit the connect screen, `ARI_SAY` sends a message once the stream
     /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, `ARI_DRAFT` fills in the
     /// composer (`\n` for a new line), `ARI_OPEN_TRAIL` opens every run and step on the trail,
-    /// `ARI_PLACE` opens a tab (`chat`, `goals` or `library`), `ARI_SETTINGS` opens Settings, and
+    /// `ARI_PLACE` opens a tab (`chat`, `goals` or `library`), `ARI_SETTINGS` opens Settings (or, with
+    /// `capabilities`, `capability:<id>` or `setup:<id>`, goes on to that place), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code.
@@ -23,6 +24,20 @@ import SwiftUI
 
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
+
+        /// Where `ARI_SETTINGS` goes past the top of Settings.
+        static var settingsPath: [SettingsRoute] {
+            let value = environment["ARI_SETTINGS"] ?? ""
+            let parts = value.split(separator: ":", maxSplits: 1).map(String.init)
+            switch parts.first {
+            case "capabilities": return [.capabilities]
+            case "capability" where parts.count == 2:
+                return [.capabilities, .capability(CapabilityID(parts[1]))]
+            case "setup" where parts.count == 2:
+                return [.capabilities, .capability(CapabilityID(parts[1]), setup: true)]
+            default: return []
+            }
+        }
 
         /// Adopts the test's notification key, so `xcrun simctl push` can send a sealed push.
         static func adoptNotificationKey(into store: NotificationStore) {

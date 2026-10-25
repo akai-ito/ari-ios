@@ -61,6 +61,12 @@ struct ProtocolDecodingTests {
                     #expect(uploaded.id == attachment && uploaded.name == name, "\(place)")
                 case .pair:
                     #expect(try !body.decode(PairResult.self).token.isEmpty, "\(place)")
+                case .capabilities:
+                    #expect(try !body.decode(CapabilityList.self).capabilities.isEmpty, "\(place)")
+                case .switchCapability(let id), .setUpCapability(let id):
+                    #expect(try body.decode(Capability.self).id == id, "\(place)")
+                case .checkCapability:
+                    _ = try body.decode(CheckResult.self)
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -100,6 +106,13 @@ struct ProtocolDecodingTests {
                 #expect(
                     try JSONValue(encoding: Presence(looking: presence.looking)) == body, "\(place)"
                 )
+            case .switchCapability:
+                let on = try body.decode(SwitchCapability.self).on
+                #expect(try JSONValue(encoding: SwitchCapability(on: on)) == body, "\(place)")
+            case .setUpCapability, .checkCapability:
+                let values = try body.decode(CapabilitySetup.self).values
+                #expect(
+                    try JSONValue(encoding: CapabilitySetup(values: values)) == body, "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -120,7 +133,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 5) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 6) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")

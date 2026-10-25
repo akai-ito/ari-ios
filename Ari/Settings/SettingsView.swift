@@ -7,13 +7,23 @@ struct SettingsView: View {
     let model: AppModel
     let session: Session
 
+    init(model: AppModel, session: Session) {
+        self.model = model
+        self.session = session
+        _capabilities = State(initialValue: model.client().map(Capabilities.init(client:)))
+    }
+
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSwitch = false
+    /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
+    @State private var capabilities: Capabilities?
+    @State private var path = Self.startingPath
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 server
+                capabilitiesSection
                 notifications
                 #if os(iOS)
                     Section("App icon") {
@@ -25,7 +35,17 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
+            .task { await capabilities?.refresh() }
             .navigationTitle("Settings")
+            .navigationDestination(for: SettingsRoute.self) { route in
+                if let capabilities {
+                    switch route {
+                    case .capabilities: CapabilitiesView(capabilities: capabilities)
+                    case .capability(let id, let setup):
+                        CapabilityView(capabilities: capabilities, id: id, opensSetup: setup)
+                    }
+                }
+            }
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -87,6 +107,41 @@ struct SettingsView: View {
             Text("Your token stays in this device's Keychain.")
         }
         .listRowBackground(Color.ariSurface)
+    }
+
+    @ViewBuilder
+    private var capabilitiesSection: some View {
+        if let capabilities {
+            Section {
+                NavigationLink(value: SettingsRoute.capabilities) {
+                    LabeledContent("Capabilities", value: Self.summary(of: capabilities))
+                }
+            } footer: {
+                Text(
+                    "What Ari can know about and do. Passwords go to your server, never back to Ari."
+                )
+            }
+            .listRowBackground(Color.ariSurface)
+        }
+    }
+
+    /// Where Settings opens: at the top, or, in debug builds, wherever `ARI_SETTINGS` says
+    /// (`capabilities`, `capability:<id>` or `setup:<id>`).
+    private static var startingPath: [SettingsRoute] {
+        #if DEBUG
+            DebugScript.settingsPath
+        #else
+            []
+        #endif
+    }
+
+    /// "2 on", or the one that needs you.
+    private static func summary(of capabilities: Capabilities) -> String {
+        if let needy = capabilities.all.first(where: { $0.state == .needsYou }) {
+            return "\(needy.title) needs you"
+        }
+        let on = capabilities.all.filter { $0.state == .on }.count
+        return capabilities.all.isEmpty ? "" : "\(on) on"
     }
 
     @ViewBuilder
