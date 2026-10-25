@@ -100,6 +100,39 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.put, "/v0/devices/\(Self.segment(device))/presence", body: body))
     }
 
+    /// `GET /v0/capabilities`: every capability, with its state and setup.
+    public func capabilities() async throws(RequestError) -> CapabilityList {
+        try await call(HTTPRequest(.get, "/v0/capabilities"))
+    }
+
+    /// `PUT /v0/capabilities/{id}`: switch a capability on or off. Off keeps its data.
+    public func switchCapability(_ id: CapabilityID, on: Bool) async throws(RequestError)
+        -> Capability
+    {
+        let body = try Self.json(SwitchCapability(on: on))
+        return try await call(
+            HTTPRequest(.put, "/v0/capabilities/\(Self.segment(id.rawValue))", body: body))
+    }
+
+    /// `PUT /v0/capabilities/{id}/setup`: save what setup asks for. A password left out keeps the
+    /// one saved; one sent is never sent back.
+    public func setUp(_ id: CapabilityID, values: [String: SetupValue]) async throws(RequestError)
+        -> Capability
+    {
+        let body = try Self.json(SetupValues(values: values))
+        return try await call(
+            HTTPRequest(.put, "/v0/capabilities/\(Self.segment(id.rawValue))/setup", body: body))
+    }
+
+    /// `POST /v0/capabilities/{id}/check`: *Test connection* with values not saved yet.
+    public func check(_ id: CapabilityID, values: [String: SetupValue]) async throws(RequestError)
+        -> CheckResult
+    {
+        let body = try Self.json(SetupValues(values: values))
+        return try await call(
+            HTTPRequest(.post, "/v0/capabilities/\(Self.segment(id.rawValue))/check", body: body))
+    }
+
     /// `GET /v0/messages?before=…&limit=…`: older messages, oldest first.
     public func messages(before oldest: MessageID, limit: Int) async throws(RequestError)
         -> MessagePage

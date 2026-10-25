@@ -9,11 +9,13 @@ struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSwitch = false
+    @State private var capabilities: Capabilities?
 
     var body: some View {
         NavigationStack {
             Form {
                 server
+                capabilitiesSection
                 notifications
                 #if os(iOS)
                     Section("App icon") {
@@ -25,6 +27,12 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
+            .task {
+                if capabilities == nil {
+                    capabilities = model.client().map(Capabilities.init(client:))
+                }
+                await capabilities?.refresh()
+            }
             .navigationTitle("Settings")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -87,6 +95,33 @@ struct SettingsView: View {
             Text("Your token stays in this device's Keychain.")
         }
         .listRowBackground(Color.ariSurface)
+    }
+
+    @ViewBuilder
+    private var capabilitiesSection: some View {
+        if let capabilities {
+            Section {
+                NavigationLink {
+                    CapabilitiesView(capabilities: capabilities)
+                } label: {
+                    LabeledContent("Capabilities", value: Self.summary(of: capabilities))
+                }
+            } footer: {
+                Text(
+                    "What Ari can know about and do. Passwords go to your server, never back to Ari."
+                )
+            }
+            .listRowBackground(Color.ariSurface)
+        }
+    }
+
+    /// "2 on", or the one that needs you.
+    private static func summary(of capabilities: Capabilities) -> String {
+        if let needy = capabilities.all.first(where: { $0.state == .needsYou }) {
+            return "\(needy.title) needs you"
+        }
+        let on = capabilities.all.filter { $0.state == .on }.count
+        return capabilities.all.isEmpty ? "" : "\(on) on"
     }
 
     @ViewBuilder

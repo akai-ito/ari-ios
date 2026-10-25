@@ -96,11 +96,17 @@ final class AppModel {
         }
     }
 
+    /// A client for the server Ari is connected to, for calls outside the conversation, such as
+    /// Settings' capabilities.
+    func client() -> ItoClient? {
+        guard let address, let token = try? tokens.token(for: address) else { return nil }
+        return ItoClient(address: address, token: token, transport: URLSessionTransport())
+    }
+
     /// Asks the server who it is again, so Settings shows what it runs now rather than what it ran
     /// when you first connected.
     func refreshServer() {
-        guard let address, let token = try? tokens.token(for: address) else { return }
-        let client = ItoClient(address: address, token: token, transport: URLSessionTransport())
+        guard let address, let client = client() else { return }
         Task {
             guard let info = try? await client.server(), info != server else { return }
             server = info

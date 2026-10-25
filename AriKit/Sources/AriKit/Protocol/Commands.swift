@@ -49,15 +49,21 @@ public struct ServerInfo: Sendable, Equatable, Codable {
         }
     }
 
+    /// The capabilities that are on, with their versions.
+    public let capabilities: [CapabilityVersion]?
+
     public struct Setup: Sendable, Equatable, Codable {
         /// `ito push setup` has run.
         public let notifications: Bool
-        /// `ito reports token` has run.
-        public let reports: Bool
+    }
+
+    public struct CapabilityVersion: Sendable, Equatable, Codable {
+        public let id: CapabilityID
+        public let version: String
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, version, agent, setup
+        case name, version, agent, setup, capabilities
         case protocolVersion = "protocol"
     }
 }
