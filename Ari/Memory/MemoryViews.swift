@@ -7,8 +7,10 @@ struct LibraryView: View {
     let memory: Memory?
     let openSettings: () -> Void
 
+    @State private var path = Self.startingPath
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if let memory {
                     MemoryList(memory: memory)
@@ -35,6 +37,17 @@ struct LibraryView: View {
                 ShelfView(memory: memory, shelf: route.shelf)
             }
         }
+    }
+}
+
+extension LibraryView {
+    /// Where the Library opens: at the top, or, in debug builds, at the page `ARI_PAGE` names.
+    fileprivate static var startingPath: NavigationPath {
+        var path = NavigationPath()
+        #if DEBUG
+            if let page = DebugScript.page { path.append(page) }
+        #endif
+        return path
     }
 }
 

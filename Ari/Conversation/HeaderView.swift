@@ -26,7 +26,15 @@ struct HeaderView: View {
     let status: StatusText?
 
     @Environment(Memory.self) private var memory: Memory?
-    @State private var showsInMind = false
+    @State private var showsInMind = Self.opensInMind
+
+    private static var opensInMind: Bool {
+        #if DEBUG
+            DebugScript.opensInMind
+        #else
+            false
+        #endif
+    }
 
     var body: some View {
         VStack(spacing: 2) {
