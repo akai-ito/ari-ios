@@ -247,6 +247,10 @@ enum Route: Equatable {
     /// Fetching an attachment's bytes.
     case attachment(AttachmentID)
     case pair
+    case capabilities
+    case switchCapability(CapabilityID)
+    case setUpCapability(CapabilityID)
+    case checkCapability(CapabilityID)
     case other
 
     init(method: String, path: String) {
@@ -279,6 +283,14 @@ enum Route: Equatable {
         case ("POST", 2) where parts == ["v0", "pair"]: self = .pair
         case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "presence":
             self = .presence
+        case ("GET", 2) where parts == ["v0", "capabilities"]: self = .capabilities
+        case ("PUT", 3) where parts[0] == "v0" && parts[1] == "capabilities":
+            self = .switchCapability(CapabilityID(parts[2]))
+        case ("PUT", 4) where parts[0] == "v0" && parts[1] == "capabilities" && parts[3] == "setup":
+            self = .setUpCapability(CapabilityID(parts[2]))
+        case ("POST", 4)
+        where parts[0] == "v0" && parts[1] == "capabilities" && parts[3] == "check":
+            self = .checkCapability(CapabilityID(parts[2]))
         default: self = .other
         }
     }

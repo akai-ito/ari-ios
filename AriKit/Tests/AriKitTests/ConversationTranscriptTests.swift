@@ -695,6 +695,9 @@ extension ConversationTranscriptTests {
             reply("m_0001_95267", 72, "the Surrey bank, just upstream of the palace."),
         ],
         "31-pair-with-a-qr-code": [],
+        // Settings, not the conversation: nothing changes in it.
+        "32-set-up-a-capability": [],
+        "33-a-capability-needs-you": [],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),
             you(

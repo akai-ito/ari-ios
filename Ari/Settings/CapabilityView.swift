@@ -85,15 +85,12 @@ struct CapabilityView: View {
         Binding(
             get: { capability.state != .off },
             set: { on in
-                // Switching on something that isn't set up starts with setup instead.
-                if on, !capability.isSetUp {
-                    settingUp = true
-                    return
-                }
                 problem = nil
                 Task {
                     do throws(RequestError) {
                         try await capabilities.setOn(id, on)
+                        // On, but setup isn't complete: the sheet asks for what's missing.
+                        if on, capabilities.capability(id)?.state == .setup { settingUp = true }
                     } catch {
                         problem = "Couldn't switch it \(on ? "on" : "off"): \(error.plainWords)"
                     }

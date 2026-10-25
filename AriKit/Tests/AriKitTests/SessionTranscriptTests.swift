@@ -11,7 +11,11 @@ struct SessionTranscriptTests {
     @Test(
         "makes exactly the transcript's requests and ends with the store's conversation",
         arguments: try Fixtures.transcripts().filter {
-            !["01-first-connection", "31-pair-with-a-qr-code"].contains($0.name)
+            // Connecting, pairing and Settings are played elsewhere: they aren't the session's.
+            ![
+                "01-first-connection", "31-pair-with-a-qr-code", "32-set-up-a-capability",
+                "33-a-capability-needs-you",
+            ].contains($0.name)
         })
     func plays(_ transcript: Transcript) async throws {
         let rehearsal = try Rehearsal(transcript, sending: Self.sentEarly[transcript.name] ?? [])

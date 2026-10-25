@@ -202,7 +202,9 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, label, kind, help, optional, options, value, set
+        case name, kind, optional, options, value, set
+        case label = "title"
+        case help = "description"
     }
 
     /// Whether something is saved for it.
@@ -258,14 +260,18 @@ public struct CapabilityList: Sendable, Equatable, Codable {
 }
 
 /// The body of `PUT /v0/capabilities/{id}`.
-struct SwitchCapability: Encodable {
-    let on: Bool
+public struct SwitchCapability: Sendable, Equatable, Codable {
+    public let on: Bool
+
+    public init(on: Bool) { self.on = on }
 }
 
-/// The body of `PUT /v0/capabilities/{id}/setup` and `POST /v0/capabilities/{id}/check`. A
-/// password left out keeps the one saved.
-struct SetupValues: Encodable {
-    let values: [String: SetupValue]
+/// The body of `PUT /v0/capabilities/{id}/setup` and `POST /v0/capabilities/{id}/check`. Setup
+/// merges: a password left out keeps the one saved.
+public struct CapabilitySetup: Sendable, Equatable, Codable {
+    public let values: [String: SetupValue]
+
+    public init(values: [String: SetupValue]) { self.values = values }
 }
 
 /// What *Test connection* found: nothing when the values work, or the problem.

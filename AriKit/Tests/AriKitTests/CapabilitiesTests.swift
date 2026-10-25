@@ -12,17 +12,17 @@ struct CapabilitiesTests {
           { "id": "reports", "kind": "hand", "title": "Reports",
             "summary": "Tells Ito's makers when something breaks", "symbol": "exclamationmark.bubble",
             "version": "0.1.0", "state": "on",
-            "fields": [ { "name": "token", "label": "GitHub token", "kind": "secret", "set": true } ],
+            "fields": [ { "name": "token", "title": "GitHub token", "kind": "secret", "set": true } ],
             "uses": { "hosts": ["api.github.com"] } },
           { "id": "time", "kind": "domain", "title": "Time", "summary": "Your calendar",
             "version": "0.1.0", "state": "needs_you", "detail": "iCloud rejected the password",
             "fields": [
-              { "name": "apple_id", "label": "Apple ID", "kind": "text", "value": "you@icloud.com" },
-              { "name": "password", "label": "App-specific password", "kind": "secret", "set": false },
-              { "name": "calendars", "label": "Calendars", "kind": "choice", "optional": true,
+              { "name": "apple_id", "title": "Apple ID", "kind": "text", "value": "you@icloud.com" },
+              { "name": "password", "title": "App-specific password", "kind": "secret", "set": false },
+              { "name": "calendars", "title": "Calendars", "kind": "choice", "optional": true,
                 "options": [ { "value": "all", "label": "All" }, { "value": "home", "label": "Home" } ],
                 "value": "all" },
-              { "name": "travel", "label": "Travel time", "kind": "toggle", "value": true } ],
+              { "name": "travel", "title": "Travel time", "kind": "toggle", "value": true } ],
             "uses": { "hosts": ["caldav.icloud.com"], "folders": ["time"] } },
           { "id": "garden", "kind": "greenhouse", "title": "Garden", "summary": "", "state": "dormant" }
         ] }
@@ -96,7 +96,7 @@ struct CapabilitiesTests {
             .put, "/v0/capabilities/time/setup",
             with: """
                 { "id": "time", "kind": "domain", "title": "Time", "summary": "", "state": "on",
-                  "fields": [ { "name": "password", "label": "Password", "kind": "secret", "set": true } ] }
+                  "fields": [ { "name": "password", "title": "Password", "kind": "secret", "set": true } ] }
                 """)
         let capabilities = Capabilities(client: server.client)
         await capabilities.refresh()
@@ -173,12 +173,128 @@ actor StubServer: Transport {
         guard !offline else { throw URLError(.notConnectedToInternet) }
         requests.append(request)
         guard let body = answers["\(request.method.rawValue) \(request.path)"] else {
-            return HTTPResponse(status: 404, headers: ["ito-protocol": "0.4"], body: Data())
+            return HTTPResponse(
+                status: 404, headers: ["ito-protocol": ProtocolVersion.supported.description],
+                body: Data())
         }
-        return HTTPResponse(status: 200, headers: ["ito-protocol": "0.4"], body: Data(body.utf8))
+        return HTTPResponse(
+            status: 200, headers: ["ito-protocol": ProtocolVersion.supported.description],
+            body: Data(body.utf8))
     }
 
     func open(_ request: HTTPRequest, to base: URL) async throws -> HTTPStream {
         throw URLError(.unsupportedURL)
+    }
+}
+
+/// The contract's own capability transcripts, played through `Capabilities`: every request Ari
+/// makes must be the one the transcript shows, and the list must end up as the server left it.
+@Suite("Capabilities against the transcripts")
+@MainActor
+struct CapabilityTranscriptTests {
+    @Test(arguments: ["32-set-up-a-capability", "33-a-capability-needs-you"])
+    func plays(_ name: String) async throws {
+        let transcript = try Fixtures.transcript(name)
+        let server = TranscriptServer(transcript)
+        let capabilities = Capabilities(client: server.client)
+        for case .app(let request) in transcript.steps {
+            try await perform(request, on: capabilities, client: server.client)
+            if let answer = await server.lastAnswer, answer.status == 200,
+                let id = answer.body?["id"]?.string
+            {
+                let shown = try #require(capabilities.capability(CapabilityID(id)))
+                #expect(shown == (try answer.body?.decode(Capability.self)), "line \(answer.line)")
+            }
+        }
+        let mismatches = await server.mismatches
+        #expect(mismatches.isEmpty, "\(mismatches)")
+        #expect(await server.unanswered == 0)
+    }
+
+    private func perform(
+        _ request: Transcript.Request, on capabilities: Capabilities, client: ItoClient
+    )
+        async throws
+    {
+        let parts = request.path.split(separator: "/").map(String.init)
+        let id = parts.count > 2 ? CapabilityID(parts[2]) : nil
+        let values =
+            try request.body?["values"].map { try $0.decode([String: SetupValue].self) } ?? [:]
+        switch (request.method, parts.last) {
+        case ("GET", "capabilities"):
+            await capabilities.refresh()
+        case ("GET", "server"):
+            _ = try await client.server()
+        case ("PUT", "setup"):
+            _ = try? await capabilities.save(try #require(id), values: values)
+        case ("POST", "check"):
+            _ = try await capabilities.check(try #require(id), values: values)
+        case ("PUT", _):
+            let on = try #require(request.body?["on"]).decode(Bool.self)
+            try? await capabilities.setOn(try #require(id), on)
+        default:
+            Issue.record("no action for \(request.method) \(request.path)")
+        }
+    }
+}
+
+/// Answers each request with the transcript's next server line, noting any request that isn't the
+/// one the transcript expects.
+actor TranscriptServer: Transport {
+    private var exchanges: [(request: Transcript.Request, response: Transcript.Response)]
+    private(set) var mismatches: [String] = []
+    private(set) var lastAnswer: Transcript.Response?
+
+    init(_ transcript: Transcript) {
+        var exchanges: [(Transcript.Request, Transcript.Response)] = []
+        var pending: Transcript.Request?
+        for step in transcript.steps {
+            switch step {
+            case .app(let request): pending = request
+            case .server(let response):
+                if let request = pending { exchanges.append((request, response)) }
+                pending = nil
+            default: break
+            }
+        }
+        self.exchanges = exchanges
+    }
+
+    var unanswered: Int { exchanges.count }
+
+    nonisolated var client: ItoClient {
+        ItoClient(
+            address: try! ServerAddress("http://127.0.0.1:8787"), token: Token("t"), transport: self
+        )
+    }
+
+    func send(_ request: HTTPRequest, to base: URL) async throws -> HTTPResponse {
+        guard !exchanges.isEmpty else {
+            mismatches.append("unexpected \(request.method.rawValue) \(request.path)")
+            throw URLError(.badServerResponse)
+        }
+        let (expected, response) = exchanges.removeFirst()
+        let body = try request.body.map { try JSONValue(data: $0) }
+        if expected.method != request.method.rawValue || expected.path != request.path
+            || expected.body != body
+        {
+            mismatches.append(
+                "line \(expected.line): expected \(expected.method) \(expected.path), got "
+                    + "\(request.method.rawValue) \(request.path)")
+        }
+        lastAnswer = response
+        return HTTPResponse(
+            status: response.status, headers: response.headers.lowercasedKeys,
+            body: try response.body.map { try JSONEncoder().encode($0) } ?? Data())
+    }
+
+    func open(_ request: HTTPRequest, to base: URL) async throws -> HTTPStream {
+        throw URLError(.unsupportedURL)
+    }
+}
+
+extension Dictionary where Key == String {
+    fileprivate var lowercasedKeys: [String: Value] {
+        Dictionary(uniqueKeysWithValues: map { ($0.key.lowercased(), $0.value) })
     }
 }

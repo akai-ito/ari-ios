@@ -119,7 +119,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     public func setUp(_ id: CapabilityID, values: [String: SetupValue]) async throws(RequestError)
         -> Capability
     {
-        let body = try Self.json(SetupValues(values: values))
+        let body = try Self.json(CapabilitySetup(values: values))
         return try await call(
             HTTPRequest(.put, "/v0/capabilities/\(Self.segment(id.rawValue))/setup", body: body))
     }
@@ -128,7 +128,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     public func check(_ id: CapabilityID, values: [String: SetupValue]) async throws(RequestError)
         -> CheckResult
     {
-        let body = try Self.json(SetupValues(values: values))
+        let body = try Self.json(CapabilitySetup(values: values))
         return try await call(
             HTTPRequest(.post, "/v0/capabilities/\(Self.segment(id.rawValue))/check", body: body))
     }
