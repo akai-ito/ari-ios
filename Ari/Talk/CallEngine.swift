@@ -89,6 +89,9 @@
         nonisolated private static let log = Logger(
             subsystem: "io.github.akai-ito.ari", category: "talk")
 
+        /// Whether a call is on, so nothing else takes its audio.
+        private(set) static var isOn = false
+
         /// How long a pause ends your turn, from Settings.
         static var pause: Double {
             let saved = UserDefaults.standard.double(forKey: "talk.pause")
@@ -109,6 +112,7 @@
         /// The call is starting: get the recogniser and your vocabulary ready while CallKit
         /// connects.
         func start() {
+            Self.isOn = true
             before = Set(session.conversation.entries.map(\.id))
             session.startCall(id: id)
             preparing = Task { await prepare() }
@@ -184,6 +188,7 @@
                 await finishTurn()
             }
             phase = .ended
+            Self.isOn = false
             for loop in loops { loop.cancel() }
             stopEngine()
             for observer in sessionObservers { NotificationCenter.default.removeObserver(observer) }
