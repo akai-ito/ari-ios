@@ -59,7 +59,12 @@ struct MainView: View {
         .task { if memory == nil { memory = model.client().map(Memory.init(client:)) } }
         #if os(iOS)
             .environment(talk)
-            .task { if talk == nil { talk = Talk(session: session) } }
+            .task {
+                if talk == nil { talk = Talk(session: session) }
+                #if DEBUG
+                    if DebugScript.talks { talk?.start() }
+                #endif
+            }
             .fullScreenCover(
                 isPresented: Binding(
                     get: { talk?.showsCall ?? false }, set: { talk?.showsCall = $0 })

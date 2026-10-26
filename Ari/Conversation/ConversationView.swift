@@ -101,6 +101,13 @@ struct ConversationView: View {
                         in: session,
                         send: { message in _ = send(message) }, stop: stop)
                 }
+                .task {
+                    guard let row = DebugScript.openRow else { return }
+                    while !rows(session.conversation).contains(where: { $0.id == row }) {
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                    open(at: row, in: rows(session.conversation))
+                }
             #endif
     }
 

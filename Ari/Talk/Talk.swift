@@ -17,6 +17,8 @@
         @ObservationIgnored private let session: Session
         @ObservationIgnored private let provider: CXProvider
         @ObservationIgnored private let controller = CXCallController()
+        /// Getting speech recognition ready since Ari opened.
+        @ObservationIgnored private var warming: Task<Void, Never>?
 
         init(session: Session) {
             self.session = session
@@ -29,6 +31,8 @@
             provider = CXProvider(configuration: configuration)
             super.init()
             provider.setDelegate(self, queue: nil)
+            // So the first call doesn't wait for the speech model or your vocabulary's.
+            warming = Task { _ = try? await CallEngine.warmUp(session) }
         }
 
         /// You tapped Talk.
@@ -38,9 +42,18 @@
                 return
             }
             problem = nil
-            let call = CallEngine(session: session)
+            let call = CallEngine(session: session, after: warming)
             self.call = call
             showsCall = true
+            #if targetEnvironment(simulator)
+                // The simulator never activates a call's audio, and ends a call whose audio the
+                // app activates itself: there, the call runs without CallKit.
+                call.configureAudioSession()
+                call.start()
+                try? AVAudioSession.sharedInstance().setActive(true)
+                call.audioActivated()
+                return
+            #endif
             let handle = CXHandle(type: .generic, value: "Ari")
             let action = CXStartCallAction(call: call.uuid, handle: handle)
             action.contactIdentifier = "Ari"
@@ -53,6 +66,10 @@
         /// You tapped End, on the call screen or the lock screen.
         func end() {
             guard let call else { return }
+            #if targetEnvironment(simulator)
+                Task { await finish() }
+                return
+            #endif
             controller.request(CXTransaction(action: CXEndCallAction(call: call.uuid))) {
                 [weak self] error in
                 guard error != nil else { return }
@@ -63,6 +80,10 @@
 
         func setMuted(_ muted: Bool) {
             guard let call else { return }
+            #if targetEnvironment(simulator)
+                call.setMuted(muted)
+                return
+            #endif
             controller.request(
                 CXTransaction(action: CXSetMutedCallAction(call: call.uuid, muted: muted))
             ) { _ in }

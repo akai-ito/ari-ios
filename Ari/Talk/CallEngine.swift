@@ -3,6 +3,7 @@
     import AriKit
     import Speech
     import UIKit
+    import os
 
     /// One call with Ari: listens on the phone, steered by your vocabulary, ends your turn when you
     /// pause, corrects names conservatively, sends what you said with its recording, and speaks
@@ -49,6 +50,7 @@
         @ObservationIgnored private var analyzerFormat: AVAudioFormat?
         @ObservationIgnored private var tap: MicrophoneTap?
         @ObservationIgnored private var preparing: Task<Void, Never>?
+        @ObservationIgnored private let warming: Task<Void, Never>?
         @ObservationIgnored private var loops: [Task<Void, Never>] = []
         @ObservationIgnored private var corrector = Corrector(vocabulary: Vocabulary(terms: []))
         /// This turn's finished pieces, and the piece still changing.
@@ -65,14 +67,19 @@
         @ObservationIgnored private var lastTone = Date.distantPast
         @ObservationIgnored private var lastStatus: String?
 
+        private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
+
         /// How long a pause ends your turn, from Settings.
         static var pause: Double {
             let saved = UserDefaults.standard.double(forKey: "talk.pause")
             return saved > 0 ? saved : 1.5
         }
 
-        init(session: Session, uuid: UUID = UUID()) {
+        /// - Parameter warming: Getting ready ahead of the call, which this one waits for rather
+        ///   than doing the same work alongside it.
+        init(session: Session, uuid: UUID = UUID(), after warming: Task<Void, Never>? = nil) {
             self.session = session
+            self.warming = warming
             self.uuid = uuid
             id = CallID(uuid.uuidString.lowercased())
         }
@@ -100,13 +107,15 @@
         func audioActivated() {
             Task {
                 await preparing?.value
-                guard phase == .connecting else { return }
+                // Without recognition there's nothing to do but say why.
+                guard phase == .connecting, transcriber != nil else { return }
                 do {
                     try startAudio()
                     connectedAt = .now
                     phase = .listening
                     loops.append(Task { await self.run() })
                 } catch {
+                    Self.log.error("No microphone: \(error, privacy: .public)")
                     problem = "Ari couldn't use the microphone."
                 }
             }
@@ -140,25 +149,41 @@
 
         // MARK: - Getting ready
 
-        private func prepare() async {
+        /// Gets speech recognition and your vocabulary's model ready ahead of a call, when Ari
+        /// opens: the speech model downloads once, and the vocabulary's model is kept until the
+        /// vocabulary changes. Returns what a call needs.
+        @discardableResult
+        static func warmUp(_ session: Session) async throws
+            -> (locale: Locale, vocabulary: Vocabulary, model: SFSpeechLanguageModel.Configuration?)
+        {
             let locale =
                 await DictationTranscriber.supportedLocale(equivalentTo: .current)
                 ?? Locale(identifier: "en-GB")
+            let plain = DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
+            if let install = try await AssetInventory.assetInstallationRequest(supporting: [plain]) {
+                log.info("Downloading speech recognition for \(locale.identifier, privacy: .public)")
+                try await install.downloadAndInstall()
+            }
+            // The vocabulary's model builds on the speech model, so it comes second.
             let vocabulary = await session.vocabulary() ?? Vocabulary(terms: [])
-            corrector = Corrector(vocabulary: vocabulary, isWord: Self.isWord, refused: Refusals.load())
             let model = await LanguageModel.configuration(for: vocabulary, locale: locale)
-            isSteered = model != nil
-            let transcriber = DictationTranscriber(
-                locale: locale,
-                contentHints: model.map { [.customizedLanguage(modelConfiguration: $0)] } ?? [],
-                transcriptionOptions: [.punctuation],
-                reportingOptions: [.volatileResults, .frequentFinalization], attributeOptions: [])
+            log.info("\(vocabulary.terms.count) terms; steered: \(model != nil, privacy: .public)")
+            return (locale, vocabulary, model)
+        }
+
+        private func prepare() async {
+            await warming?.value
             do {
-                if let install = try await AssetInventory.assetInstallationRequest(
-                    supporting: [transcriber])
-                {
-                    try await install.downloadAndInstall()
-                }
+                let (locale, vocabulary, model) = try await Self.warmUp(session)
+                corrector = Corrector(
+                    vocabulary: vocabulary, isWord: Self.isWord, refused: Refusals.load())
+                isSteered = model != nil
+                let transcriber = DictationTranscriber(
+                    locale: locale,
+                    contentHints: model.map { [.customizedLanguage(modelConfiguration: $0)] } ?? [],
+                    transcriptionOptions: [.punctuation],
+                    reportingOptions: [.volatileResults, .frequentFinalization],
+                    attributeOptions: [])
                 let format = await SpeechAnalyzer.bestAvailableAudioFormat(
                     compatibleWith: [transcriber])
                 let analyzer = SpeechAnalyzer(modules: [transcriber])
@@ -166,8 +191,12 @@
                 self.transcriber = transcriber
                 self.analyzer = analyzer
                 analyzerFormat = format
+                Self.log.info("Ready")
             } catch {
-                problem = "Ari couldn't get speech recognition ready."
+                Self.log.error("Not ready: \(error, privacy: .public)")
+                problem =
+                    "Ari couldn't get speech recognition ready. It downloads once, so check the "
+                    + "connection and try again."
             }
         }
 
