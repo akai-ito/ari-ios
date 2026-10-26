@@ -37,6 +37,9 @@
         private(set) var problem: String?
         /// Whether your vocabulary steers the recogniser this call.
         private(set) var isSteered = false
+        /// What the microphone and the recogniser are doing, when it helps to know: in debug
+        /// builds, and whenever Ari has heard nothing for a while.
+        private(set) var diagnostics: String?
 
         @ObservationIgnored private let session: Session
         @ObservationIgnored private let audio = AVAudioEngine()
@@ -66,6 +69,9 @@
         @ObservationIgnored private var lastSound = Date()
         @ObservationIgnored private var lastTone = Date.distantPast
         @ObservationIgnored private var lastStatus: String?
+        @ObservationIgnored private var lastCheck = Date.distantPast
+        @ObservationIgnored private var results = 0
+        @ObservationIgnored private var microphone = ""
 
         private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
@@ -159,6 +165,11 @@
             let locale =
                 await DictationTranscriber.supportedLocale(equivalentTo: .current)
                 ?? Locale(identifier: "en-GB")
+            // The speech model stays installed for Ari only while Ari reserves its language.
+            if !(await AssetInventory.reservedLocales.contains(locale)) {
+                let reserved = try await AssetInventory.reserve(locale: locale)
+                log.info("Reserved \(locale.identifier, privacy: .public): \(reserved)")
+            }
             let plain = DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
             if let install = try await AssetInventory.assetInstallationRequest(supporting: [plain])
             {
@@ -166,6 +177,8 @@
                     "Downloading speech recognition for \(locale.identifier, privacy: .public)")
                 try await install.downloadAndInstall()
             }
+            let status = await AssetInventory.status(forModules: [plain])
+            log.info("Speech model: \(String(describing: status), privacy: .public)")
             // The vocabulary's model builds on the speech model, so it comes second.
             let vocabulary = await session.vocabulary() ?? Vocabulary(terms: [])
             let model = await LanguageModel.configuration(for: vocabulary, locale: locale)
@@ -175,6 +188,14 @@
 
         private func prepare() async {
             await warming?.value
+            if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+                await withCheckedContinuation { done in
+                    SFSpeechRecognizer.requestAuthorization { _ in done.resume() }
+                }
+            }
+            Self.log.info(
+                "Speech recognition: \(String(describing: SFSpeechRecognizer.authorizationStatus().rawValue), privacy: .public)"
+            )
             do {
                 let (locale, vocabulary, model) = try await Self.warmUp(session)
                 corrector = Corrector(
@@ -236,11 +257,14 @@
             guard let analyzer else { throw CallError.notReady }
             let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
             let target = analyzerFormat ?? micFormat
-            let tap = MicrophoneTap(
-                input: continuation, resampler: Resampler(from: micFormat, to: target))
+            let tap = MicrophoneTap(input: continuation, microphone: micFormat, recogniser: target)
             tap.muted = muted
             self.tap = tap
-            _ = tap.record(to: newRecording(format: micFormat))
+            microphone = "\(Int(micFormat.sampleRate / 1000)) kHz, \(micFormat.channelCount) ch"
+            Self.log.info(
+                "Microphone \(micFormat, privacy: .public) → recogniser \(target, privacy: .public)"
+            )
+            _ = tap.record(to: newRecording(format: tap.mono))
             input.installTap(onBus: 0, bufferSize: 4096, format: micFormat, block: tap.block())
             audio.prepare()
             try audio.start()
@@ -252,6 +276,7 @@
                     do {
                         try await analyzer.start(inputSequence: stream)
                     } catch {
+                        Self.log.error("Analyzer stopped: \(error, privacy: .public)")
                         self.problem = "Ari stopped hearing you."
                     }
                 })
@@ -259,13 +284,18 @@
                 Task {
                     do {
                         for try await result in transcriber.results { self.heard(result) }
-                    } catch {}
+                        Self.log.info("Recognition ended")
+                    } catch {
+                        Self.log.error("Recognition failed: \(error, privacy: .public)")
+                        self.problem = "Ari stopped hearing you."
+                    }
                 })
         }
 
         // MARK: - Listening
 
         private func heard(_ result: DictationTranscriber.Result) {
+            results += 1
             let text = String(result.text.characters)
             if result.isFinal {
                 finals += text
@@ -294,8 +324,28 @@
                 }
                 speakWhatsNew()
                 fillTheGap()
+                checkHearing()
                 try? await Task.sleep(for: .milliseconds(150))
             }
+        }
+
+        /// Every few seconds: what the microphone and the recogniser are doing, in the log, and on
+        /// screen while Ari hears nothing.
+        private func checkHearing() {
+            guard let tap, Date.now.timeIntervalSince(lastCheck) >= 3 else { return }
+            lastCheck = .now
+            let counts = tap.counts()
+            let level = counts.peak > 0 ? Int(20 * log10(counts.peak)) : -99
+            let summary =
+                "Mic \(microphone) · level \(level) dB · fed \(counts.fed) · failed \(counts.failed)"
+                + " · heard \(results)" + (isSteered ? " · steered" : "")
+            Self.log.info("\(summary, privacy: .public)")
+            #if DEBUG
+                diagnostics = summary
+            #else
+                let quiet = connectedAt.map { Date.now.timeIntervalSince($0) > 8 } ?? false
+                diagnostics = quiet && results == 0 ? summary : nil
+            #endif
         }
 
         /// Your pause ended your turn: what you said goes, corrected and with its recording.
@@ -343,7 +393,7 @@
         /// Ends this turn's recording and starts the next; the finished one uploads.
         private func closeRecording() -> AttachmentID? {
             guard let tap, let finished = recording else { return nil }
-            let old = tap.record(to: newRecording(format: audio.inputNode.outputFormat(forBus: 0)))
+            let old = tap.record(to: newRecording(format: tap.mono))
             old?.close()
             defer { try? FileManager.default.removeItem(at: finished) }
             guard let bytes = try? Data(contentsOf: finished), !bytes.isEmpty else { return nil }
