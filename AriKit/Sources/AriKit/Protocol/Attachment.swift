@@ -77,12 +77,14 @@ public struct PendingAttachment: Sendable, Equatable, Identifiable {
         self.bytes = bytes
     }
 
-    /// What it'll be once uploaded: an image if it's a photo the agent can see.
+    /// What it'll be once uploaded: an image if it's a photo the agent can see, audio if it's a
+    /// recording.
     public var attachment: Attachment {
         let images = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        let kind: AttachmentKind =
+            images.contains(mediaType) ? .image : mediaType.hasPrefix("audio/") ? .audio : .file
         return Attachment(
-            id: id, kind: images.contains(mediaType) ? .image : .file, name: name,
-            mediaType: mediaType, size: bytes.count)
+            id: id, kind: kind, name: name, mediaType: mediaType, size: bytes.count)
     }
 
     struct About: Codable {

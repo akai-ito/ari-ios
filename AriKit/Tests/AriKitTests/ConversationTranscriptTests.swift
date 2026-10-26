@@ -410,7 +410,7 @@ struct ConversationTranscriptTests {
 extension Replay {
     /// Plays through the transcript's line `line`, which must hold the step `summary` names, so that
     /// a regenerated transcript can't quietly move a checkpoint.
-    fileprivate mutating func play(
+    mutating func play(
         throughLine line: Int, expecting summary: String,
         sourceLocation: SourceLocation = #_sourceLocation
     ) throws {
@@ -718,6 +718,23 @@ extension ConversationTranscriptTests {
         ],
         // Settings, not the conversation: nothing changes in it.
         "37-choose-the-model": [],
+        "38-a-walk-with-ari": [
+            you("3dc7eae9-5c32-46d8-b0a5-5e61c1bfe0bb", "What did Bora say about the QRT panel?"),
+            Expected(
+                id: "m_0001_72021", text: "Let me check what I have on Bora.", outcome: .completed,
+                shown: false),
+            reply("m_0002_05333", 115, "I've put what she asked for in the chat."),
+        ],
+        // The recogniser's vocabulary, not the conversation: nothing changes in it.
+        "39-ari-learns-a-name": [],
+        "40-delete-a-call-s-audio": [
+            you(
+                "4ebb2673-f9f9-4c6e-9719-11403eec63de",
+                "Today was a good day. The long run felt easy."),
+            reply(
+                "m_0001_90849", 64,
+                "That's a lovely one to end on. I've added it to today's journal."),
+        ],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),
             you(

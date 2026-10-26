@@ -89,14 +89,23 @@ public struct SendMessage: Sendable, Equatable, Codable {
     public let answers: AskID?
     /// Photos and files already uploaded, in order. The text may then be empty.
     public let attachments: [AttachmentID]?
+    /// For a message you spoke on a call: the call, your recording and the corrections.
+    public let spoken: SendSpoken?
 
     public init(
-        id: MessageID, text: String, answers: AskID? = nil, attachments: [AttachmentID] = []
+        id: MessageID, text: String, answers: AskID? = nil, attachments: [AttachmentID] = [],
+        spoken: SendSpoken? = nil
     ) {
         self.id = id
         self.text = text
         self.answers = answers
         self.attachments = attachments.isEmpty ? nil : attachments
+        self.spoken = spoken
+    }
+
+    /// Everything it names that's uploaded first: its attachments, and a spoken message's recording.
+    public var uploads: [AttachmentID] {
+        (attachments ?? []) + (spoken?.audio.map { [$0] } ?? [])
     }
 }
 
@@ -112,11 +121,13 @@ public struct MessagePage: Sendable, Equatable, Decodable {
     public let steps: [Step]
     /// Every ask in the same span.
     public let asks: [Ask]
+    /// Every call that started in the same span.
+    public let calls: [Call]
     /// Whether even older messages exist.
     public let hasMore: Bool
 
     enum CodingKeys: String, CodingKey {
-        case messages, steps, asks
+        case messages, steps, asks, calls
         case hasMore = "has_more"
     }
 }

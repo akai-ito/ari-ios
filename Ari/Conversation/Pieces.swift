@@ -53,11 +53,15 @@ struct DayLabel: View {
 }
 
 /// Your message, in a thin outline.
-struct YourMessage<Attachments: View>: View {
+struct YourMessage<Attachments: View, Footer: View>: View {
     let text: String
     let tag: String?
+    /// Words the phone corrected in something you said, underlined.
+    var corrections: [Correction] = []
     /// Its photos and files, above the words.
     @ViewBuilder var attachments: Attachments
+    /// Below the words: playing back what you said, and what was corrected.
+    @ViewBuilder var footer: Footer
 
     /// The tag on screen. "Sending" waits half a second first, so a message that goes at once
     /// doesn't flicker a tag in and out.
@@ -68,7 +72,7 @@ struct YourMessage<Attachments: View>: View {
             attachments
             // A message may be only photos.
             if !text.isEmpty {
-                Text(Self.linked(text))
+                Text(SpokenFooter.marked(Self.linked(text), corrections, in: text))
                     .foregroundStyle(.ariText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -78,6 +82,7 @@ struct YourMessage<Attachments: View>: View {
                     )
                     .textSelection(.enabled)
             }
+            footer
             if let shown {
                 // Its own line, so it never sits on what comes next.
                 Tag(text: shown).padding(.trailing, 6).transition(.opacity)
@@ -259,11 +264,14 @@ struct SelectTextSheet: View {
 enum SheetItem: Identifiable {
     case details(ServerError)
     case selecting(String)
+    /// Teaching Ari a word it misheard in something you said.
+    case fixingWord(String)
 
     var id: String {
         switch self {
         case .details(let error): "details \(error.code.rawValue) \(error.message)"
         case .selecting(let text): "selecting \(text)"
+        case .fixingWord(let text): "fixing \(text)"
         }
     }
 }

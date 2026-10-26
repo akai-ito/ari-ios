@@ -164,6 +164,7 @@ extension Timeline.Item {
         switch self {
         case .message: "message"
         case .trail: "trail"
+        case .call: "call"
         }
     }
 }

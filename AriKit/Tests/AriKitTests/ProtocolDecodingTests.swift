@@ -82,6 +82,16 @@ struct ProtocolDecodingTests {
                 case .chooseModel:
                     let sent = try #require(request.body).decode(ModelChoice.self)
                     #expect(try body.decode(ModelChoice.self) == sent, "\(place)")
+                case .startCall(let call), .endCall(let call), .deleteCallAudio(let call):
+                    #expect(try body.decode(CallResult.self).call.id == call, "\(place)")
+                case .vocabulary:
+                    #expect(try !body.decode(Vocabulary.self).terms.isEmpty, "\(place)")
+                case .teachVocabulary:
+                    let sent = try #require(request.body).decode(VocabularyCorrections.self)
+                    let taught = try body.decode(VocabularyCorrections.self)
+                    #expect(
+                        taught.corrections.map(\.meant) == sent.corrections.map(\.meant), "\(place)"
+                    )
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -104,7 +114,11 @@ struct ProtocolDecodingTests {
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
                     id: message.id, text: message.text, answers: message.answers,
-                    attachments: message.attachments ?? [])
+                    attachments: message.attachments ?? [],
+                    spoken: message.spoken.map {
+                        SendSpoken(
+                            call: $0.call, audio: $0.audio, corrections: $0.corrections ?? [])
+                    })
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .stop:
                 let stop = try body.decode(StopTurn.self)
@@ -133,6 +147,13 @@ struct ProtocolDecodingTests {
                 let values = try body.decode(CapabilitySetup.self).values
                 #expect(
                     try JSONValue(encoding: CapabilitySetup(values: values)) == body, "\(place)")
+            case .teachVocabulary:
+                let pairs = try body.decode(VocabularyCorrections.self).corrections.map {
+                    VocabularyCorrections.Pair(heard: $0.heard, meant: $0.meant)
+                }
+                #expect(
+                    try JSONValue(encoding: VocabularyCorrections(corrections: pairs)) == body,
+                    "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -153,7 +174,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 8) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 9) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
@@ -184,6 +205,9 @@ extension Event.Payload {
         case .messageDelta: "message.delta"
         case .messageEnded: "message.ended"
         case .turnEnded: "turn.ended"
+        case .callStarted: "call.started"
+        case .callEnded: "call.ended"
+        case .callAudioDeleted: "call.audio_deleted"
         case .unknown: nil
         }
     }

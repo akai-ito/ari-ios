@@ -22,6 +22,10 @@ public struct Conversation: Sendable, Equatable {
     public private(set) var asks: [Ask] = [] {
         didSet { changes.count &+= 1 }
     }
+    /// The calls that started from the oldest message on, and one still on, in conversation order.
+    public private(set) var calls: [Call] = [] {
+        didSet { changes.count &+= 1 }
+    }
     /// Asks you've answered or cancelled here, until the server says they've ended.
     public private(set) var settling: [AskID: Settling] = [:] {
         didSet { changes.count &+= 1 }
@@ -102,6 +106,8 @@ extension Conversation {
         public internal(set) var isSecret = false
         /// Your messages: the photos and files attached, in order.
         public internal(set) var attachments: [Attachment] = []
+        /// Your messages: how one you spoke on a call came to be.
+        public internal(set) var spoken: Spoken?
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -137,11 +143,12 @@ extension Conversation {
             answers = message.answers
             isSecret = message.secret ?? false
             attachments = message.attachments ?? []
+            spoken = message.spoken
         }
 
         init(
             sending id: MessageID, text: String, answers: AskID?, secret: Bool,
-            attachments: [Attachment]
+            attachments: [Attachment], spoken: Spoken?
         ) {
             self.id = id
             role = .user
@@ -151,6 +158,7 @@ extension Conversation {
             self.answers = answers
             isSecret = secret
             self.attachments = attachments
+            self.spoken = spoken
         }
     }
 
@@ -226,6 +234,11 @@ extension Conversation {
             applied = end(ended)
         case .turnEnded(let ended):
             finish(ended)
+        case .callStarted(let event), .callEnded(let event):
+            record(event.call)
+        case .callAudioDeleted(let event):
+            record(event.call)
+            forgetAudio(of: event.call.id)
         case .unknown:
             break
         }
@@ -250,6 +263,7 @@ extension Conversation {
         reindex(from: 0)
         replaceSteps(with: snapshot.steps)
         replaceAsks(with: snapshot.asks)
+        replaceCalls(with: snapshot.calls)
 
         hasEarlierMessages = snapshot.hasMore
         turn = snapshot.turn.map {
@@ -369,6 +383,24 @@ extension Conversation {
         reindexAsks(from: index)
     }
 
+    /// A call started or ended, or its audio went: each event carries the whole call. Starting one
+    /// ends one left on, which the server says with its own `call.ended`.
+    private mutating func record(_ call: Call) {
+        if let index = calls.firstIndex(where: { $0.id == call.id }) {
+            calls[index] = call
+            return
+        }
+        let index = calls.lastIndex { $0.position < call.position }.map { $0 + 1 } ?? 0
+        calls.insert(call, at: index)
+    }
+
+    /// The call's audio was deleted: its spoken messages keep their words, without the recording.
+    private mutating func forgetAudio(of call: CallID) {
+        for index in entries.indices where entries[index].spoken?.call == call {
+            entries[index].spoken?.audio = nil
+        }
+    }
+
     /// A step started, or more is known about it: each event carries the whole step, so it replaces
     /// what Ari has.
     private mutating func record(_ step: Step) {
@@ -398,13 +430,14 @@ extension Conversation {
     /// once. A secret keeps no text here at all.
     public mutating func send(
         _ id: MessageID, text: String, answers: AskID? = nil, secret: Bool = false,
-        attachments: [Attachment] = []
+        attachments: [Attachment] = [], spoken: Spoken? = nil
     ) {
         guard positions[id] == nil else { return }
         if let waiting = waitingAsk { settling[waiting.id] = .answering(id) }
         entries.append(
             Entry(
-                sending: id, text: text, answers: answers, secret: secret, attachments: attachments)
+                sending: id, text: text, answers: answers, secret: secret, attachments: attachments,
+                spoken: spoken)
         )
         positions[id] = entries.count - 1
     }
@@ -413,6 +446,12 @@ extension Conversation {
     public mutating func cancel(_ ask: AskID) {
         guard let index = askIndices[ask], asks[index].outcome == nil else { return }
         settling[ask] = .cancelling
+    }
+
+    /// The server answered starting or ending a call, or deleting its audio, with the call.
+    public mutating func confirm(_ result: CallResult) {
+        record(result.call)
+        if result.call.audioDeleted { forgetAudio(of: result.call.id) }
     }
 
     /// The server answered a cancel with the ask as it ended.
@@ -467,6 +506,8 @@ extension Conversation {
         serverCount += earlier.count
         replaceSteps(with: page.steps.filter { stepIndices[$0.id] == nil } + steps)
         replaceAsks(with: page.asks.filter { askIndices[$0.id] == nil } + asks)
+        let known = Set(calls.map(\.id))
+        replaceCalls(with: page.calls.filter { !known.contains($0.id) } + calls)
         hasEarlierMessages = page.hasMore
     }
 
@@ -481,6 +522,7 @@ extension Conversation {
         if let first = entries.first?.position {
             replaceSteps(with: steps.filter { $0.position > first })
             replaceAsks(with: asks.filter { $0.position > first })
+            replaceCalls(with: calls.filter { $0.position > first || $0.isOn })
         }
         hasEarlierMessages = true
     }
@@ -522,6 +564,16 @@ extension Conversation {
     public subscript(step id: StepID) -> Step? {
         stepIndices[id].map { steps[$0] }
     }
+
+    /// The call that's on, from this phone or another, if any.
+    public var callOn: Call? {
+        calls.last { $0.isOn }
+    }
+
+    /// The call with `id`, if the conversation has it.
+    public subscript(call id: CallID) -> Call? {
+        calls.last { $0.id == id }
+    }
 }
 
 // MARK: - Bookkeeping
@@ -552,6 +604,10 @@ extension Conversation {
         askIndices = [:]
         reindexAsks(from: 0)
         settling = settling.filter { askIndices[$0.key].map { asks[$0].outcome == nil } ?? false }
+    }
+
+    private mutating func replaceCalls(with new: [Call]) {
+        calls = new.sorted { $0.position < $1.position }
     }
 
     private mutating func reindexAsks(from start: Int) {

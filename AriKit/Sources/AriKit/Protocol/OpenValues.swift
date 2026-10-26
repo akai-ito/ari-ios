@@ -237,7 +237,9 @@ public struct AttachmentKind: OpenValue {
 
     /// A JPEG, PNG, GIF or WebP photo, which the agent sees.
     public static let image = AttachmentKind(rawValue: "image")
+    /// A recording, such as a spoken message's.
+    public static let audio = AttachmentKind(rawValue: "audio")
     /// Anything else, which lands in the agent's workspace.
     public static let file = AttachmentKind(rawValue: "file")
-    public static let known = [image, file]
+    public static let known = [image, audio, file]
 }

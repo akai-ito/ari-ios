@@ -11,7 +11,9 @@ import SwiftUI
     /// opens In mind, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
-    /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code.
+    /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code, and
+    /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), and `ARI_TALK`
+    /// starts a call.
     enum DebugScript {
         static let environment = ProcessInfo.processInfo.environment
 
@@ -52,6 +54,8 @@ import SwiftUI
             _ = store.deviceID
         }
         static let place = environment["ARI_PLACE"]
+        static let openRow = environment["ARI_OPEN_ROW"]
+        static let talks = environment["ARI_TALK"] != nil
         static let openURL = environment["ARI_OPEN_URL"].flatMap(URL.init(string:))
 
         static var attachments: [URL] {

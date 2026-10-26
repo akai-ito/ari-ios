@@ -330,7 +330,7 @@ private enum Fixture {
            {"id":"m_1","role":"agent","kind":"reply","turn":"t_1","text":"Half a rep","at":"2026-10-12T08:41:01.000Z"},
            {"id":"u_3","role":"user","text":"Also dinner","at":"2026-10-12T08:41:02.000Z"},
            {"id":"u_2","role":"user","text":"Also lunch","at":"2026-10-12T08:41:03.000Z"}],
-         "steps":[],"asks":[],
+         "steps":[],"asks":[],"calls":[],
          "turn":{"id":"t_1","inputs":["u_1"],"read":["u_3"],"retry_of":"t_0",
                  "status":{"kind":"writing","label":"Writing"}},
          "next":["u_2"]}
@@ -341,12 +341,12 @@ private enum Fixture {
         #"""
         {"id":"e_20","type":"snapshot","at":"2026-10-12T08:42:00.000Z","reason":"cursor_unknown","has_more":false,
          "messages":[{"id":"\#(id)","role":"user","text":"Answer lost on the way","at":"2026-10-12T08:41:50.000Z"}],
-         "steps":[],"asks":[],"turn":null,"next":[]}
+         "steps":[],"asks":[],"calls":[],"turn":null,"next":[]}
         """#
     }
 
     static let page = #"""
-        {"has_more":false,"steps":[],"asks":[],"messages":[{"id":"u_0","role":"user","text":"Morning","at":"2026-10-11T08:00:00.000Z"}]}
+        {"has_more":false,"steps":[],"asks":[],"calls":[],"messages":[{"id":"u_0","role":"user","text":"Morning","at":"2026-10-11T08:00:00.000Z"}]}
         """#
 }
 

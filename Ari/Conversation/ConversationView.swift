@@ -46,6 +46,10 @@ struct ConversationView: View {
     /// Each send and each Stop, for a light tap you can feel.
     @State private var sent = 0
     @State private var stops = 0
+    #if os(iOS)
+        /// Calls with Ari.
+        @Environment(Talk.self) private var talk: Talk?
+    #endif
 
     var body: some View {
         let conversation = session.conversation
@@ -80,6 +84,10 @@ struct ConversationView: View {
                 switch item {
                 case .details(let error): DetailsSheet(error: error)
                 case .selecting(let text): SelectTextSheet(text: text)
+                case .fixingWord(let text):
+                    FixWordSheet(text: text) { heard, meant in
+                        await session.teach([.init(heard: heard, meant: meant)])
+                    }
                 }
             }
             #if DEBUG
@@ -92,6 +100,13 @@ struct ConversationView: View {
                     await DebugScript.run(
                         in: session,
                         send: { message in _ = send(message) }, stop: stop)
+                }
+                .task {
+                    guard let row = DebugScript.openRow else { return }
+                    while !rows(session.conversation).contains(where: { $0.id == row }) {
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                    open(at: row, in: rows(session.conversation))
                 }
             #endif
     }
@@ -194,13 +209,21 @@ struct ConversationView: View {
                     ProblemNotice(problem: problem, connectAgain: connectAgain)
                 } else {
                     // While Ari waits for your answer, the composer takes it, as a secret if asked.
-                    ComposerArea(
-                        session: session, attached: $attached, attachProblem: $attachProblem,
-                        working: working, stopping: conversation.pendingStop != nil,
-                        asking: revealing ? nil : conversation.waitingAsk,
-                        send: send, stop: stop, attach: attach, detach: detach
-                    )
-                    .equatable()
+                    VStack(spacing: 0) {
+                        #if os(iOS)
+                            if let talk, let call = talk.call, !talk.showsCall {
+                                OnCallBar(call: call) { talk.showsCall = true }
+                            }
+                        #endif
+                        ComposerArea(
+                            session: session, attached: $attached, attachProblem: $attachProblem,
+                            working: working, stopping: conversation.pendingStop != nil,
+                            asking: revealing ? nil : conversation.waitingAsk,
+                            send: send, stop: stop, attach: attach, detach: detach,
+                            talk: talkAction
+                        )
+                        .equatable()
+                    }
                     .frame(maxWidth: Rhythm.column)
                     .frame(maxWidth: .infinity)
                 }
@@ -286,14 +309,26 @@ struct ConversationView: View {
             DayLabel(date: date)
         case .yours(let entry):
             YourMessage(
-                text: entry.isSecret ? "••••••" : entry.text, tag: tag(for: entry, in: conversation)
+                text: entry.isSecret ? "••••••" : entry.text,
+                tag: tag(for: entry, in: conversation),
+                corrections: entry.spoken?.corrections ?? []
             ) {
                 if !entry.attachments.isEmpty {
                     MessageAttachments(attachments: entry.attachments) {
                         await session.bytes(of: $0)
                     }
                 }
+            } footer: {
+                if let spoken = entry.spoken {
+                    SpokenFooter(
+                        spoken: spoken, text: entry.text, bytes: { await session.bytes(of: $0) },
+                        fixWord: { sheet = .fixingWord(entry.text) })
+                }
             }
+        case .call(let call):
+            CallBlock(
+                call: call, returnToCall: returnToCall(call),
+                deleteAudio: { session.deleteAudio(of: call.id) })
         case .ari(let entry):
             let text = conversation.visibleText(of: entry)
             let document = cache.document(entry.id, text)
@@ -377,6 +412,26 @@ struct ConversationView: View {
     }
 
     // MARK: - What you do
+
+    /// Talk, where Ari can take a call: on the iPhone.
+    private var talkAction: (() -> Void)? {
+        #if os(iOS)
+            guard let talk else { return nil }
+            return { talk.start() }
+        #else
+            return nil
+        #endif
+    }
+
+    /// Back to the call a block opened, when it's this phone's and still on.
+    private func returnToCall(_ call: Call) -> (() -> Void)? {
+        #if os(iOS)
+            guard let talk, call.isOn, talk.call?.id == call.id else { return nil }
+            return { talk.showsCall = true }
+        #else
+            return nil
+        #endif
+    }
 
     /// Whatever you send while Ari waits answers it. A secret names the ask, and keeps no text.
     /// Returns whether it went, so the composer can clear.

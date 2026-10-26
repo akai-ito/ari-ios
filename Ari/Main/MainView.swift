@@ -11,6 +11,10 @@ struct MainView: View {
     @State private var showsSettings = false
     /// What Ari knows, for the Library, In mind and memory steps on the trail.
     @State private var memory: Memory?
+    #if os(iOS)
+        /// Calls with Ari, registered with iOS.
+        @State private var talk: Talk?
+    #endif
     @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
         @Environment(\.openSettings) private var openSettings
@@ -53,6 +57,23 @@ struct MainView: View {
         }
         .environment(memory)
         .task { if memory == nil { memory = model.client().map(Memory.init(client:)) } }
+        #if os(iOS)
+            .environment(talk)
+            .task {
+                if talk == nil { talk = Talk(session: session) }
+                #if DEBUG
+                    if DebugScript.talks { talk?.start() }
+                #endif
+            }
+            .fullScreenCover(
+                isPresented: Binding(
+                    get: { talk?.showsCall ?? false }, set: { talk?.showsCall = $0 })
+            ) {
+                if let talk, let call = talk.call {
+                    CallView(talk: talk, call: call, session: session)
+                }
+            }
+        #endif
         // A tab bar on iPhone, a sidebar on the Mac.
         .tabViewStyle(.sidebarAdaptable)
         #if os(iOS)

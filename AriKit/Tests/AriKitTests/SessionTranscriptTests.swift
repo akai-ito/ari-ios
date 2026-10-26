@@ -14,7 +14,7 @@ struct SessionTranscriptTests {
             // Connecting, pairing and Settings are played elsewhere: they aren't the session's.
             ![
                 "01-first-connection", "31-pair-with-a-qr-code", "32-set-up-a-capability",
-                "33-a-capability-needs-you", "37-choose-the-model",
+                "33-a-capability-needs-you", "37-choose-the-model", "39-ari-learns-a-name",
             ].contains($0.name)
         })
     func plays(_ transcript: Transcript) async throws {

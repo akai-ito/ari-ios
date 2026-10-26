@@ -17,11 +17,14 @@ public struct Timeline: Equatable, Sendable {
         /// Yours, a reply, or a note that reads as an answer.
         case message(Conversation.Entry)
         case trail(Trail)
+        /// A call, where it started: the block that opens the stretch it covered.
+        case call(Call)
 
         public var id: String {
             switch self {
             case .message(let entry): entry.id.rawValue
             case .trail(let trail): trail.id
+            case .call(let call): "call \(call.id)"
             }
         }
     }
@@ -63,6 +66,9 @@ public struct Timeline: Equatable, Sendable {
             case .ask(let ask):
                 guard held.map({ ask.position < $0 }) ?? true else { continue }
                 add(.ask(ask), turn: ask.turn)
+            case .call(let call):
+                close()
+                items.append(.call(call))
             }
         }
         close()
@@ -111,21 +117,25 @@ public struct Timeline: Equatable, Sendable {
         case entry(Conversation.Entry)
         case step(Step)
         case ask(Ask)
+        case call(Call)
 
         var position: Int {
             switch self {
             case .entry(let entry): entry.position ?? .max
             case .step(let step): step.position
             case .ask(let ask): ask.position
+            case .call(let call): call.position
             }
         }
     }
 
-    /// Entries, steps and asks in one order. Your messages the server hasn't placed yet come last.
+    /// Entries, steps, asks and calls in one order. Your messages the server hasn't placed yet come
+    /// last.
     private static func merged(_ conversation: Conversation) -> [Piece] {
         let placed =
             conversation.entries.filter { $0.position != nil }.map(Piece.entry)
             + conversation.steps.map(Piece.step) + conversation.asks.map(Piece.ask)
+            + conversation.calls.map(Piece.call)
         let waiting = conversation.entries.filter { $0.position == nil }.map(Piece.entry)
         return placed.sorted { $0.position < $1.position } + waiting
     }
