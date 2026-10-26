@@ -3,6 +3,8 @@
     import AriKit
     import CallKit
     import Foundation
+    import Speech
+    import os
 
     /// Talking with Ari: the call that's on, if any, registered with iOS as a call so it carries
     /// on locked and in your pocket, and AirPods controls work.
@@ -19,6 +21,10 @@
         @ObservationIgnored private let controller = CXCallController()
         /// Getting speech recognition ready since Ari opened.
         @ObservationIgnored private var warming: Task<Void, Never>?
+        /// Asking for speech recognition, before the call starts.
+        @ObservationIgnored private var starting = false
+
+        private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
         init(session: Session) {
             self.session = session
@@ -41,7 +47,33 @@
                 showsCall = true
                 return
             }
+            guard !starting else { return }
+            starting = true
             problem = nil
+            Task {
+                // Asked here in the chat, before the call: once CallKit has the screen, the
+                // prompt never came and the call waited for it.
+                let speech = await Self.askForSpeechRecognition()
+                Self.log.info("Speech recognition: \(speech.rawValue, privacy: .public)")
+                starting = false
+                begin()
+            }
+        }
+
+        /// Asks for speech recognition the first time, off the main actor: iOS answers on a queue
+        /// of its own.
+        nonisolated private static func askForSpeechRecognition() async
+            -> SFSpeechRecognizerAuthorizationStatus
+        {
+            guard SFSpeechRecognizer.authorizationStatus() == .notDetermined else {
+                return SFSpeechRecognizer.authorizationStatus()
+            }
+            return await withCheckedContinuation { done in
+                SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0) }
+            }
+        }
+
+        private func begin() {
             let call = CallEngine(session: session, after: warming)
             self.call = call
             showsCall = true
@@ -52,15 +84,15 @@
                 call.start()
                 try? AVAudioSession.sharedInstance().setActive(true)
                 call.audioActivated()
-                return
+            #else
+                let handle = CXHandle(type: .generic, value: "Ari")
+                let action = CXStartCallAction(call: call.uuid, handle: handle)
+                action.contactIdentifier = "Ari"
+                controller.request(CXTransaction(action: action)) { [weak self] error in
+                    guard let error else { return }
+                    Task { @MainActor in self?.couldNotStart(error) }
+                }
             #endif
-            let handle = CXHandle(type: .generic, value: "Ari")
-            let action = CXStartCallAction(call: call.uuid, handle: handle)
-            action.contactIdentifier = "Ari"
-            controller.request(CXTransaction(action: action)) { [weak self] error in
-                guard let error else { return }
-                Task { @MainActor in self?.couldNotStart(error) }
-            }
         }
 
         /// You tapped End, on the call screen or the lock screen.
@@ -68,25 +100,25 @@
             guard let call else { return }
             #if targetEnvironment(simulator)
                 Task { await finish() }
-                return
+            #else
+                controller.request(CXTransaction(action: CXEndCallAction(call: call.uuid))) {
+                    [weak self] error in
+                    guard error != nil else { return }
+                    // iOS no longer knows the call: end it here anyway.
+                    Task { @MainActor in await self?.finish() }
+                }
             #endif
-            controller.request(CXTransaction(action: CXEndCallAction(call: call.uuid))) {
-                [weak self] error in
-                guard error != nil else { return }
-                // iOS no longer knows the call: end it here anyway.
-                Task { @MainActor in await self?.finish() }
-            }
         }
 
         func setMuted(_ muted: Bool) {
             guard let call else { return }
             #if targetEnvironment(simulator)
                 call.setMuted(muted)
-                return
+            #else
+                controller.request(
+                    CXTransaction(action: CXSetMutedCallAction(call: call.uuid, muted: muted))
+                ) { _ in }
             #endif
-            controller.request(
-                CXTransaction(action: CXSetMutedCallAction(call: call.uuid, muted: muted))
-            ) { _ in }
         }
 
         private func couldNotStart(_ error: any Error) {
@@ -106,7 +138,7 @@
         // The provider calls these on the main queue, as `setDelegate(_:queue: nil)` asks.
 
         nonisolated func providerDidReset(_ provider: CXProvider) {
-            MainActor.assumeIsolated { Task { await self.finish() } }
+            _ = MainActor.assumeIsolated { Task { await self.finish() } }
         }
 
         nonisolated func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
@@ -124,7 +156,7 @@
         }
 
         nonisolated func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-            MainActor.assumeIsolated { Task { await self.finish() } }
+            _ = MainActor.assumeIsolated { Task { await self.finish() } }
             action.fulfill()
         }
 
