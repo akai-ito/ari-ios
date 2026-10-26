@@ -120,7 +120,8 @@ public struct Vocabulary: Sendable, Equatable, Codable {
         public let address: PageAddress?
 
         public init(
-            text: String, kind: TermKind, weight: Double, phrases: [String] = [], heard: [String] = [],
+            text: String, kind: TermKind, weight: Double, phrases: [String] = [],
+            heard: [String] = [],
             address: PageAddress? = nil
         ) {
             self.text = text

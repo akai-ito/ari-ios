@@ -19,10 +19,11 @@ struct SpokenTests {
         let corrector = Corrector(vocabulary: Self.vocabulary)
         let (text, corrections) = corrector.correct("What did Bara say about the cutie panel?")
         #expect(text == "What did Bora say about the QRT panel?")
-        #expect(corrections == [
-            Correction(offset: 9, length: 4, heard: "Bara"),
-            Correction(offset: 28, length: 9, heard: "cutie panel"),
-        ])
+        #expect(
+            corrections == [
+                Correction(offset: 9, length: 4, heard: "Bara"),
+                Correction(offset: 28, length: 9, heard: "cutie panel"),
+            ])
         let (alone, _) = corrector.correct("Cutie, I said.")
         #expect(alone == "QRT, I said.")
     }
@@ -32,7 +33,8 @@ struct SpokenTests {
         let dictionary: Set<String> = ["citadel", "the", "hub", "octave", "said"]
         let corrector = Corrector(vocabulary: Self.vocabulary, isWord: { dictionary.contains($0) })
         #expect(corrector.correct("Back from Lubljana today").text == "Back from Ljubljana today")
-        #expect(corrector.correct("The Optivar call went fine").text == "The Optiver call went fine")
+        #expect(
+            corrector.correct("The Optivar call went fine").text == "The Optiver call went fine")
         // Too far off, a real word, or a name too short to guess.
         #expect(corrector.correct("Octava said yes").corrections.isEmpty)
         #expect(corrector.correct("diving in the hub").corrections.isEmpty)
@@ -70,22 +72,32 @@ struct SpokenTests {
             SpokenText.spoken(from: reply)
                 == "She wants one more round on your design. I've put the list in the chat.")
         #expect(SpokenText.spoken(from: "- Eggs\n- [Milk](https://shop.example)") == "Eggs. Milk.")
-        #expect(SpokenText.spoken(from: "A rule --- inside a line stays") == "A rule --- inside a line stays.")
+        #expect(
+            SpokenText.spoken(from: "A rule --- inside a line stays")
+                == "A rule --- inside a line stays.")
     }
 
     @Test("a streaming reply goes to the voice a sentence at a time, and stops at the divider")
     func feed() {
         var feed = SentenceFeed()
         #expect(feed.next(from: "She wants one more", finished: false).isEmpty)
-        #expect(feed.next(from: "She wants one more round. The panel", finished: false) == [
-            "She wants one more round."
-        ])
-        #expect(feed.next(from: "She wants one more round. The panel sits in Nov", finished: false).isEmpty)
         #expect(
-            feed.next(from: "She wants one more round. The panel sits in 3.5 weeks.\n---\nDetail.", finished: false)
+            feed.next(from: "She wants one more round. The panel", finished: false) == [
+                "She wants one more round."
+            ])
+        #expect(
+            feed.next(from: "She wants one more round. The panel sits in Nov", finished: false)
+                .isEmpty)
+        #expect(
+            feed.next(
+                from: "She wants one more round. The panel sits in 3.5 weeks.\n---\nDetail.",
+                finished: false)
                 == ["The panel sits in 3.5 weeks."])
         #expect(
-            feed.next(from: "She wants one more round. The panel sits in 3.5 weeks.\n---\nDetail. More.", finished: true)
-                .isEmpty)
+            feed.next(
+                from: "She wants one more round. The panel sits in 3.5 weeks.\n---\nDetail. More.",
+                finished: true
+            )
+            .isEmpty)
     }
 }

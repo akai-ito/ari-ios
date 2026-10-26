@@ -309,7 +309,8 @@ struct ConversationView: View {
             DayLabel(date: date)
         case .yours(let entry):
             YourMessage(
-                text: entry.isSecret ? "••••••" : entry.text, tag: tag(for: entry, in: conversation),
+                text: entry.isSecret ? "••••••" : entry.text,
+                tag: tag(for: entry, in: conversation),
                 corrections: entry.spoken?.corrections ?? []
             ) {
                 if !entry.attachments.isEmpty {

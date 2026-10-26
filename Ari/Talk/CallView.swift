@@ -133,7 +133,8 @@
             case .connecting, .ended: .resting
             case .listening: .asking
             case .speaking: .writing
-            case .working: session.conversation.turn?.status.map { Pose(kind: $0.kind) } ?? .thinking
+            case .working:
+                session.conversation.turn?.status.map { Pose(kind: $0.kind) } ?? .thinking
             }
         }
     }

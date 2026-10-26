@@ -728,8 +728,12 @@ extension ConversationTranscriptTests {
         // The recogniser's vocabulary, not the conversation: nothing changes in it.
         "39-ari-learns-a-name": [],
         "40-delete-a-call-s-audio": [
-            you("4ebb2673-f9f9-4c6e-9719-11403eec63de", "Today was a good day. The long run felt easy."),
-            reply("m_0001_90849", 64, "That's a lovely one to end on. I've added it to today's journal."),
+            you(
+                "4ebb2673-f9f9-4c6e-9719-11403eec63de",
+                "Today was a good day. The long run felt easy."),
+            reply(
+                "m_0001_90849", 64,
+                "That's a lovely one to end on. I've added it to today's journal."),
         ],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),

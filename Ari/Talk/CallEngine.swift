@@ -160,8 +160,10 @@
                 await DictationTranscriber.supportedLocale(equivalentTo: .current)
                 ?? Locale(identifier: "en-GB")
             let plain = DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
-            if let install = try await AssetInventory.assetInstallationRequest(supporting: [plain]) {
-                log.info("Downloading speech recognition for \(locale.identifier, privacy: .public)")
+            if let install = try await AssetInventory.assetInstallationRequest(supporting: [plain])
+            {
+                log.info(
+                    "Downloading speech recognition for \(locale.identifier, privacy: .public)")
                 try await install.downloadAndInstall()
             }
             // The vocabulary's model builds on the speech model, so it comes second.
@@ -209,7 +211,8 @@
                 let language = Locale.current.identifier
                 return checker.rangeOfMisspelledWord(
                     in: word, range: range, startingAt: 0, wrap: false,
-                    language: UITextChecker.availableLanguages.contains(language) ? language : "en_GB"
+                    language: UITextChecker.availableLanguages.contains(language)
+                        ? language : "en_GB"
                 ).location == NSNotFound
             }
         }
@@ -259,7 +262,6 @@
                     } catch {}
                 })
         }
-
 
         // MARK: - Listening
 

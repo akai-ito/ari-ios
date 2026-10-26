@@ -45,7 +45,9 @@ public struct Corrector: Sendable {
             known.formUnion(words)
             for heard in term.heard {
                 let heardWords = Self.words(in: heard).map { Self.fold($0.text) }
-                if !heardWords.isEmpty, heardWords != words { learnt.append((heardWords, term.text)) }
+                if !heardWords.isEmpty, heardWords != words {
+                    learnt.append((heardWords, term.text))
+                }
             }
             if term.kind != .term, words.count == 1, let folded = words.first,
                 folded.count >= 6, !isWord(folded)

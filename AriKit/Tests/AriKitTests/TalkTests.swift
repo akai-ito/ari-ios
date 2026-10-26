@@ -20,10 +20,11 @@ struct TalkTests {
             replay.conversation["3dc7eae9-5c32-46d8-b0a5-5e61c1bfe0bb"]?.spoken)
         #expect(spoken.call == call)
         #expect(spoken.audio?.kind == .audio)
-        #expect(spoken.corrections == [
-            Correction(offset: 9, length: 4, heard: "Bara"),
-            Correction(offset: 28, length: 3, heard: "cutie"),
-        ])
+        #expect(
+            spoken.corrections == [
+                Correction(offset: 9, length: 4, heard: "Bara"),
+                Correction(offset: 28, length: 3, heard: "cutie"),
+            ])
 
         try replay.play()
         #expect(replay.conversation.callOn == nil)
@@ -122,7 +123,8 @@ struct TalkTests {
 
         try await bench.server.answer(
             201,
-            json: #"{"message":{"id":"\#(mine)","role":"user","text":"Hello from the river","at":"2026-10-26T07:30:07.700Z"}}"#
+            json:
+                #"{"message":{"id":"\#(mine)","role":"user","text":"Hello from the river","at":"2026-10-26T07:30:07.700Z"}}"#
         )
         let end = try await bench.nextRequest()
         #expect(end.method == .post && end.path == "/v0/calls/\(call)/end")

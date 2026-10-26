@@ -276,7 +276,9 @@ struct SettingsView: View {
             } header: {
                 Text("Talk")
             } footer: {
-                Text("On a call, Ari answers once you've been quiet this long. Longer suits thinking aloud.")
+                Text(
+                    "On a call, Ari answers once you've been quiet this long. Longer suits thinking aloud."
+                )
             }
             .listRowBackground(Color.ariSurface)
         }

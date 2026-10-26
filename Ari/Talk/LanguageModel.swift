@@ -14,7 +14,8 @@
         {
             guard !vocabulary.terms.isEmpty else { return nil }
             let version = fingerprint(vocabulary, locale: locale)
-            let folder = URL.cachesDirectory.appending(path: "Talk/\(version)", directoryHint: .isDirectory)
+            let folder = URL.cachesDirectory.appending(
+                path: "Talk/\(version)", directoryHint: .isDirectory)
             let configuration = SFSpeechLanguageModel.Configuration(
                 languageModel: folder.appending(path: "model"),
                 vocabulary: folder.appending(path: "vocabulary"))
@@ -22,7 +23,8 @@
             if FileManager.default.fileExists(atPath: built.path()) { return configuration }
 
             do {
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(
+                    at: folder, withIntermediateDirectories: true)
                 let data = SFCustomLanguageModelData(
                     locale: locale, identifier: "ari.vocabulary", version: version)
                 for term in vocabulary.terms {
@@ -77,8 +79,11 @@
                 (try? FileManager.default.contentsOfDirectory(
                     at: root, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
             let dated = folders.map { folder in
-                (folder, (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?
-                    .contentModificationDate ?? .distantPast)
+                (
+                    folder,
+                    (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?
+                        .contentModificationDate ?? .distantPast
+                )
             }
             for (folder, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(3)
             where folder.lastPathComponent != current {

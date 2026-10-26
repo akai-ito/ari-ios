@@ -89,7 +89,9 @@ struct ProtocolDecodingTests {
                 case .teachVocabulary:
                     let sent = try #require(request.body).decode(VocabularyCorrections.self)
                     let taught = try body.decode(VocabularyCorrections.self)
-                    #expect(taught.corrections.map(\.meant) == sent.corrections.map(\.meant), "\(place)")
+                    #expect(
+                        taught.corrections.map(\.meant) == sent.corrections.map(\.meant), "\(place)"
+                    )
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -114,7 +116,8 @@ struct ProtocolDecodingTests {
                     id: message.id, text: message.text, answers: message.answers,
                     attachments: message.attachments ?? [],
                     spoken: message.spoken.map {
-                        SendSpoken(call: $0.call, audio: $0.audio, corrections: $0.corrections ?? [])
+                        SendSpoken(
+                            call: $0.call, audio: $0.audio, corrections: $0.corrections ?? [])
                     })
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .stop:

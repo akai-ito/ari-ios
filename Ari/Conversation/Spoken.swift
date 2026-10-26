@@ -39,7 +39,8 @@ struct CallBlock: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
         .confirmationDialog(
-            "Delete this call's recordings?", isPresented: $confirmsDelete, titleVisibility: .visible
+            "Delete this call's recordings?", isPresented: $confirmsDelete,
+            titleVisibility: .visible
         ) {
             Button("Delete recordings", role: .destructive, action: deleteAudio)
         } message: {
@@ -79,7 +80,8 @@ struct SpokenFooter: View {
                 .accessibilityLabel(replay.playing == audio.id ? "Stop" : "Hear yourself")
             }
             Menu {
-                ForEach(Array((spoken.corrections ?? []).enumerated()), id: \.offset) { _, correction in
+                ForEach(Array((spoken.corrections ?? []).enumerated()), id: \.offset) {
+                    _, correction in
                     let meant = Self.meant(correction, in: text)
                     Section("Heard “\(correction.heard)” as \(meant)") {
                         Button("Don't correct this again", systemImage: "arrow.uturn.backward") {
@@ -136,7 +138,9 @@ final class AudioReplay: NSObject, AVAudioPlayerDelegate {
             stop()
             return
         }
-        guard let data = await bytes(id), let player = try? AVAudioPlayer(data: data) else { return }
+        guard let data = await bytes(id), let player = try? AVAudioPlayer(data: data) else {
+            return
+        }
         #if os(iOS)
             // A call keeps its own audio session; otherwise play as media.
             if AVAudioSession.sharedInstance().category != .playAndRecord {

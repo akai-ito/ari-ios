@@ -134,7 +134,8 @@
             action.fulfill()
         }
 
-        nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        nonisolated func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession)
+        {
             MainActor.assumeIsolated { call?.audioActivated() }
         }
 
