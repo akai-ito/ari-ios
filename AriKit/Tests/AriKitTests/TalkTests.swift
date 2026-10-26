@@ -50,6 +50,17 @@ struct TalkTests {
         #expect(replay.conversation[mine]?.text == "Today was a good day. The long run felt easy.")
     }
 
+    @Test("Scenario 41: another device's first snapshot carries the call before what was said")
+    func anotherDevice() throws {
+        var replay = Replay(try Fixtures.transcript("41-another-device-sees-the-call"))
+        try replay.play()
+        let call: CallID = "e1a0a4da-4694-4924-95f4-f91185ff711e"
+        #expect(replay.conversation[call: call]?.durationMs == 307_502)
+        let items = Timeline(replay.conversation, reveal: Reveal()).items.map(\.id)
+        #expect(items.first == "call \(call)")
+        #expect(items.dropFirst().first == "914f3838-aaa0-49a3-89cd-57b1b6391d24")
+    }
+
     @Test("Paging back brings the calls of the older messages, and forgetting keeps the one on")
     func history() throws {
         var replay = Replay(try Fixtures.transcript("38-a-walk-with-ari"))

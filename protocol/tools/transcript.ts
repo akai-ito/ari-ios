@@ -107,6 +107,7 @@ export type Transcript = {
   readonly disconnect: (marker: string, fields?: Fields) => void;
   readonly stall: (durationMs: number) => void;
   readonly exchange: (user: string, agent: string, files?: readonly string[]) => Exchange;
+  readonly callExchange: (user: string, agent: string, corrections: readonly Correction[], recording: string) => string;
   readonly send: (text: string, options?: SendOptions) => string;
   readonly startTurn: (inputs: readonly string[], options?: { readonly retryOf?: string }) => string;
   readonly status: (kind: StatusKind, label: string, detail?: string) => void;
@@ -276,6 +277,9 @@ const project = (log: readonly Event[]): Projection =>
     asks: new Map(),
     calls: new Map(),
   });
+
+const positionBefore = (order: readonly string[], byId: ReadonlyMap<string, Message>, index: number): number =>
+  index > 0 ? (byId.get(order[index - 1] ?? "")?.position ?? 0) : 0;
 
 const callsFrom = (calls: ReadonlyMap<string, Call>, from: number, until = Infinity): readonly Call[] =>
   calls
@@ -463,7 +467,7 @@ export const createTranscript = (header: Header): Transcript => {
         has_more: order.length > messagesPerSnapshot,
         steps: first === undefined ? [] : between(steps, first),
         asks: first === undefined ? [] : between(asks, first),
-        calls: first === undefined ? [] : callsFrom(calls, first),
+        calls: callsFrom(calls, positionBefore(order, byId, order.length - messagesPerSnapshot) + 1),
         turn: turn.get() ?? null,
         next: next.get(),
       },
@@ -760,6 +764,39 @@ export const createTranscript = (header: Header): Transcript => {
     response(200, { call: deleted });
   };
 
+  const callExchange = (user: string, agent: string, corrections: readonly Correction[], recording: string): string => {
+    const call: Call = { id: newUserId(), started_at: timestamp(), position: nextPosition() };
+    emit("call.started", { call });
+    wait(6000);
+    const userMessageId = newUserId();
+    emit("message.accepted", {
+      message: {
+        id: userMessageId,
+        role: "user",
+        text: user,
+        at: timestamp(),
+        position: nextPosition(),
+        spoken: {
+          call: call.id,
+          audio: describeAttachment(recording, newUserId()),
+          ...(corrections.length > 0 && { corrections }),
+        },
+      },
+    });
+    wait(1);
+    startTurn([userMessageId]);
+    wait(900);
+    reply();
+    write(agent, { pieces: 1 });
+    wait(600);
+    endMessage("completed");
+    wait(1);
+    endTurn("completed");
+    wait(5 * 60 * 1000);
+    endCallNow(call.id);
+    return call.id;
+  };
+
   const send = (text: string, options: SendOptions = {}): string => {
     const id = options.id ?? newUserId();
     const attached = options.attachments ?? [];
@@ -1013,7 +1050,7 @@ export const createTranscript = (header: Header): Transcript => {
       messages,
       steps: from === undefined ? [] : between(steps, from, until),
       asks: from === undefined ? [] : between(asks, from, until),
-      calls: from === undefined ? [] : callsFrom(calls, from, until),
+      calls: callsFrom(calls, positionBefore(order, byId, first) + 1, until),
       has_more: first > 0,
     });
   };
@@ -1071,6 +1108,7 @@ export const createTranscript = (header: Header): Transcript => {
     latestEventId,
     stepAtOffset,
     world,
+    callExchange,
     change: () => newId("c"),
     startCall,
     endCall,
