@@ -188,14 +188,6 @@
 
         private func prepare() async {
             await warming?.value
-            if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
-                await withCheckedContinuation { done in
-                    SFSpeechRecognizer.requestAuthorization { _ in done.resume() }
-                }
-            }
-            Self.log.info(
-                "Speech recognition: \(String(describing: SFSpeechRecognizer.authorizationStatus().rawValue), privacy: .public)"
-            )
             do {
                 let (locale, vocabulary, model) = try await Self.warmUp(session)
                 corrector = Corrector(

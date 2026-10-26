@@ -20,13 +20,15 @@
             guard let converted = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity)
             else { return nil }
             // The converter asks for input until told there's no more for now: this buffer, once.
+            // It asks within this call, on this thread, so the buffer is never shared.
             let given = Given()
+            nonisolated(unsafe) let input = buffer
             var error: NSError?
             converter.convert(to: converted, error: &error) { _, status in
                 let first = !given.value
                 given.value = true
                 status.pointee = first ? .haveData : .noDataNow
-                return first ? buffer : nil
+                return first ? input : nil
             }
             return error == nil && converted.frameLength > 0 ? converted : nil
         }
