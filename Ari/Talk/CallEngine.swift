@@ -42,9 +42,19 @@
         private(set) var diagnostics: String?
 
         @ObservationIgnored private let session: Session
-        @ObservationIgnored private let audio = AVAudioEngine()
-        @ObservationIgnored private let voicePlayer = AVAudioPlayerNode()
-        @ObservationIgnored private let tonePlayer = AVAudioPlayerNode()
+        /// Made once CallKit has activated the call's audio, and made again when iOS changes it.
+        @ObservationIgnored private var audio: AVAudioEngine?
+        @ObservationIgnored private var tonePlayer: AVAudioPlayerNode?
+        /// Where the microphone's audio goes to the recogniser, whichever engine it comes from.
+        @ObservationIgnored private var input: AsyncStream<AnalyzerInput>.Continuation?
+        @ObservationIgnored private var engineObserver: (any NSObjectProtocol)?
+        @ObservationIgnored private var sessionObservers: [any NSObjectProtocol] = []
+        @ObservationIgnored private var engineStarts = 0
+        /// Echo cancellation, so you can talk over Ari; off only if the microphone gives nothing
+        /// with it.
+        @ObservationIgnored private var voiceProcessing = true
+        @ObservationIgnored private var lastBuffers = 0
+        @ObservationIgnored private var silentChecks = 0
         @ObservationIgnored private var voice: Voice?
         @ObservationIgnored private var tone: AVAudioPCMBuffer?
         @ObservationIgnored private var transcriber: DictationTranscriber?
@@ -73,7 +83,8 @@
         @ObservationIgnored private var results = 0
         @ObservationIgnored private var microphone = ""
 
-        private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
+        nonisolated private static let log = Logger(
+            subsystem: "io.github.akai-ito.ari", category: "talk")
 
         /// How long a pause ends your turn, from Settings.
         static var pause: Double {
@@ -104,17 +115,31 @@
         /// through AirPods or the speaker.
         func configureAudioSession() {
             let audioSession = AVAudioSession.sharedInstance()
-            try? audioSession.setCategory(
-                .playAndRecord, mode: .voiceChat,
-                options: [.allowBluetoothHFP, .defaultToSpeaker, .duckOthers])
+            do {
+                try audioSession.setCategory(
+                    .playAndRecord, mode: .voiceChat,
+                    options: [.allowBluetoothHFP, .defaultToSpeaker, .duckOthers])
+            } catch {
+                Self.log.error("Audio session refused: \(error, privacy: .public)")
+            }
         }
 
-        /// CallKit activated the audio: start listening.
+        /// CallKit activated the audio: start listening, or listen again after an interruption.
         func audioActivated() {
+            Self.log.info("Audio activated: \(Self.describeSession(), privacy: .public)")
             Task {
                 await preparing?.value
+                // The engine starts from the main queue, outside Swift's concurrency: AVFAudio
+                // waits on queues of its own while it starts.
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.listen() } }
+            }
+        }
+
+        private func listen() {
+            switch phase {
+            case .connecting:
                 // Without recognition there's nothing to do but say why.
-                guard phase == .connecting, transcriber != nil else { return }
+                guard transcriber != nil else { return }
                 do {
                     try startAudio()
                     connectedAt = .now
@@ -124,11 +149,16 @@
                     Self.log.error("No microphone: \(error, privacy: .public)")
                     problem = "Ari couldn't use the microphone."
                 }
+            case .ended:
+                return
+            default:
+                restartEngine(because: "the audio came back")
             }
         }
 
         func audioDeactivated() {
-            audio.stop()
+            Self.log.info("Audio deactivated")
+            audio?.stop()
         }
 
         func setMuted(_ muted: Bool) {
@@ -144,10 +174,9 @@
             }
             phase = .ended
             for loop in loops { loop.cancel() }
-            voice?.stop()
-            audio.inputNode.removeTap(onBus: 0)
-            audio.stop()
-            tap?.finish()
+            stopEngine()
+            for observer in sessionObservers { NotificationCenter.default.removeObserver(observer) }
+            input?.finish()
             await analyzer?.cancelAndFinishNow()
             if let recording { try? FileManager.default.removeItem(at: recording) }
             session.endCall(id)
@@ -231,37 +260,11 @@
         }
 
         private func startAudio() throws {
-            guard let transcriber else { throw CallError.notReady }
-            let input = audio.inputNode
-            try input.setVoiceProcessingEnabled(true)
-            let micFormat = input.outputFormat(forBus: 0)
-
-            let voice = Voice(player: voicePlayer)
-            voice.finished = { [weak self] in self?.lastSound = .now }
-            self.voice = voice
-            audio.attach(voicePlayer)
-            audio.connect(voicePlayer, to: audio.mainMixerNode, format: voice.format)
-            let toneFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
-            audio.attach(tonePlayer)
-            audio.connect(tonePlayer, to: audio.mainMixerNode, format: toneFormat)
-            tone = WorkingTone.buffer(format: toneFormat)
-
-            guard let analyzer else { throw CallError.notReady }
+            guard let transcriber, let analyzer else { throw CallError.notReady }
             let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-            let target = analyzerFormat ?? micFormat
-            let tap = MicrophoneTap(input: continuation, microphone: micFormat, recogniser: target)
-            tap.muted = muted
-            self.tap = tap
-            microphone = "\(Int(micFormat.sampleRate / 1000)) kHz, \(micFormat.channelCount) ch"
-            Self.log.info(
-                "Microphone \(micFormat, privacy: .public) → recogniser \(target, privacy: .public)"
-            )
-            _ = tap.record(to: newRecording(format: tap.mono))
-            input.installTap(onBus: 0, bufferSize: 4096, format: micFormat, block: tap.block())
-            audio.prepare()
-            try audio.start()
-            voicePlayer.play()
-            tonePlayer.play()
+            input = continuation
+            try startEngine()
+            observeSession()
 
             loops.append(
                 Task {
@@ -282,6 +285,115 @@
                         self.problem = "Ari stopped hearing you."
                     }
                 })
+        }
+
+        /// A fresh engine: the microphone, with echo cancellation unless it gave nothing, into the
+        /// recogniser and your turn's recording, and Ari's voice and tone out.
+        private func startEngine() throws {
+            guard let input else { throw CallError.notReady }
+            stopEngine()
+            let audio = AVAudioEngine()
+            self.audio = audio
+            let microphone = audio.inputNode
+            if voiceProcessing { try microphone.setVoiceProcessingEnabled(true) }
+            let micFormat = microphone.outputFormat(forBus: 0)
+            guard micFormat.sampleRate > 0, micFormat.channelCount > 0 else {
+                throw CallError.noMicrophone
+            }
+
+            let voicePlayer = AVAudioPlayerNode()
+            let tonePlayer = AVAudioPlayerNode()
+            let voice = Voice(player: voicePlayer)
+            voice.finished = { [weak self] in self?.lastSound = .now }
+            self.voice = voice
+            self.tonePlayer = tonePlayer
+            audio.attach(voicePlayer)
+            audio.connect(voicePlayer, to: audio.mainMixerNode, format: voice.format)
+            let toneFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+            audio.attach(tonePlayer)
+            audio.connect(tonePlayer, to: audio.mainMixerNode, format: toneFormat)
+            tone = WorkingTone.buffer(format: toneFormat)
+
+            let target = analyzerFormat ?? micFormat
+            let tap = MicrophoneTap(input: input, microphone: micFormat, recogniser: target)
+            tap.muted = muted
+            self.tap = tap
+            lastBuffers = 0
+            self.microphone =
+                "\(Int(micFormat.sampleRate / 1000)) kHz, \(micFormat.channelCount) ch"
+                + (voiceProcessing ? "" : ", no echo cancellation")
+            _ = tap.record(to: newRecording(format: tap.mono))
+            microphone.installTap(onBus: 0, bufferSize: 4096, format: micFormat, block: tap.block())
+            audio.prepare()
+            try audio.start()
+            voicePlayer.play()
+            tonePlayer.play()
+            engineStarts += 1
+            Self.log.info(
+                "Engine \(self.engineStarts) running: \(audio.isRunning); microphone \(micFormat, privacy: .public) → recogniser \(target, privacy: .public); \(Self.describeSession(), privacy: .public)"
+            )
+            engineObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange, object: audio, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.restartEngine(because: "iOS changed the audio") }
+            }
+        }
+
+        private func stopEngine() {
+            if let engineObserver { NotificationCenter.default.removeObserver(engineObserver) }
+            engineObserver = nil
+            voice?.stop()
+            audio?.inputNode.removeTap(onBus: 0)
+            audio?.stop()
+            audio = nil
+            if let old = tap?.record(to: nil) { old.close() }
+            if let recording { try? FileManager.default.removeItem(at: recording) }
+            recording = nil
+        }
+
+        private func restartEngine(because reason: String) {
+            guard phase != .ended, phase != .connecting else { return }
+            guard engineStarts < 8 else {
+                problem = "Ari can't get any sound from the microphone."
+                return
+            }
+            Self.log.info("Restarting the engine: \(reason, privacy: .public)")
+            do {
+                try startEngine()
+            } catch {
+                Self.log.error("Engine didn't restart: \(error, privacy: .public)")
+                problem = "Ari couldn't use the microphone."
+            }
+        }
+
+        /// Interruptions and route changes, in the log.
+        private func observeSession() {
+            let center = NotificationCenter.default
+            sessionObservers = [
+                center.addObserver(
+                    forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+                ) { note in
+                    let kind = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 99
+                    Self.log.info("Audio interrupted: \(kind)")
+                },
+                center.addObserver(
+                    forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+                ) { note in
+                    let reason = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 99
+                    Self.log.info(
+                        "Audio route changed (\(reason)): \(Self.describeSession(), privacy: .public)"
+                    )
+                },
+            ]
+        }
+
+        nonisolated private static func describeSession() -> String {
+            let session = AVAudioSession.sharedInstance()
+            let inputs = session.currentRoute.inputs.map(\.portName).joined(separator: ", ")
+            let outputs = session.currentRoute.outputs.map(\.portName).joined(separator: ", ")
+            return "\(session.category.rawValue)/\(session.mode.rawValue), input "
+                + (session.isInputAvailable ? "available" : "unavailable")
+                + " [\(inputs)] → [\(outputs)]"
         }
 
         // MARK: - Listening
@@ -328,10 +440,28 @@
             lastCheck = .now
             let counts = tap.counts()
             let level = counts.peak > 0 ? Int(20 * log10(counts.peak)) : -99
+            let running = audio?.isRunning == true
             let summary =
-                "Mic \(microphone) · level \(level) dB · fed \(counts.fed) · failed \(counts.failed)"
+                "Mic \(microphone) · engine \(running ? "on" : "off") · in \(counts.buffers)"
+                + " · level \(level) dB · fed \(counts.fed) · failed \(counts.failed)"
                 + " · heard \(results)" + (isSteered ? " · steered" : "")
             Self.log.info("\(summary, privacy: .public)")
+            // No sound at all from the microphone: a fresh engine, then one without echo
+            // cancellation, which some routes don't give sound with.
+            if counts.buffers == lastBuffers {
+                silentChecks += 1
+                if silentChecks == 1 {
+                    restartEngine(because: "no sound from the microphone")
+                } else if silentChecks == 2, voiceProcessing {
+                    voiceProcessing = false
+                    restartEngine(because: "still no sound; trying without echo cancellation")
+                } else if silentChecks >= 4 {
+                    problem = "Ari can't get any sound from the microphone."
+                }
+            } else {
+                silentChecks = 0
+                lastBuffers = counts.buffers
+            }
             #if DEBUG
                 diagnostics = summary
             #else
@@ -446,11 +576,11 @@
                 return
             }
             if quiet > 5, Date.now.timeIntervalSince(lastTone) > 6, let tone {
-                tonePlayer.scheduleBuffer(tone)
+                tonePlayer?.scheduleBuffer(tone)
                 lastTone = .now
             }
         }
 
-        enum CallError: Error { case notReady }
+        enum CallError: Error { case notReady, noMicrophone }
     }
 #endif
