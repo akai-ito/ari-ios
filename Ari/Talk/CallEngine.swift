@@ -50,11 +50,14 @@
         @ObservationIgnored private var engineObserver: (any NSObjectProtocol)?
         @ObservationIgnored private var sessionObservers: [any NSObjectProtocol] = []
         @ObservationIgnored private var engineStarts = 0
-        /// Echo cancellation, so you can talk over Ari; off only if the microphone gives nothing
-        /// with it.
-        @ObservationIgnored private var voiceProcessing = true
+        /// Whether Ari can hear you over its own voice: iOS cancels the speaker's echo, or the sound
+        /// is in your ears. Otherwise Ari doesn't listen while it speaks, or it would hear itself.
+        @ObservationIgnored private var hearsOverItself = false
+        /// When Ari last stopped speaking, so the tail of its voice isn't heard as yours.
+        @ObservationIgnored private var spokeUntil = Date.distantPast
         @ObservationIgnored private var lastBuffers = 0
         @ObservationIgnored private var silentChecks = 0
+        @ObservationIgnored private var pendingRestart: Task<Void, Never>?
         @ObservationIgnored private var voice: Voice?
         @ObservationIgnored private var tone: AVAudioPCMBuffer?
         @ObservationIgnored private var transcriber: DictationTranscriber?
@@ -111,14 +114,22 @@
             preparing = Task { await prepare() }
         }
 
-        /// What CallKit asks before it activates the audio: a voice chat, with echo cancellation,
-        /// through AirPods or the speaker.
+        /// What CallKit asks before it activates the audio: playing and recording, through AirPods
+        /// or the speaker, with iOS cancelling the speaker's echo where the iPhone can.
+        ///
+        /// Not the voice chat mode with the engine's own voice processing: under CallKit that made
+        /// a second voice processor, and the engine never ran (`kAudioUnitErr_MultipleVoiceProcessors`).
         func configureAudioSession() {
             let audioSession = AVAudioSession.sharedInstance()
             do {
                 try audioSession.setCategory(
-                    .playAndRecord, mode: .voiceChat,
+                    .playAndRecord, mode: .default,
                     options: [.allowBluetoothHFP, .defaultToSpeaker, .duckOthers])
+                if audioSession.isEchoCancelledInputAvailable {
+                    try audioSession.setPrefersEchoCancelledInput(true)
+                }
+                Self.log.info(
+                    "Echo cancellation available: \(audioSession.isEchoCancelledInputAvailable)")
             } catch {
                 Self.log.error("Audio session refused: \(error, privacy: .public)")
             }
@@ -287,15 +298,14 @@
                 })
         }
 
-        /// A fresh engine: the microphone, with echo cancellation unless it gave nothing, into the
-        /// recogniser and your turn's recording, and Ari's voice and tone out.
+        /// A fresh engine: the microphone into the recogniser and your turn's recording, and Ari's
+        /// voice and tone out.
         private func startEngine() throws {
             guard let input else { throw CallError.notReady }
             stopEngine()
             let audio = AVAudioEngine()
             self.audio = audio
             let microphone = audio.inputNode
-            if voiceProcessing { try microphone.setVoiceProcessingEnabled(true) }
             let micFormat = microphone.outputFormat(forBus: 0)
             guard micFormat.sampleRate > 0, micFormat.channelCount > 0 else {
                 throw CallError.noMicrophone
@@ -304,7 +314,7 @@
             let voicePlayer = AVAudioPlayerNode()
             let tonePlayer = AVAudioPlayerNode()
             let voice = Voice(player: voicePlayer)
-            voice.finished = { [weak self] in self?.lastSound = .now }
+            voice.finished = { [weak self] in self?.finishedSpeaking() }
             self.voice = voice
             self.tonePlayer = tonePlayer
             audio.attach(voicePlayer)
@@ -319,9 +329,10 @@
             tap.muted = muted
             self.tap = tap
             lastBuffers = 0
+            hearsOverItself = Self.hearsOverItself()
             self.microphone =
                 "\(Int(micFormat.sampleRate / 1000)) kHz, \(micFormat.channelCount) ch"
-                + (voiceProcessing ? "" : ", no echo cancellation")
+                + (hearsOverItself ? "" : ", listens only while Ari is quiet")
             _ = tap.record(to: newRecording(format: tap.mono))
             microphone.installTap(onBus: 0, bufferSize: 4096, format: micFormat, block: tap.block())
             audio.prepare()
@@ -335,14 +346,53 @@
             engineObserver = NotificationCenter.default.addObserver(
                 forName: .AVAudioEngineConfigurationChange, object: audio, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.restartEngine(because: "iOS changed the audio") }
+                MainActor.assumeIsolated { self?.restartSoon(because: "iOS changed the audio") }
+            }
+            if !audio.isRunning { restartSoon(because: "the engine stopped as it started") }
+        }
+
+        /// Whether the route keeps Ari's voice out of the microphone: iOS cancels the built-in
+        /// speaker's echo, or the sound is in AirPods or headphones.
+        nonisolated private static func hearsOverItself() -> Bool {
+            let session = AVAudioSession.sharedInstance()
+            let speaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+            return !speaker || session.isEchoCancelledInputEnabled
+        }
+
+        /// Ari's voice went quiet. Without echo cancellation, what the recogniser still holds is
+        /// Ari's own words: it's flushed and dropped before Ari listens again.
+        private func finishedSpeaking() {
+            lastSound = .now
+            guard !hearsOverItself else { return }
+            spokeUntil = .distantFuture
+            Task {
+                try? await analyzer?.finalize(through: nil)
+                finals = ""
+                volatile = ""
+                hearing = ""
+                spokeUntil = .now + 0.3
+            }
+        }
+
+        /// Restarts the engine once the audio has settled, however many changes arrive meanwhile.
+        private func restartSoon(because reason: String) {
+            pendingRestart?.cancel()
+            pendingRestart = Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self.restartEngine(because: reason) }
+                }
             }
         }
 
         private func stopEngine() {
             if let engineObserver { NotificationCenter.default.removeObserver(engineObserver) }
             engineObserver = nil
+            // The voice's player belongs to this engine: it goes with it.
             voice?.stop()
+            voice = nil
+            tonePlayer = nil
             audio?.inputNode.removeTap(onBus: 0)
             audio?.stop()
             audio = nil
@@ -400,6 +450,13 @@
 
         private func heard(_ result: DictationTranscriber.Result) {
             results += 1
+            // Without echo cancellation the microphone hears Ari's voice from the speaker: what it
+            // hears while Ari speaks, and just after, is Ari's.
+            let speaking = voice?.isSpeaking == true || Date.now < spokeUntil
+            guard hearsOverItself || !speaking else {
+                if result.isFinal { volatile = "" }
+                return
+            }
             let text = String(result.text.characters)
             if result.isFinal {
                 finals += text
@@ -446,16 +503,12 @@
                 + " · level \(level) dB · fed \(counts.fed) · failed \(counts.failed)"
                 + " · heard \(results)" + (isSteered ? " · steered" : "")
             Self.log.info("\(summary, privacy: .public)")
-            // No sound at all from the microphone: a fresh engine, then one without echo
-            // cancellation, which some routes don't give sound with.
+            // No sound at all from the microphone: a fresh engine, twice, then say so.
             if counts.buffers == lastBuffers {
                 silentChecks += 1
-                if silentChecks == 1 {
+                if silentChecks <= 2 {
                     restartEngine(because: "no sound from the microphone")
-                } else if silentChecks == 2, voiceProcessing {
-                    voiceProcessing = false
-                    restartEngine(because: "still no sound; trying without echo cancellation")
-                } else if silentChecks >= 4 {
+                } else {
                     problem = "Ari can't get any sound from the microphone."
                 }
             } else {

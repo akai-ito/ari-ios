@@ -66,6 +66,8 @@
             current = nil
             speaker.cancel()
             synthesizer.stopSpeaking(at: .immediate)
+            // A player whose engine has gone can't be touched at all.
+            guard player.engine != nil else { return }
             player.stop()
             player.play()
         }
