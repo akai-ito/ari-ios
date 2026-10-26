@@ -83,6 +83,12 @@
                 if let problem = call.problem ?? talk.problem {
                     Text(problem).font(.footnote).foregroundStyle(.ariSecondary)
                 }
+                if let diagnostics = call.diagnostics {
+                    Text(diagnostics)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.ariTertiary)
+                        .textSelection(.enabled)
+                }
             }
             .multilineTextAlignment(.center)
             .lineLimit(6)

@@ -38,20 +38,45 @@
     }
 
     /// What the microphone's tap does on the audio thread: feeds the recogniser and writes your
-    /// turn's recording. The call swaps the recording between turns from the main actor.
+    /// turn's recording, in mono. The call swaps the recording between turns from the main actor.
     nonisolated final class MicrophoneTap: @unchecked Sendable {
         private struct State {
             var recording: AVAudioFile?
             var muted = false
         }
 
+        /// What the tap has seen, for saying why Ari hears nothing.
+        struct Counts: Sendable {
+            var buffers = 0
+            var fed = 0
+            var failed = 0
+            /// The loudest sample in the last second or so, 0 to 1.
+            var peak: Float = 0
+        }
+
         private let state = Mutex(State())
+        private let counted = Mutex(Counts())
         private let input: AsyncStream<AnalyzerInput>.Continuation
         private let resampler: Resampler
+        /// The microphone's sample rate in one channel: with echo cancellation on, some iPhones
+        /// report several channels, and converting those straight to the recogniser's one fails.
+        let mono: AVAudioFormat
 
-        init(input: AsyncStream<AnalyzerInput>.Continuation, resampler: Resampler) {
+        init(
+            input: AsyncStream<AnalyzerInput>.Continuation, microphone: AVAudioFormat,
+            recogniser: AVAudioFormat
+        ) {
             self.input = input
-            self.resampler = resampler
+            mono = AVAudioFormat(standardFormatWithSampleRate: microphone.sampleRate, channels: 1)!
+            resampler = Resampler(from: mono, to: recogniser)
+        }
+
+        /// What the tap has seen so far; the peak starts again.
+        func counts() -> Counts {
+            counted.withLock { counts in
+                defer { counts.peak = 0 }
+                return counts
+            }
         }
 
         var muted: Bool {
@@ -68,25 +93,51 @@
         }
 
         func take(_ buffer: AVAudioPCMBuffer) {
-            let recording = state.withLock { $0.muted ? nil : Optional($0.recording) }
-            guard let recording else {
-                // Muted: the recogniser hears silence, so it isn't left waiting mid-word.
-                if let silent = AVAudioPCMBuffer(
-                    pcmFormat: buffer.format, frameCapacity: buffer.frameLength)
-                {
-                    silent.frameLength = buffer.frameLength
-                    feed(silent)
-                }
+            guard let mono = firstChannel(of: buffer) else {
+                counted.withLock { $0.failed += 1 }
                 return
             }
-            try? recording?.write(from: buffer)
-            feed(buffer)
+            let (muted, recording) = state.withLock { ($0.muted, $0.recording) }
+            if muted {
+                // The recogniser hears silence, so it isn't left waiting mid-word.
+                if let channel = mono.floatChannelData?[0] {
+                    channel.update(repeating: 0, count: Int(mono.frameLength))
+                }
+            } else {
+                try? recording?.write(from: mono)
+            }
+            feed(mono)
+        }
+
+        /// The buffer's first channel, as a buffer of its own in `mono`.
+        private func firstChannel(of buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+            guard let source = buffer.floatChannelData?[0],
+                let mono = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength),
+                let target = mono.floatChannelData?[0]
+            else { return nil }
+            let frames = Int(buffer.frameLength)
+            let stride = buffer.stride
+            var peak: Float = 0
+            for frame in 0..<frames {
+                let sample = source[frame * stride]
+                target[frame] = sample
+                peak = max(peak, abs(sample))
+            }
+            mono.frameLength = buffer.frameLength
+            counted.withLock { counts in
+                counts.buffers += 1
+                counts.peak = max(counts.peak, peak)
+            }
+            return mono
         }
 
         private func feed(_ buffer: AVAudioPCMBuffer) {
-            if let converted = resampler.convert(buffer) {
-                input.yield(AnalyzerInput(buffer: converted))
+            guard let converted = resampler.convert(buffer) else {
+                counted.withLock { $0.failed += 1 }
+                return
             }
+            input.yield(AnalyzerInput(buffer: converted))
+            counted.withLock { $0.fed += 1 }
         }
 
         func finish() {
