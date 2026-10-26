@@ -13,6 +13,8 @@ import Observation
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
 ///   A secret answer goes from memory only, never through the outbox on disk.
+/// - **Calls** start and end on their own lane, in order. A spoken message waits for its call's
+///   start, and the end waits for the call's spoken messages, so none arrives after it.
 @MainActor
 @Observable
 public final class Session {
@@ -58,6 +60,7 @@ public final class Session {
     @ObservationIgnored private var stopRequest: (turn: TurnID?, cut: Cut?)?
     @ObservationIgnored private var retries: [TurnID] = []
     @ObservationIgnored private var cancels: [AskID] = []
+    @ObservationIgnored private var callRequests: [CallRequest] = []
     /// The device to register for notifications (or forget, with no registration), until the
     /// server has it.
     @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
@@ -121,7 +124,7 @@ public final class Session {
     public func start() {
         if lanes.isEmpty {
             let waiting = (try? outbox.load()) ?? []
-            let named = Set(waiting.flatMap { $0.attachments ?? [] })
+            let named = Set(waiting.flatMap(\.uploads))
             for attachment in outbox.attachments() where uploads[attachment.id] == nil {
                 // A draft doesn't survive a restart, so what no waiting message names goes.
                 guard named.contains(attachment.id) else {
@@ -136,7 +139,9 @@ public final class Session {
                 let waiting = (message.attachments ?? []).compactMap { id in
                     uploadQueue.first { $0.id == id }?.attachment
                 }
-                conversation.send(message.id, text: message.text, attachments: waiting)
+                conversation.send(
+                    message.id, text: message.text, attachments: waiting,
+                    spoken: message.spoken.map { shown($0) })
                 queue.append(message)
             }
             let network = network
@@ -154,6 +159,7 @@ public final class Session {
                 Task { await self.runDevice() },
                 Task { await self.runPresence() },
                 Task { await self.runUploads() },
+                Task { await self.runCalls() },
             ]
         }
         guard streamTask == nil else { return }
@@ -190,20 +196,22 @@ public final class Session {
     ///     device, and the conversation keeps nothing of it.
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
+    ///   - spoken: For what you said on a call: the call, the recording attached with
+    ///     ``attach(_:)``, and the words the phone corrected.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = []
+        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = [],
+        spoken: SendSpoken? = nil
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, answers: answers, attachments: attachments)
-        let shown = attachments.compactMap { attachment -> Attachment? in
-            if case .uploaded(let uploaded) = uploads[attachment] { return uploaded }
-            return uploadQueue.first { $0.id == attachment }?.attachment
-        }
-        conversation.send(id, text: text, answers: answers, secret: secret, attachments: shown)
+        let message = SendMessage(
+            id: id, text: text, answers: answers, attachments: attachments, spoken: spoken)
+        conversation.send(
+            id, text: text, answers: answers, secret: secret,
+            attachments: attachments.compactMap(attachment), spoken: spoken.map { shown($0) })
         if secret {
             secrets.insert(id)
         } else {
@@ -212,6 +220,18 @@ public final class Session {
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
+    }
+
+    /// An attachment as the conversation shows it, once uploaded or while it waits to be.
+    private func attachment(_ id: AttachmentID) -> Attachment? {
+        if case .uploaded(let uploaded) = uploads[id] { return uploaded }
+        return uploadQueue.first { $0.id == id }?.attachment
+    }
+
+    private func shown(_ spoken: SendSpoken) -> Spoken {
+        Spoken(
+            call: spoken.call, audio: spoken.audio.flatMap(attachment),
+            corrections: spoken.corrections)
     }
 
     /// You attached a photo or file: it starts uploading at once, while you write, saved on the
@@ -291,6 +311,43 @@ public final class Session {
     public func setLooking(_ looking: Bool, device: String) {
         presenceRequest = (device, looking)
         wake(.presence)
+    }
+
+    /// You started a call: it starts on the server as soon as it can, and spoken messages wait
+    /// for it. Returns its id, for its spoken messages and its end.
+    @discardableResult
+    public func startCall(id: CallID = CallID(UUID().uuidString.lowercased())) -> CallID {
+        callRequests.append(.start(id))
+        wake(.call)
+        return id
+    }
+
+    /// You ended the call: it ends once its spoken messages have gone.
+    public func endCall(_ id: CallID) {
+        guard !callRequests.contains(.end(id)) else { return }
+        callRequests.append(.end(id))
+        wake(.call)
+    }
+
+    /// You deleted a call's audio from its block: the recordings go, the words stay.
+    public func deleteAudio(of id: CallID) {
+        guard !callRequests.contains(.deleteAudio(id)) else { return }
+        callRequests.append(.deleteAudio(id))
+        wake(.call)
+    }
+
+    /// The words to steer recognition, from memory and conversation; `nil` if the server can't
+    /// say right now.
+    public func vocabulary() async -> Vocabulary? {
+        try? await client.vocabulary()
+    }
+
+    /// You undid a correction or fixed a word: the server learns what was heard and what you
+    /// meant. Returns whether it did.
+    @discardableResult
+    public func teach(_ pairs: [VocabularyCorrections.Pair]) async -> Bool {
+        guard !pairs.isEmpty else { return true }
+        return (try? await client.teach(VocabularyCorrections(corrections: pairs))) != nil
     }
 
     /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
@@ -458,8 +515,13 @@ public final class Session {
                 await nap(until: .live)
                 continue
             }
+            // A spoken message goes once its call has started.
+            if let call = message.spoken?.call, callRequests.contains(.start(call)) {
+                await nap(until: .call)
+                continue
+            }
             // A message goes once its attachments are on the server.
-            let attached = message.attachments ?? []
+            let attached = message.uploads
             if let refused = attached.lazy.compactMap({ self.refusal(of: $0) }).first {
                 refusedMessages[message.id] = refused
                 finish(message)
@@ -496,7 +558,7 @@ public final class Session {
     /// Uploads a message's attachments again, under the same ids, from the bytes kept in the
     /// outbox. Those the server still has answer at once and change nothing.
     private func uploadAgain(_ message: SendMessage) -> Bool {
-        let named = message.attachments ?? []
+        let named = message.uploads
         let kept = outbox.attachments().filter { named.contains($0.id) }
         guard kept.count == named.count else { return false }
         for attachment in kept where !uploadQueue.contains(where: { $0.id == attachment.id }) {
@@ -511,7 +573,8 @@ public final class Session {
     private func finish(_ message: SendMessage) {
         queue.removeAll { $0.id == message.id }
         if secrets.remove(message.id) == nil { try? outbox.remove(message.id) }
-        for attachment in message.attachments ?? [] { outbox.removeAttachment(attachment) }
+        for attachment in message.uploads { outbox.removeAttachment(attachment) }
+        wake(.outbox)
     }
 
     private func runStops() async {
@@ -640,6 +703,45 @@ public final class Session {
         }
     }
 
+    private func runCalls() async {
+        var failures = 0
+        while !Task.isCancelled {
+            guard let request = callRequests.first else {
+                await nap(until: .call)
+                continue
+            }
+            guard isOnline else {
+                await nap(until: [.network, .call])
+                continue
+            }
+            // A call ends after its spoken messages have gone.
+            if case .end(let call) = request, queue.contains(where: { $0.spoken?.call == call }) {
+                await nap(until: .outbox)
+                continue
+            }
+            do {
+                let result =
+                    switch request {
+                    case .start(let call): try await client.startCall(call)
+                    case .end(let call): try await client.endCall(call)
+                    case .deleteAudio(let call): try await client.deleteAudio(of: call)
+                    }
+                conversation.confirm(result)
+                callRequests.removeFirst()
+                failures = 0
+                wake(.call)
+            } catch {
+                if error.isTemporary {
+                    failures += 1
+                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
+                } else {
+                    callRequests.removeFirst()
+                    wake(.call)
+                }
+            }
+        }
+    }
+
     private func runDevice() async {
         var failures = 0
         while !Task.isCancelled {
@@ -717,6 +819,14 @@ public final class Session {
         static let device = Wake(rawValue: 1 << 6)
         static let presence = Wake(rawValue: 1 << 7)
         static let upload = Wake(rawValue: 1 << 8)
+        static let call = Wake(rawValue: 1 << 9)
+    }
+
+    /// A call to start, end, or delete the audio of, in the order you asked.
+    enum CallRequest: Equatable {
+        case start(CallID)
+        case end(CallID)
+        case deleteAudio(CallID)
     }
 
     /// Waits for `duration`, or, without one, until woken; anything in `reasons` wakes it early.

@@ -180,6 +180,40 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"))
     }
 
+    // MARK: - Talk
+
+    /// `PUT /v0/calls/{call}`: start a call under the id Ari chose, so starting it again is safe.
+    /// Starting one ends any call left on.
+    public func startCall(_ call: CallID) async throws(RequestError) -> CallResult {
+        try await self.call(HTTPRequest(.put, "/v0/calls/\(Self.segment(call.rawValue))"))
+    }
+
+    /// `POST /v0/calls/{call}/end`, with its length. Ending it again changes nothing.
+    public func endCall(_ call: CallID) async throws(RequestError) -> CallResult {
+        try await self.call(HTTPRequest(.post, "/v0/calls/\(Self.segment(call.rawValue))/end"))
+    }
+
+    /// `DELETE /v0/calls/{call}/audio`: the recordings of the call's spoken messages go; their
+    /// words stay.
+    public func deleteAudio(of call: CallID) async throws(RequestError) -> CallResult {
+        try await self.call(
+            HTTPRequest(.delete, "/v0/calls/\(Self.segment(call.rawValue))/audio"))
+    }
+
+    /// `GET /v0/vocabulary`: words from memory and conversation to steer recognition.
+    public func vocabulary() async throws(RequestError) -> Vocabulary {
+        try await call(HTTPRequest(.get, "/v0/vocabulary"))
+    }
+
+    /// `POST /v0/vocabulary/corrections`: what the recogniser heard and what you meant. The answer
+    /// says which page each mishearing joined.
+    public func teach(_ corrections: VocabularyCorrections) async throws(RequestError)
+        -> VocabularyCorrections
+    {
+        try await call(
+            HTTPRequest(.post, "/v0/vocabulary/corrections", body: try Self.json(corrections)))
+    }
+
     /// `GET /v0/messages?before=…&limit=…`: older messages, oldest first.
     public func messages(before oldest: MessageID, limit: Int) async throws(RequestError)
         -> MessagePage

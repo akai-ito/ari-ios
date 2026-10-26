@@ -80,9 +80,15 @@ struct Replay {
         case .send:
             let message = try #require(request.body).decode(SendMessage.self)
             let secret = message.answers.flatMap { conversation[ask: $0]?.secret } ?? false
+            let spoken = message.spoken.map {
+                Spoken(
+                    call: $0.call, audio: $0.audio.flatMap { uploaded[$0] },
+                    corrections: $0.corrections)
+            }
             conversation.send(
                 message.id, text: message.text, answers: message.answers, secret: secret,
-                attachments: (message.attachments ?? []).compactMap { uploaded[$0] })
+                attachments: (message.attachments ?? []).compactMap { uploaded[$0] },
+                spoken: spoken)
         case .stop(let turn):
             let cut = try request.body?.decode(StopTurn.self).cut
             if let cut, conversation.turn?.id == turn { tapped = (turn, cut) }
@@ -119,6 +125,8 @@ struct Replay {
             uploaded[attachment.id] = attachment
         case .earlierMessages(let before, _):
             conversation.insertEarlier(try body.decode(MessagePage.self), before: before)
+        case .startCall, .endCall, .deleteCallAudio:
+            conversation.confirm(try body.decode(CallResult.self))
         default:
             break
         }

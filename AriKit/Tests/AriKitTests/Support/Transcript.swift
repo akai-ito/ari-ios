@@ -259,6 +259,11 @@ enum Route: Equatable {
     case memoryChange(String)
     case models
     case chooseModel
+    case startCall(CallID)
+    case endCall(CallID)
+    case deleteCallAudio(CallID)
+    case vocabulary
+    case teachVocabulary
     case other
 
     init(method: String, path: String) {
@@ -312,16 +317,26 @@ enum Route: Equatable {
             self = .memoryChange(parts[3])
         case ("GET", 2) where parts == ["v0", "models"]: self = .models
         case ("PUT", 2) where parts == ["v0", "agent"]: self = .chooseModel
+        case ("PUT", 3) where parts[0] == "v0" && parts[1] == "calls":
+            self = .startCall(CallID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "calls" && parts[3] == "end":
+            self = .endCall(CallID(parts[2]))
+        case ("DELETE", 4) where parts[0] == "v0" && parts[1] == "calls" && parts[3] == "audio":
+            self = .deleteCallAudio(CallID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "vocabulary"]: self = .vocabulary
+        case ("POST", 3) where parts == ["v0", "vocabulary", "corrections"]:
+            self = .teachVocabulary
         default: self = .other
         }
     }
 
-    /// Settings and the Library ask for these, not the conversation's session.
+    /// Settings, the Library and a call's recogniser ask for these, not the conversation's
+    /// session.
     var isOutsideSession: Bool {
         switch self {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability, .memoryInMind,
             .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
-            .chooseModel:
+            .chooseModel, .vocabulary, .teachVocabulary:
             true
         default: false
         }

@@ -28,6 +28,8 @@ public struct Message: Hashable, Sendable, Codable {
     public var secret: Bool?
     /// Your messages only: the photos and files you attached, in order.
     public var attachments: [Attachment]?
+    /// Your messages only: how a message you spoke on a call came to be.
+    public var spoken: Spoken?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -47,7 +49,8 @@ public struct Message: Hashable, Sendable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, role, kind, turn, text, at, position, outcome, error, answers, secret, attachments
+        case id, role, kind, turn, text, at, position, outcome, error, answers, secret, attachments,
+            spoken
         case endedAt = "ended_at"
     }
 }

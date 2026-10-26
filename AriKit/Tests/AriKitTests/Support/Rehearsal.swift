@@ -165,9 +165,10 @@ final class Rehearsal {
             let secret = answers.flatMap { session.conversation[ask: $0]?.secret } ?? false
             let attachments = request.body?["attachments"]?.array?.compactMap(\.string)
                 .map(AttachmentID.init(rawValue:))
+            let spoken = try? request.body?["spoken"]?.decode(SendSpoken.self)
             session.send(
                 text, id: MessageID(id), answers: answers, secret: secret,
-                attachments: attachments ?? [])
+                attachments: attachments ?? [], spoken: spoken)
         case .upload(let attachment, let name):
             // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
             guard let bytes = try? request.uploadBytes() else { return }
@@ -198,6 +199,12 @@ final class Rehearsal {
             session.stop(cut: cut)
         case .retry(let turn):
             session.tryAgain(turn)
+        case .startCall(let call):
+            session.startCall(id: call)
+        case .endCall(let call):
+            session.endCall(call)
+        case .deleteCallAudio(let call):
+            session.deleteAudio(of: call)
         case .earlierMessages(_, let limit):
             let session = session
             Task { await session.loadEarlier(limit: limit ?? 50) }
