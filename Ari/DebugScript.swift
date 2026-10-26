@@ -7,7 +7,7 @@ import SwiftUI
     /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, `ARI_DRAFT` fills in the
     /// composer (`\n` for a new line), `ARI_OPEN_TRAIL` opens every run and step on the trail,
     /// `ARI_PLACE` opens a tab (`chat`, `goals` or `library`), `ARI_SETTINGS` opens Settings (or, with
-    /// `capabilities`, `capability:<id>` or `setup:<id>`, goes on to that place), `ARI_IN_MIND`
+    /// `capabilities`, `capability:<id>`, `setup:<id>` or `model`, goes on to that place), `ARI_IN_MIND`
     /// opens In mind, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
@@ -34,6 +34,7 @@ import SwiftUI
             let parts = value.split(separator: ":", maxSplits: 1).map(String.init)
             switch parts.first {
             case "capabilities": return [.capabilities]
+            case "model": return [.model]
             case "capability" where parts.count == 2:
                 return [.capabilities, .capability(CapabilityID(parts[1]))]
             case "setup" where parts.count == 2:

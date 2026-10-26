@@ -71,6 +71,8 @@ enum SettingsRoute: Hashable {
     case capabilities
     /// A capability's page, with its setup sheet open if `setup`.
     case capability(CapabilityID, setup: Bool = false)
+    /// The agent's model and how hard it thinks.
+    case model
 }
 
 /// A capability's row: its symbol, title and summary (or why it needs you), and its state.
