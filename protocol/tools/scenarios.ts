@@ -3,10 +3,11 @@ import path from "node:path";
 import type { Error as ErrorBody } from "#protocol/types.ts";
 import { loadSpec } from "./spec.ts";
 import { transcriptDirectory } from "./transcript-files.ts";
+import { demoModels } from "#engine/scripted/models.ts";
 import { createTranscript, type Transcript } from "./transcript.ts";
 
-const protocol = "0.6";
-const serverVersion = "0.6.0";
+const protocol = "0.7";
+const serverVersion = "0.7.0";
 const yesterdayAt = "2026-10-11T21:14:00.000Z";
 const todayAt = "2026-10-12T08:41:00.000Z";
 const authorization = "Bearer ito_example_not_a_real_token_00000000000000000000";
@@ -928,11 +929,13 @@ const scenarios: readonly (() => Transcript)[] = [
       title: "Reporting a gap",
       summary:
         "The agent can't load a page it needs, so it gives its best answer, reports the gap to Ito and says so " +
-        "in one line. The report is a tool step titled by what it did, linking the issue it opened.",
+        "in one line. Reports is a capability that's switched on, and the report is a tool step titled by " +
+        "what it did, linking the issue it opened.",
       guarantees: ["G10", "G14"],
     });
     yesterday(transcript);
     transcript.begin(todayAt, { cursor: "latest" });
+    transcript.world("capability_on", { capability: "reports", values: { token: "github_pat_example" } });
     transcript.connect();
     transcript.wait(2000);
     sendAndStart(transcript, "What time does the Battersea parkrun start?");
@@ -950,8 +953,8 @@ const scenarios: readonly (() => Transcript)[] = [
       title: "Reporting it to Ito",
       endedTitle: "Reported it to Ito",
       fields: {
-        capability: "ito",
-        operation: "report_gap",
+        capability: "reports",
+        operation: "report",
         arguments: {
           capability: "web search",
           operation: "open a page",
@@ -1865,6 +1868,61 @@ const scenarios: readonly (() => Transcript)[] = [
         { shelf: "journal", count: 0 },
       ],
     });
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "37-choose-the-model",
+      scenario: 37,
+      title: "Choose the model",
+      summary:
+        "Settings lists the models the engine offers and how hard each can think, with the current choice. You " +
+        "pick a lighter model at a middling effort; an effort it doesn't have is refused with the reason, and " +
+        "the server names the new choice from then on.",
+      guarantees: ["G10"],
+    });
+    transcript.begin(todayAt);
+    transcript.request("GET", "/v0/models");
+    transcript.wait(300);
+    transcript.response(
+      200,
+      { models: demoModels, chosen: { model: "gpt-6.1-sol", effort: "low" } },
+      { headers: { "Ito-Protocol": protocol } },
+    );
+    transcript.wait(5000);
+    transcript.request("PUT", "/v0/agent", { body: { model: "gpt-6-luna", effort: "ultra" } });
+    transcript.wait(200);
+    transcript.response(
+      400,
+      {
+        error: {
+          code: "invalid_request",
+          message: "Ito can't run on that.",
+          detail: "GPT-6-Luna can't think at ultra: choose low, medium, high, xhigh or max.",
+        },
+      },
+      { headers: { "Ito-Protocol": protocol } },
+    );
+    transcript.wait(3000);
+    transcript.request("PUT", "/v0/agent", { body: { model: "gpt-6-luna", effort: "medium" } });
+    transcript.wait(200);
+    transcript.response(200, { model: "gpt-6-luna", effort: "medium" }, { headers: { "Ito-Protocol": protocol } });
+    transcript.wait(400);
+    transcript.request("GET", "/v0/server");
+    transcript.wait(40);
+    transcript.response(
+      200,
+      {
+        name: "studio",
+        version: serverVersion,
+        protocol,
+        agent: { name: "Ari", model: "gpt-6-luna", effort: "medium" },
+        setup: { notifications: false, memory_backup: false },
+        capabilities: [],
+      },
+      { headers: { "Ito-Protocol": protocol } },
+    );
     return transcript;
   },
 ];

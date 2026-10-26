@@ -10,13 +10,16 @@ struct SettingsView: View {
     init(model: AppModel, session: Session) {
         self.model = model
         self.session = session
-        _capabilities = State(initialValue: model.client().map(Capabilities.init(client:)))
+        let client = model.client()
+        _capabilities = State(initialValue: client.map(Capabilities.init(client:)))
+        _models = State(initialValue: client.map(Models.init(client:)))
     }
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSwitch = false
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
+    @State private var models: Models?
     @State private var path = Self.startingPath
 
     var body: some View {
@@ -36,15 +39,22 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
-            .task { await capabilities?.refresh() }
+            .task {
+                async let capabilitiesLoaded: Void? = capabilities?.refresh()
+                async let modelsLoaded: Void? = models?.refresh()
+                _ = await (capabilitiesLoaded, modelsLoaded)
+            }
             .navigationTitle("Settings")
             .navigationDestination(for: SettingsRoute.self) { route in
-                if let capabilities {
-                    switch route {
-                    case .capabilities: CapabilitiesView(capabilities: capabilities)
-                    case .capability(let id, let setup):
+                switch route {
+                case .capabilities:
+                    if let capabilities { CapabilitiesView(capabilities: capabilities) }
+                case .capability(let id, let setup):
+                    if let capabilities {
                         CapabilityView(capabilities: capabilities, id: id, opensSetup: setup)
                     }
+                case .model:
+                    if let models { ModelPickerView(models: models, chosen: model.refreshServer) }
                 }
             }
             #if os(iOS)
@@ -94,8 +104,10 @@ struct SettingsView: View {
             if let server = model.server {
                 LabeledContent("Version", value: server.version)
                 LabeledContent("Protocol", value: server.protocolVersion.description)
-                if let engine = server.agent.model {
-                    LabeledContent("Model", value: engine)
+                if models != nil || server.agent.model != nil {
+                    NavigationLink(value: SettingsRoute.model) {
+                        LabeledContent("Model", value: modelSummary(server.agent))
+                    }
                 }
                 if let account = server.agent.account {
                     LabeledContent("Signed in with", value: Self.describe(account))
@@ -153,6 +165,19 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.ariSurface)
         }
+    }
+
+    /// The model and how hard it thinks, as the picker names them once it has loaded: "GPT-6-Luna ·
+    /// Balanced". Until then, what the server reports.
+    private func modelSummary(_ agent: ServerInfo.Agent) -> String {
+        guard let list = models?.list, let chosen = models?.chosenModel else {
+            return agent.model ?? ""
+        }
+        let effort = chosen.choices(current: list.chosen.effort).first {
+            $0.effort.id == list.chosen.effort
+        }
+        let word = effort.map { ModelPickerView.word($0.step, effort: $0.effort) }
+        return [chosen.title, word].compactMap(\.self).joined(separator: " · ")
     }
 
     /// "2 on", or the one that needs you.

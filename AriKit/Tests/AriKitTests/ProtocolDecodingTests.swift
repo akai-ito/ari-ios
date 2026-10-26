@@ -77,6 +77,11 @@ struct ProtocolDecodingTests {
                     #expect(try !body.decode(MemoryPage.self).title.isEmpty, "\(place)")
                 case .memoryChange(let change):
                     #expect(try body.decode(PageChange.self).change == change, "\(place)")
+                case .models:
+                    #expect(try !body.decode(ModelList.self).models.isEmpty, "\(place)")
+                case .chooseModel:
+                    let sent = try #require(request.body).decode(ModelChoice.self)
+                    #expect(try body.decode(ModelChoice.self) == sent, "\(place)")
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -119,6 +124,11 @@ struct ProtocolDecodingTests {
             case .switchCapability:
                 let on = try body.decode(SwitchCapability.self).on
                 #expect(try JSONValue(encoding: SwitchCapability(on: on)) == body, "\(place)")
+            case .chooseModel:
+                let choice = try body.decode(ModelChoice.self)
+                #expect(
+                    try JSONValue(encoding: ModelChoice(model: choice.model, effort: choice.effort))
+                        == body, "\(place)")
             case .setUpCapability, .checkCapability:
                 let values = try body.decode(CapabilitySetup.self).values
                 #expect(
@@ -143,7 +153,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 7) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 8) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
