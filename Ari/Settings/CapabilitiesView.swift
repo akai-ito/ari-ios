@@ -73,6 +73,8 @@ enum SettingsRoute: Hashable {
     case capability(CapabilityID, setup: Bool = false)
     /// The agent's model and how hard it thinks.
     case model
+    /// Ari's voice on a call.
+    case voice
 }
 
 /// A capability's row: its symbol, title and summary (or why it needs you), and its state.

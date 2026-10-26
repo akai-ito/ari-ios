@@ -56,6 +56,10 @@ struct SettingsView: View {
                     }
                 case .model:
                     if let models { ModelPickerView(models: models, chosen: model.refreshServer) }
+                case .voice:
+                    #if os(iOS)
+                        VoicePickerView()
+                    #endif
                 }
             }
             #if os(iOS)
@@ -264,9 +268,14 @@ struct SettingsView: View {
     /// How calls with Ari go: how long a pause ends your turn.
     private struct TalkSettings: View {
         @AppStorage("talk.pause") private var pause = 1.5
+        @AppStorage(Voice.chosenKey) private var voice = ""
 
         var body: some View {
             Section {
+                NavigationLink(value: SettingsRoute.voice) {
+                    LabeledContent("Voice", value: Voice.chosen()?.name ?? "None")
+                }
+                .id(voice)
                 Picker("Pause before Ari answers", selection: $pause) {
                     ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { seconds in
                         Text(seconds.formatted(.number.precision(.fractionLength(0...1))) + " s")

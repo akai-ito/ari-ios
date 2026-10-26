@@ -1,6 +1,7 @@
 #if os(iOS)
     import AVFoundation
     import Synchronization
+    import os
 
     /// Ari's voice on a call: Apple's best on-device voice, a sentence at a time. It plays through
     /// the call's own audio engine rather than the system's speech output, so echo cancellation
@@ -17,29 +18,49 @@
         private let speaker: Speaker
         private let voice: AVSpeechSynthesisVoice?
         private var queue: [String] = []
+        private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
         /// The format the player is connected with.
         let format: AVAudioFormat
 
         init(player: AVAudioPlayerNode) {
             self.player = player
-            voice = Self.best()
+            voice = Self.chosen()
+            Self.log.info(
+                "Voice: \(self.voice?.name ?? "none", privacy: .public), \(self.voice?.language ?? "", privacy: .public), quality \(self.voice?.quality.rawValue ?? 0)"
+            )
             let rate = (voice?.audioFileSettings[AVSampleRateKey] as? Double) ?? 22_050
             format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
             speaker = Speaker(player: player, format: format)
         }
 
+        /// Where Settings keeps the voice you chose; empty for the best on this iPhone.
+        static let chosenKey = "talk.voice"
+
+        /// The voice you chose in Settings, if it's still on this iPhone, or the best one.
+        static func chosen() -> AVSpeechSynthesisVoice? {
+            let id = UserDefaults.standard.string(forKey: chosenKey) ?? ""
+            return id.isEmpty ? best() : AVSpeechSynthesisVoice(identifier: id) ?? best()
+        }
+
+        /// The voices on this iPhone for its language, best first, preferring its region.
+        static func installed(for locale: Locale = .current) -> [AVSpeechSynthesisVoice] {
+            let language = locale.language.languageCode?.identifier ?? "en"
+            let region = locale.region?.identifier
+            return AVSpeechSynthesisVoice.speechVoices()
+                .filter {
+                    $0.language.hasPrefix(language) && !$0.voiceTraits.contains(.isNoveltyVoice)
+                }
+                .sorted { a, b in
+                    let (x, y) = (score(a, region: region), score(b, region: region))
+                    return x != y ? x > y : a.name < b.name
+                }
+        }
+
         /// The best voice for this phone's language: premium, then enhanced, then any, preferring
         /// its region.
         static func best(for locale: Locale = .current) -> AVSpeechSynthesisVoice? {
-            let language = locale.language.languageCode?.identifier ?? "en"
-            let region = locale.region?.identifier
-            let voices = AVSpeechSynthesisVoice.speechVoices().filter {
-                $0.language.hasPrefix(language) && !$0.voiceTraits.contains(.isNoveltyVoice)
-            }
-            return voices.max { a, b in
-                score(a, region: region) < score(b, region: region)
-            }
+            installed(for: locale).first
         }
 
         private static func score(_ voice: AVSpeechSynthesisVoice, region: String?) -> Int {

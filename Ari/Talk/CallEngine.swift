@@ -340,6 +340,9 @@
             voicePlayer.play()
             tonePlayer.play()
             engineStarts += 1
+            // The first check on the microphone comes after a second and a half, not three: a
+            // fresh engine sometimes gives nothing until it's made again.
+            lastCheck = .now - 1.5
             Self.log.info(
                 "Engine \(self.engineStarts) running: \(audio.isRunning); microphone \(micFormat, privacy: .public) → recogniser \(target, privacy: .public); \(Self.describeSession(), privacy: .public)"
             )
