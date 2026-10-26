@@ -32,6 +32,8 @@ public struct ServerInfo: Sendable, Equatable, Codable {
         /// The model the agent last ran on, such as `demo` for the demo engine; absent until it has
         /// run once.
         public let model: String?
+        /// How hard it thinks, such as `medium`: the chosen effort, or the model's default.
+        public let effort: String?
         /// How the engine is signed in, as of its last session.
         public let account: Account?
 

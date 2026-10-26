@@ -716,6 +716,8 @@ extension ConversationTranscriptTests {
                 "Please forget the bit about our first date."),
             reply("m_0001_71553", 33, "Done. It's gone from Alex's page."),
         ],
+        // Settings, not the conversation: nothing changes in it.
+        "37-choose-the-model": [],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),
             you(

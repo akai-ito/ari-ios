@@ -257,6 +257,8 @@ enum Route: Equatable {
     case memoryRecent
     case memoryPage
     case memoryChange(String)
+    case models
+    case chooseModel
     case other
 
     init(method: String, path: String) {
@@ -308,6 +310,8 @@ enum Route: Equatable {
             }
         case ("GET", 4) where parts[0] == "v0" && parts[1] == "memory" && parts[2] == "changes":
             self = .memoryChange(parts[3])
+        case ("GET", 2) where parts == ["v0", "models"]: self = .models
+        case ("PUT", 2) where parts == ["v0", "agent"]: self = .chooseModel
         default: self = .other
         }
     }
@@ -316,7 +320,8 @@ enum Route: Equatable {
     var isOutsideSession: Bool {
         switch self {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability, .memoryInMind,
-            .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange:
+            .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
+            .chooseModel:
             true
         default: false
         }

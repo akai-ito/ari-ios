@@ -133,6 +133,19 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.post, "/v0/capabilities/\(Self.segment(id.rawValue))/check", body: body))
     }
 
+    // MARK: - The agent's model
+
+    /// `GET /v0/models`: the models the engine offers, and the current choice.
+    public func models() async throws(RequestError) -> ModelList {
+        try await call(HTTPRequest(.get, "/v0/models"))
+    }
+
+    /// `PUT /v0/agent`: choose the model and how hard it thinks, for the whole server, from the next
+    /// message.
+    public func choose(_ choice: ModelChoice) async throws(RequestError) -> ModelChoice {
+        try await call(HTTPRequest(.put, "/v0/agent", body: try Self.json(choice)))
+    }
+
     // MARK: - Memory, read-only
 
     /// `GET /v0/memory/in-mind`: Portrait, Now and How to help you, in full.
