@@ -53,6 +53,9 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Ari
         # Only to scan the QR code ito pair shows.
         "INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphone*]": "Ari uses the camera to scan the pairing code your server shows."
+        # Talking with Ari on a call: heard and recognised on the phone.
+        "INFOPLIST_KEY_NSMicrophoneUsageDescription[sdk=iphone*]": "Ari listens on a call, so you can talk with it."
+        "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription[sdk=iphone*]": "Ari turns what you say on a call into words, on your iPhone, using the names it knows from your memory."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         "INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphone*]": YES
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphone*]": YES
@@ -83,6 +86,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER).pair
             CFBundleURLSchemes: [ito]
+        # A call with Ari carries on locked and in your pocket.
+        UIBackgroundModes: [audio, voip]
     # Ari.xcodeproj isn't in git: a project generated before project.yml last changed builds fine
     # but quietly lacks its newer settings, such as entitlements. Stop and say so instead.
     preBuildScripts:

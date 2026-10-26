@@ -13,6 +13,8 @@ struct ConversationRow: Identifiable {
         case offer
         /// A turn that failed before writing anything.
         case failure(TurnID, ServerError?)
+        /// A call, where it started.
+        case call(Call)
     }
 
     let id: String
@@ -53,6 +55,8 @@ final class RowsCache {
             guard case .message(let entry) = item else {
                 if case .trail(let trail) = item {
                     rows.append(ConversationRow(id: trail.id, kind: .trail(trail)))
+                } else if case .call(let call) = item {
+                    rows.append(ConversationRow(id: item.id, kind: .call(call)))
                 }
                 continue
             }

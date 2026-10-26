@@ -28,6 +28,10 @@ struct TalkTests {
         try replay.play()
         #expect(replay.conversation.callOn == nil)
         #expect(replay.conversation[call: call]?.durationMs == 1_449_180)
+        // The block opens the stretch, above what you said.
+        let items = Timeline(replay.conversation, reveal: Reveal()).items.map(\.id)
+        #expect(items.first == "call \(call)")
+        #expect(items.dropFirst().first == "3dc7eae9-5c32-46d8-b0a5-5e61c1bfe0bb")
     }
 
     @Test("Scenario 40: deleting a call's audio keeps its words")

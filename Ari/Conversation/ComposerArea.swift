@@ -18,6 +18,8 @@ struct ComposerArea: View, Equatable {
     let stop: () -> Void
     let attach: (PendingAttachment) -> Void
     let detach: (AttachmentID) -> Void
+    /// Starts a call, where Ari can take one.
+    var talk: (() -> Void)?
 
     /// What you're writing. Saved a moment after you stop typing, and when Ari leaves the screen,
     /// so it survives Ari closing; saved on every keystroke, the field kept waiting on it.
@@ -32,7 +34,7 @@ struct ComposerArea: View, Equatable {
         Composer(
             draft: secret ? $secretAnswer : $draft, role: role,
             prompt: asking.map(Self.takesTypedAnswer) == true ? "Answer Ari" : "Message Ari",
-            secret: secret, send: submit, stop: stop
+            secret: secret, send: submit, stop: stop, talk: secret ? nil : talk
         ) {
             // A secret answer is only ever typed.
             if !secret {

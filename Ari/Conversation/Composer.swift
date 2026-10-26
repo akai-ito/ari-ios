@@ -5,7 +5,8 @@ enum ComposerRole { case send, stop, idle }
 
 /// The composer: an outlined field and one round button, which is whichever action makes sense
 /// now. Send while you have something to send; Stop while Ari works and the field is empty;
-/// otherwise a dimmed Send. Beside the field, what attaches; above it, what's attached.
+/// otherwise Talk, where Ari can take a call, or a dimmed Send. Beside the field, what attaches;
+/// above it, what's attached.
 struct Composer<Leading: View, Above: View>: View {
     @Binding var draft: String
     let role: Role
@@ -15,13 +16,15 @@ struct Composer<Leading: View, Above: View>: View {
     var secret = false
     let send: () -> Void
     let stop: () -> Void
+    /// Starts a call, where Ari can take one.
+    var talk: (() -> Void)?
     let leading: Leading
     let above: Above
 
     init(
         draft: Binding<String>, role: ComposerRole, prompt: String = "Message Ari",
         secret: Bool = false, send: @escaping () -> Void, stop: @escaping () -> Void,
-        @ViewBuilder leading: () -> Leading = { EmptyView() },
+        talk: (() -> Void)? = nil, @ViewBuilder leading: () -> Leading = { EmptyView() },
         @ViewBuilder above: () -> Above = { EmptyView() }
     ) {
         _draft = draft
@@ -30,6 +33,7 @@ struct Composer<Leading: View, Above: View>: View {
         self.secret = secret
         self.send = send
         self.stop = stop
+        self.talk = talk
         self.leading = leading()
         self.above = above()
     }
@@ -62,24 +66,25 @@ struct Composer<Leading: View, Above: View>: View {
             #if os(macOS)
                 .onSubmit(send)
             #endif
-        Button(action: role == .stop ? stop : send) {
+        let talks = role == .idle && talk != nil
+        Button(action: role == .stop ? stop : talks ? talk ?? send : send) {
             ZStack {
                 if role == .send {
                     Circle().fill(.ariText)
                 } else {
                     Circle().strokeBorder(.ariLine, lineWidth: 1)
                 }
-                Image(systemName: role == .stop ? "stop.fill" : "arrow.up")
+                Image(systemName: role == .stop ? "stop.fill" : talks ? "waveform" : "arrow.up")
                     .font(.system(size: role == .stop ? 14 : 18, weight: .bold))
-                    .foregroundStyle(glyph)
+                    .foregroundStyle(talks ? .ariText : glyph)
                     .contentTransition(.symbolEffect(.replace))
             }
             .frame(width: 44, height: 44)
         }
         .buttonStyle(.plain)
-        .disabled(role == .idle)
+        .disabled(role == .idle && !talks)
         .keyboardShortcut(role == .stop ? .cancelAction : .defaultAction)
-        .accessibilityLabel(role == .stop ? "Stop" : "Send")
+        .accessibilityLabel(role == .stop ? "Stop" : talks ? "Talk" : "Send")
         .animation(.smooth(duration: 0.3), value: role)
     }
 

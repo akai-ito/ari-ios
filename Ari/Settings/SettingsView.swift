@@ -30,6 +30,7 @@ struct SettingsView: View {
                 memoryBackup
                 notifications
                 #if os(iOS)
+                    TalkSettings()
                     Section("App icon") {
                         AppIconChooser()
                     }
@@ -258,3 +259,26 @@ struct SettingsView: View {
         }
     }
 }
+
+#if os(iOS)
+    /// How calls with Ari go: how long a pause ends your turn.
+    private struct TalkSettings: View {
+        @AppStorage("talk.pause") private var pause = 1.5
+
+        var body: some View {
+            Section {
+                Picker("Pause before Ari answers", selection: $pause) {
+                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { seconds in
+                        Text(seconds.formatted(.number.precision(.fractionLength(0...1))) + " s")
+                            .tag(seconds)
+                    }
+                }
+            } header: {
+                Text("Talk")
+            } footer: {
+                Text("On a call, Ari answers once you've been quiet this long. Longer suits thinking aloud.")
+            }
+            .listRowBackground(Color.ariSurface)
+        }
+    }
+#endif
