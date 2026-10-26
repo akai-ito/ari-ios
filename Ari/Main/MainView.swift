@@ -9,6 +9,8 @@ struct MainView: View {
 
     @State private var place = Place.chat
     @State private var showsSettings = false
+    /// What Ari knows, for the Library, In mind and memory steps on the trail.
+    @State private var memory: Memory?
     @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
         @Environment(\.openSettings) private var openSettings
@@ -46,12 +48,11 @@ struct MainView: View {
                 ) { showsSettings = true }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                ComingPlace(
-                    title: "Library",
-                    text: "What Ari makes for you, plans, summaries and lists, will be kept here."
-                ) { showsSettings = true }
+                LibraryView(memory: memory) { showsSettings = true }
             }
         }
+        .environment(memory)
+        .task { if memory == nil { memory = model.client().map(Memory.init(client:)) } }
         // A tab bar on iPhone, a sidebar on the Mac.
         .tabViewStyle(.sidebarAdaptable)
         #if os(iOS)

@@ -67,6 +67,16 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(Capability.self).id == id, "\(place)")
                 case .checkCapability:
                     _ = try body.decode(CheckResult.self)
+                case .memoryInMind:
+                    _ = try body.decode(MemoryPages.self)
+                case .memoryShelves:
+                    _ = try body.decode(ShelfList.self)
+                case .memoryPages, .memoryRecent:
+                    _ = try body.decode(PageList.self)
+                case .memoryPage:
+                    #expect(try !body.decode(MemoryPage.self).title.isEmpty, "\(place)")
+                case .memoryChange(let change):
+                    #expect(try body.decode(PageChange.self).change == change, "\(place)")
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -133,7 +143,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 6) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 7) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")

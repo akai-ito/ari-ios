@@ -250,6 +250,9 @@ private struct StepLineView: View {
 private struct StepDetails: View {
     let steps: [Step]
 
+    @Environment(Memory.self) private var memory: Memory?
+    @State private var openedPage: PageAddress?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(steps) { step in
@@ -263,6 +266,15 @@ private struct StepDetails: View {
             }
         }
         .padding(.top, 4)
+        .sheet(item: $openedPage) { address in
+            NavigationStack {
+                PageView(memory: memory, address: address)
+                    .navigationDestination(for: PageAddress.self) {
+                        PageView(memory: memory, address: $0)
+                    }
+            }
+            .tint(.ariText)
+        }
     }
 
     static func hasContent(_ step: Step) -> Bool {
@@ -275,6 +287,8 @@ private struct StepDetails: View {
         case .tool: return step.capability != nil || step.arguments != nil || step.url != nil
         case .plan: return !(step.items ?? []).isEmpty
         case .imageView: return step.path != nil
+        case .memory:
+            return step.memoryAction == .updated ? step.change != nil : !(step.pages ?? []).isEmpty
         default: return false
         }
     }
@@ -325,6 +339,28 @@ private struct StepDetails: View {
             PlanChecklist(items: step.items ?? [])
         case .imageView:
             if let path = step.path { CodeBox(text: path) }
+        case .memory:
+            // An update shows what changed, fetched now: the trail never carries a page's words.
+            if step.memoryAction == .updated, let change = step.change {
+                PageChangeView(memory: memory, change: change)
+            }
+            if step.memoryAction != .updated {
+                ForEach(step.pages ?? []) { page in
+                    if page.address.isPage {
+                        Button(page.title + " ›") { openedPage = page.address }
+                            .buttonStyle(.plain)
+                            .font(.caption)
+                            .foregroundStyle(.ariSecondary)
+                    } else {
+                        Caption(page.title)
+                    }
+                }
+            } else if let page = step.pages?.first {
+                Button("Open \(page.title) ›") { openedPage = page.address }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.ariSecondary)
+            }
         default:
             EmptyView()
         }

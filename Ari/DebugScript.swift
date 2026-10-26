@@ -7,7 +7,8 @@ import SwiftUI
     /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, `ARI_DRAFT` fills in the
     /// composer (`\n` for a new line), `ARI_OPEN_TRAIL` opens every run and step on the trail,
     /// `ARI_PLACE` opens a tab (`chat`, `goals` or `library`), `ARI_SETTINGS` opens Settings (or, with
-    /// `capabilities`, `capability:<id>` or `setup:<id>`, goes on to that place), and
+    /// `capabilities`, `capability:<id>` or `setup:<id>`, goes on to that place), `ARI_IN_MIND`
+    /// opens In mind, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code.
@@ -24,6 +25,8 @@ import SwiftUI
 
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
+        static let opensInMind = environment["ARI_IN_MIND"] != nil
+        static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))
 
         /// Where `ARI_SETTINGS` goes past the top of Settings.
         static var settingsPath: [SettingsRoute] {

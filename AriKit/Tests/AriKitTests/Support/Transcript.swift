@@ -251,6 +251,12 @@ enum Route: Equatable {
     case switchCapability(CapabilityID)
     case setUpCapability(CapabilityID)
     case checkCapability(CapabilityID)
+    case memoryInMind
+    case memoryShelves
+    case memoryPages
+    case memoryRecent
+    case memoryPage
+    case memoryChange(String)
     case other
 
     init(method: String, path: String) {
@@ -291,7 +297,28 @@ enum Route: Equatable {
         case ("POST", 4)
         where parts[0] == "v0" && parts[1] == "capabilities" && parts[3] == "check":
             self = .checkCapability(CapabilityID(parts[2]))
+        case ("GET", 3) where parts[0] == "v0" && parts[1] == "memory":
+            switch parts[2] {
+            case "in-mind": self = .memoryInMind
+            case "shelves": self = .memoryShelves
+            case "pages": self = .memoryPages
+            case "recent": self = .memoryRecent
+            case "page": self = .memoryPage
+            default: self = .other
+            }
+        case ("GET", 4) where parts[0] == "v0" && parts[1] == "memory" && parts[2] == "changes":
+            self = .memoryChange(parts[3])
         default: self = .other
+        }
+    }
+
+    /// Settings and the Library ask for these, not the conversation's session.
+    var isOutsideSession: Bool {
+        switch self {
+        case .capabilities, .switchCapability, .setUpCapability, .checkCapability, .memoryInMind,
+            .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange:
+            true
+        default: false
         }
     }
 }

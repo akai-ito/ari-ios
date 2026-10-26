@@ -59,6 +59,13 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
     // image_view
     /// The image looked at.
     public var path: String?
+    // memory
+    /// What memory did: the pages used in this reply, a page updated, or the journal added to.
+    public var memoryAction: MemoryAction?
+    /// The pages it used or updated, without their words.
+    public var pages: [PageSummary]?
+    /// For an update, the change to fetch when you open it.
+    public var change: String?
 
     public struct SearchResult: Hashable, Sendable, Decodable {
         public var title: String?
@@ -107,7 +114,8 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         case id, turn, kind, title, at, position, outcome, detail
         case heading, summary, query, queries, url, pattern, results
         case command, cwd, actions, output, files, capability, operation, arguments
-        case explanation, items, path
+        case explanation, items, path, pages, change
+        case memoryAction = "action"
         case endedAt = "ended_at"
         case durationMs = "duration_ms"
         case exitCode = "exit_code"
@@ -146,6 +154,9 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         items = try c.decodeIfPresent([PlanItem].self, forKey: .items)
         waitMs = try c.decodeIfPresent(Int.self, forKey: .waitMs)
         path = try c.decodeIfPresent(String.self, forKey: .path)
+        memoryAction = try c.decodeIfPresent(MemoryAction.self, forKey: .memoryAction)
+        pages = try c.decodeIfPresent([PageSummary].self, forKey: .pages)
+        change = try c.decodeIfPresent(String.self, forKey: .change)
     }
 }
 

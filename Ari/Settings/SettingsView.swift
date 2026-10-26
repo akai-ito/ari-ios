@@ -24,6 +24,7 @@ struct SettingsView: View {
             Form {
                 server
                 capabilitiesSection
+                memoryBackup
                 notifications
                 #if os(iOS)
                     Section("App icon") {
@@ -133,6 +134,25 @@ struct SettingsView: View {
         #else
             []
         #endif
+    }
+
+    /// Whether what Ari knows is backed up off the server.
+    @ViewBuilder
+    private var memoryBackup: some View {
+        if let backedUp = model.server?.setup?.memoryBackup {
+            Section {
+                LabeledContent("Backup", value: backedUp ? "On" : "Not backed up")
+            } header: {
+                Text("Memory")
+            } footer: {
+                Text(
+                    backedUp
+                        ? "What Ari knows is pushed to your private repository as it changes."
+                        : "What Ari knows lives only on your server. Run ito memory remote on it to "
+                            + "back it up to a private repository.")
+            }
+            .listRowBackground(Color.ariSurface)
+        }
     }
 
     /// "2 on", or the one that needs you.

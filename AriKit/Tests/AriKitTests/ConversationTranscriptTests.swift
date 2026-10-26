@@ -698,6 +698,24 @@ extension ConversationTranscriptTests {
         // Settings, not the conversation: nothing changes in it.
         "32-set-up-a-capability": [],
         "33-a-capability-needs-you": [],
+        "34-ari-uses-what-it-remembers": [
+            you(
+                "36990cb5-389b-4685-97ce-623970b069ec",
+                "Should I book the hotel in Lisbon for both of us?"),
+            reply("m_0001_61036", 153, "places with two rooms for 14 to 18 November."),
+        ],
+        "35-ari-updates-what-it-knows": [
+            you(
+                "cc288c87-2f40-4b1b-a451-eaab6bed925d",
+                "Alex and I are seeing each other a lot now. It's going really well!"),
+            reply("m_0001_71650", 82, "page, so taking it slow is now history."),
+        ],
+        "36-forget-that": [
+            you(
+                "9a6c147d-b561-45d9-a502-a89bfd8e4f3e",
+                "Please forget the bit about our first date."),
+            reply("m_0001_71553", 33, "Done. It's gone from Alex's page."),
+        ],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),
             you(
