@@ -4,6 +4,7 @@
     import CallKit
     import Foundation
     import Speech
+    import UIKit
     import os
 
     /// Talking with Ari: the call that's on, if any, registered with iOS as a call so it carries
@@ -131,6 +132,8 @@
             await call.end()
             self.call = nil
             showsCall = false
+            // The connection stayed open for the call; in the background it closes as usual.
+            if UIApplication.shared.applicationState == .background { session.pause() }
         }
     }
 
