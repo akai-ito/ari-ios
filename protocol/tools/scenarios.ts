@@ -4,10 +4,11 @@ import type { Correction, Error as ErrorBody } from "#protocol/types.ts";
 import { loadSpec } from "./spec.ts";
 import { transcriptDirectory } from "./transcript-files.ts";
 import { demoModels } from "#engine/scripted/models.ts";
+import { defaultVoice, voices } from "#voice/voices.ts";
 import { createTranscript, type Transcript } from "./transcript.ts";
 
-const protocol = "0.8";
-const serverVersion = "0.8.0";
+const protocol = "0.9";
+const serverVersion = "0.9.0";
 const yesterdayAt = "2026-10-11T21:14:00.000Z";
 const todayAt = "2026-10-12T08:41:00.000Z";
 const authorization = "Bearer ito_example_not_a_real_token_00000000000000000000";
@@ -249,6 +250,16 @@ const correctionOf = (text: string, meant: string, heard: string): Correction =>
   length: meant.length,
   heard,
 });
+
+const spokenWav = { "Content-Type": "audio/wav", "Content-Length": "12044" };
+
+const preview = "Hi, I'm Ari. This is how I sound.";
+
+const speak = (transcript: Transcript, voice?: string): void => {
+  transcript.request("POST", "/v0/speech", { body: { text: preview, ...(voice !== undefined && { voice }) } });
+  transcript.wait(240);
+  transcript.response(200, undefined, { headers: { ...spokenWav, "Ito-Protocol": protocol } });
+};
 
 const scenarios: readonly (() => Transcript)[] = [
   () => {
@@ -2115,6 +2126,114 @@ const scenarios: readonly (() => Transcript)[] = [
     );
     transcript.begin("2026-10-26T09:00:00.000Z");
     transcript.connect();
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "42-choose-ari-s-voice",
+      scenario: 42,
+      title: "Choose Ari's voice",
+      summary:
+        "Settings lists Ari's voices and the one chosen, plays a preview of another, and chooses it for the whole " +
+        "server; a preview that names no voice then speaks in it, and a voice the server doesn't have is refused.",
+      guarantees: ["G10"],
+    });
+    const headers = { headers: { "Ito-Protocol": protocol } };
+    transcript.begin("2026-10-27T18:00:00.000Z");
+    transcript.request("GET", "/v0/voices");
+    transcript.wait(40);
+    transcript.response(200, { voices, chosen: defaultVoice, state: "ready" }, headers);
+    transcript.wait(6000);
+    speak(transcript, "bf_emma");
+    transcript.wait(4000);
+    transcript.request("PUT", "/v0/voice", { body: { voice: "bf_emma" } });
+    transcript.wait(20);
+    transcript.response(200, { voice: "bf_emma" }, headers);
+    transcript.wait(2000);
+    transcript.request("GET", "/v0/voices");
+    transcript.wait(40);
+    transcript.response(200, { voices, chosen: "bf_emma", state: "ready" }, headers);
+    transcript.wait(3000);
+    speak(transcript);
+    transcript.wait(10_000);
+    transcript.request("PUT", "/v0/voice", { body: { voice: "zz_nobody" } });
+    transcript.wait(20);
+    transcript.response(
+      400,
+      {
+        error: {
+          code: "invalid_request",
+          message: "The request isn't valid.",
+          detail: "There's no voice called zz_nobody: choose one from GET /v0/voices.",
+        },
+      },
+      headers,
+    );
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "43-before-the-voice-is-ready",
+      scenario: 43,
+      title: "Before the voice is ready",
+      summary:
+        "Ari connects while the server's voice is still loading, so it doesn't offer Talk yet and a preview is " +
+        "refused with when to try again. The event stream says when the voice is ready, and the preview plays.",
+      guarantees: ["G10", "G24"],
+    });
+    const headers = { headers: { "Ito-Protocol": protocol } };
+    const loading = "The voice models are still loading.";
+    transcript.begin("2026-10-27T08:00:00.000Z");
+    transcript.voiceStatus("loading", loading);
+    transcript.connect();
+    transcript.request("GET", "/v0/voices");
+    transcript.wait(40);
+    transcript.response(200, { voices, chosen: defaultVoice, state: "loading", reason: loading }, headers);
+    transcript.wait(2000);
+    transcript.request("POST", "/v0/speech", { body: { text: preview } });
+    transcript.wait(20);
+    transcript.response(
+      503,
+      { error: { code: "unavailable", message: "Ari's voice isn't ready.", detail: loading } },
+      { headers: { "Ito-Protocol": protocol, "Retry-After": "10" } },
+    );
+    transcript.wait(25_000);
+    transcript.voiceStatus("ready");
+    transcript.wait(3000);
+    speak(transcript);
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "44-when-the-server-can-t-talk",
+      scenario: 44,
+      title: "When the server can't talk",
+      summary:
+        "The server's voice fails, and the event stream says why in a line, so Ari stops offering Talk and shows " +
+        "the reason. The voice list carries the same reason, and a preview is refused with it.",
+      guarantees: ["G10", "G24"],
+    });
+    const headers = { headers: { "Ito-Protocol": protocol } };
+    const reason = "The GPU ran out of memory loading the voice.";
+    transcript.begin("2026-10-27T09:00:00.000Z");
+    transcript.connect();
+    transcript.wait(60_000);
+    transcript.voiceStatus("failed", reason);
+    transcript.wait(5000);
+    transcript.request("GET", "/v0/voices");
+    transcript.wait(40);
+    transcript.response(200, { voices, chosen: defaultVoice, state: "failed", reason }, headers);
+    transcript.wait(4000);
+    transcript.request("POST", "/v0/speech", { body: { text: preview, voice: "am_michael" } });
+    transcript.wait(20);
+    transcript.response(
+      503,
+      { error: { code: "unavailable", message: "Ari's voice isn't ready.", detail: reason } },
+      headers,
+    );
     return transcript;
   },
 ];

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Ito client API
-  version: "0.8"
+  version: "0.9"
   summary: Commands in, one resumable event stream out.
   description: |
     The API that Ari, and any other client, uses to talk to an Ito server.
@@ -29,6 +29,8 @@ info:
     - **Talk:** start and end a call with the agent, send what you say as spoken messages with their
       audio and the words the phone corrected, and fetch a vocabulary from memory that steers
       speech recognition toward your names.
+    - **Ari's voice:** whether the server can hold a call, the voices Ari can speak in, choosing
+      one, and hearing a preview.
 
     **Versioning.** Routes carry the protocol's major version, and every response carries an
     `Ito-Protocol` header with the full version. Until 1.0, every protocol change may break, so
@@ -94,7 +96,7 @@ paths:
               schema: { $ref: "#/components/schemas/Discovery" }
               example:
                 product: ito
-                protocol: ["0.8"]
+                protocol: ["0.9"]
         "429": { $ref: "#/components/responses/SlowDown" }
   /v0/pair:
     post:
@@ -141,8 +143,8 @@ paths:
               schema: { $ref: "#/components/schemas/ServerInfo" }
               example:
                 name: studio
-                version: 0.8.0
-                protocol: "0.8"
+                version: 0.9.0
+                protocol: "0.9"
                 agent:
                   name: Ari
                   model: gpt-6.1-sol
@@ -898,6 +900,72 @@ paths:
               schema: { $ref: "#/components/schemas/Corrections" }
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/TokenRejected" }
+  /v0/speech:
+    post:
+      tags: [Talk]
+      operationId: speak
+      summary: Hear a preview of Ari's voice
+      description: |
+        Says the text in Ari's voice and answers with a WAV: 24 kHz, mono, 16-bit PCM. It's for
+        previewing voices in Settings. Left out, `voice` is the one chosen with `PUT /v0/voice`. While
+        the voice isn't ready, the answer is `unavailable`, with `Retry-After` while it's loading and
+        the reason in `detail`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpeechRequest" }
+            example: { text: "Hi, I'm Ari. This is how I sound.", voice: bf_emma }
+      responses:
+        "200":
+          description: The speech.
+          headers:
+            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
+          content:
+            audio/wav:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/TokenRejected" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /v0/voices:
+    get:
+      tags: [Talk]
+      operationId: listVoices
+      summary: Ari's voices, and whether the server can talk
+      description: |
+        Every voice, the one chosen, and the voice's state: offer Talk only while it's `ready`, and
+        otherwise show the reason. `voice.status` events say when the state changes.
+      responses:
+        "200":
+          description: The voices and the voice's state.
+          headers:
+            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VoiceList" }
+        "401": { $ref: "#/components/responses/TokenRejected" }
+  /v0/voice:
+    put:
+      tags: [Talk]
+      operationId: chooseVoice
+      summary: Choose Ari's voice
+      description: One choice for the whole server, kept across restarts. It applies from the next sentence Ari says.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoiceChoice" }
+            example: { voice: bf_emma }
+      responses:
+        "200":
+          description: The choice, as saved.
+          headers:
+            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VoiceChoice" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/TokenRejected" }
 components:
   securitySchemes:
     token:
@@ -913,7 +981,7 @@ components:
       schema:
         type: string
         pattern: ^\d+\.\d+$
-        example: "0.8"
+        example: "0.9"
     RetryAfter:
       description: Seconds to wait before trying again.
       schema:
@@ -1033,6 +1101,42 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResult" }
   schemas:
+    SpeechRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          description: What to say, as it should be spoken.
+          type: string
+          minLength: 1
+          maxLength: 500
+        voice:
+          description: "A voice's id from `GET /v0/voices`. Left out, the chosen voice speaks."
+          type: string
+    VoiceList:
+      type: object
+      required: [voices, chosen, state]
+      properties:
+        voices:
+          type: array
+          items: { $ref: "#/components/schemas/Voice" }
+        chosen:
+          description: The id of the voice Ari speaks in.
+          type: string
+        state: { $ref: "events.schema.json#/$defs/VoiceState" }
+        reason: { $ref: "events.schema.json#/$defs/VoiceReason" }
+    VoiceChoice:
+      type: object
+      required: [voice]
+      properties:
+        voice: { description: "A voice's id from `GET /v0/voices`.", type: string, minLength: 1 }
+    Voice:
+      type: object
+      required: [id, name, accent]
+      properties:
+        id: { description: "Such as `af_heart`.", type: string }
+        name: { description: "Such as Heart.", type: string }
+        accent: { enum: [american, british] }
     CallResult:
       type: object
       required: [call]

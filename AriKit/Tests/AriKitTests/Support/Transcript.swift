@@ -264,6 +264,9 @@ enum Route: Equatable {
     case deleteCallAudio(CallID)
     case vocabulary
     case teachVocabulary
+    case voices
+    case chooseVoice
+    case speech
     case other
 
     init(method: String, path: String) {
@@ -326,6 +329,9 @@ enum Route: Equatable {
         case ("GET", 2) where parts == ["v0", "vocabulary"]: self = .vocabulary
         case ("POST", 3) where parts == ["v0", "vocabulary", "corrections"]:
             self = .teachVocabulary
+        case ("GET", 2) where parts == ["v0", "voices"]: self = .voices
+        case ("PUT", 2) where parts == ["v0", "voice"]: self = .chooseVoice
+        case ("POST", 2) where parts == ["v0", "speech"]: self = .speech
         default: self = .other
         }
     }
@@ -336,7 +342,7 @@ enum Route: Equatable {
         switch self {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability, .memoryInMind,
             .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
-            .chooseModel, .vocabulary, .teachVocabulary:
+            .chooseModel, .vocabulary, .teachVocabulary, .voices, .chooseVoice, .speech:
             true
         default: false
         }

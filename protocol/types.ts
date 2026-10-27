@@ -649,10 +649,99 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/speech": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Hear a preview of Ari's voice
+     * @description Says the text in Ari's voice and answers with a WAV: 24 kHz, mono, 16-bit PCM. It's for
+     *     previewing voices in Settings. Left out, `voice` is the one chosen with `PUT /v0/voice`. While
+     *     the voice isn't ready, the answer is `unavailable`, with `Retry-After` while it's loading and
+     *     the reason in `detail`.
+     */
+    post: operations["speak"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/voices": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Ari's voices, and whether the server can talk
+     * @description Every voice, the one chosen, and the voice's state: offer Talk only while it's `ready`, and
+     *     otherwise show the reason. `voice.status` events say when the state changes.
+     */
+    get: operations["listVoices"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/voice": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Choose Ari's voice
+     * @description One choice for the whole server, kept across restarts. It applies from the next sentence Ari says.
+     */
+    put: operations["chooseVoice"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    SpeechRequest: {
+      /** @description What to say, as it should be spoken. */
+      text: string;
+      /** @description A voice's id from `GET /v0/voices`. Left out, the chosen voice speaks. */
+      voice?: string;
+    };
+    VoiceList: {
+      voices: components["schemas"]["Voice"][];
+      /** @description The id of the voice Ari speaks in. */
+      chosen: string;
+      state: components["schemas"]["VoiceState"];
+      reason?: components["schemas"]["VoiceReason"];
+    };
+    VoiceChoice: {
+      /** @description A voice's id from `GET /v0/voices`. */
+      voice: string;
+    };
+    Voice: {
+      /** @description Such as `af_heart`. */
+      id: string;
+      /** @description Such as Heart. */
+      name: string;
+      /** @enum {unknown} */
+      accent: "american" | "british";
+    };
     CallResult: {
       call: components["schemas"]["Call"];
     };
@@ -880,7 +969,8 @@ export interface components {
       | components["schemas"]["TurnEnded"]
       | components["schemas"]["CallStarted"]
       | components["schemas"]["CallEnded"]
-      | components["schemas"]["CallAudioDeleted"];
+      | components["schemas"]["CallAudioDeleted"]
+      | components["schemas"]["VoiceStatus"];
     /**
      * snapshot
      * @description The first event when the server can't resume from your cursor: there was none, the server doesn't know it (it was restored from a backup, compacted it away, or is a different server), or you are too far behind. Replace your view of the conversation with it. Its id is the id of the latest event, so resuming after it continues from here; it has no id while the conversation is empty.
@@ -1575,6 +1665,13 @@ export interface components {
       audio_deleted?: boolean;
     };
     /**
+     * @description Whether the server can hold a call: `ready` once it can both listen and speak, with memory's vocabulary loaded; `loading` while it starts; `failed` when it can't, until the server restarts.
+     * @enum {unknown}
+     */
+    VoiceState: "loading" | "ready" | "failed";
+    /** @description Why the voice isn't `ready`, in a plain line to show, such as "The GPU ran out of memory loading the voice." */
+    VoiceReason: string;
+    /**
      * @description Coarse, for animating the agent's presence. Show the label of a kind you don't recognise.
      * @enum {unknown}
      */
@@ -1627,6 +1724,18 @@ export interface components {
       type: "call.audio_deleted";
       at: components["schemas"]["Timestamp"];
       call: components["schemas"]["Call"];
+    };
+    /**
+     * voice.status
+     * @description The server's voice changed. Offer Talk only while it's `ready`, and otherwise show the reason. It's sent on each change after the server starts; `GET /v0/voices` has the state at any time.
+     */
+    VoiceStatus: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "voice.status";
+      at: components["schemas"]["Timestamp"];
+      state: components["schemas"]["VoiceState"];
+      reason?: components["schemas"]["VoiceReason"];
     };
     /**
      * @description Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or a `reminder` for an ask still waiting after three hours, sent once.
@@ -1768,6 +1877,10 @@ export interface components {
   };
   pathItems: never;
 }
+export type SpeechRequest = components["schemas"]["SpeechRequest"];
+export type VoiceList = components["schemas"]["VoiceList"];
+export type VoiceChoice = components["schemas"]["VoiceChoice"];
+export type Voice = components["schemas"]["Voice"];
 export type CallResult = components["schemas"]["CallResult"];
 export type Vocabulary = components["schemas"]["Vocabulary"];
 export type Term = components["schemas"]["Term"];
@@ -1851,6 +1964,8 @@ export type AskKind = components["schemas"]["AskKind"];
 export type AskOption = components["schemas"]["AskOption"];
 export type AskOutcome = components["schemas"]["AskOutcome"];
 export type Call = components["schemas"]["Call"];
+export type VoiceState = components["schemas"]["VoiceState"];
+export type VoiceReason = components["schemas"]["VoiceReason"];
 export type StatusKind = components["schemas"]["StatusKind"];
 export type StatusLabel = components["schemas"]["StatusLabel"];
 export type StatusDetail = components["schemas"]["StatusDetail"];
@@ -1858,6 +1973,7 @@ export type LiveTurn = components["schemas"]["LiveTurn"];
 export type CallStarted = components["schemas"]["CallStarted"];
 export type CallEnded = components["schemas"]["CallEnded"];
 export type CallAudioDeleted = components["schemas"]["CallAudioDeleted"];
+export type VoiceStatus = components["schemas"]["VoiceStatus"];
 export type NotificationKind = components["schemas"]["NotificationKind"];
 export type ResponseInvalidRequest = components["responses"]["InvalidRequest"];
 export type ResponseTokenRejected = components["responses"]["TokenRejected"];
@@ -1897,7 +2013,7 @@ export interface operations {
            * @example {
            *       "product": "ito",
            *       "protocol": [
-           *         "0.8"
+           *         "0.9"
            *       ]
            *     }
            */
@@ -1960,8 +2076,8 @@ export interface operations {
           /**
            * @example {
            *       "name": "studio",
-           *       "version": "0.8.0",
-           *       "protocol": "0.8",
+           *       "version": "0.9.0",
+           *       "protocol": "0.9",
            *       "agent": {
            *         "name": "Ari",
            *         "model": "gpt-6.1-sol",
@@ -2903,6 +3019,94 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Corrections"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  speak: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "text": "Hi, I'm Ari. This is how I sound.",
+         *       "voice": "bf_emma"
+         *     }
+         */
+        "application/json": components["schemas"]["SpeechRequest"];
+      };
+    };
+    responses: {
+      /** @description The speech. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "audio/wav": string;
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  listVoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The voices and the voice's state. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  chooseVoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "voice": "bf_emma"
+         *     }
+         */
+        "application/json": components["schemas"]["VoiceChoice"];
+      };
+    };
+    responses: {
+      /** @description The choice, as saved. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceChoice"];
         };
       };
       400: components["responses"]["InvalidRequest"];

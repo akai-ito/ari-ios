@@ -20,6 +20,10 @@ struct SettingsView: View {
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
     @State private var models: Models?
+    #if os(iOS)
+        /// Ari's voice on the server, from the main view.
+        @Environment(Voices.self) private var voices: Voices?
+    #endif
     @State private var path = Self.startingPath
 
     var body: some View {
@@ -58,7 +62,7 @@ struct SettingsView: View {
                     if let models { ModelPickerView(models: models, chosen: model.refreshServer) }
                 case .voice:
                     #if os(iOS)
-                        VoicePickerView()
+                        if let voices { VoicePickerView(voices: voices) }
                     #endif
                 }
             }
@@ -268,14 +272,14 @@ struct SettingsView: View {
     /// How calls with Ari go: how long a pause ends your turn.
     private struct TalkSettings: View {
         @AppStorage("talk.pause") private var pause = 1.5
-        @AppStorage(Voice.chosenKey) private var voice = ""
+        @Environment(Voices.self) private var voices: Voices?
 
         var body: some View {
             Section {
                 NavigationLink(value: SettingsRoute.voice) {
-                    LabeledContent("Voice", value: Voice.chosen()?.name ?? "None")
+                    LabeledContent("Voice", value: voices?.chosen?.name ?? "")
                 }
-                .id(voice)
+                .disabled(voices == nil)
                 Picker("Pause before Ari answers", selection: $pause) {
                     ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { seconds in
                         Text(seconds.formatted(.number.precision(.fractionLength(0...1))) + " s")

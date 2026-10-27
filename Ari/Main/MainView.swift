@@ -14,6 +14,8 @@ struct MainView: View {
     #if os(iOS)
         /// Calls with Ari, registered with iOS.
         @State private var talk: Talk?
+        /// Ari's voice on the server, and whether it can talk.
+        @State private var voices: Voices?
         /// The calls Siri asked for that have started here.
         @State private var startedCalls = 0
     #endif
@@ -61,8 +63,10 @@ struct MainView: View {
         .task { if memory == nil { memory = model.client().map(Memory.init(client:)) } }
         #if os(iOS)
             .environment(talk)
+            .environment(voices)
             .task {
-                if talk == nil { talk = Talk(session: session) }
+                makeTalk()
+                await voices?.refresh()
                 #if DEBUG
                     if DebugScript.talks { talk?.start() }
                 #endif
@@ -71,9 +75,21 @@ struct MainView: View {
             .onChange(of: TalkRequests.shared.count, initial: true) { _, count in
                 guard count > startedCalls else { return }
                 startedCalls = count
-                if talk == nil { talk = Talk(session: session) }
+                makeTalk()
                 place = .chat
-                talk?.start()
+                Task {
+                    // Opened by Siri: know whether the server can talk before starting.
+                    if voices?.state == nil { await voices?.refresh() }
+                    talk?.start()
+                }
+            }
+            // The server's voice changed: Talk follows, and a call ends if it can't go on.
+            .onChange(of: session.voiceStatus) { _, status in
+                guard let status, let voices else { return }
+                voices.apply(status)
+                if talk?.call != nil, !voices.canTalk {
+                    talk?.end(because: voices.reason ?? "Ari's voice stopped on your server.")
+                }
             }
             .fullScreenCover(
                 isPresented: Binding(
@@ -106,7 +122,12 @@ struct MainView: View {
             model.setLooking(looking)
         }
         .onChange(of: session.link) { _, link in
-            if link == .live { model.reconnected() }
+            guard link == .live else { return }
+            model.reconnected()
+            #if os(iOS)
+                // The voice may have changed while the stream was down.
+                Task { await voices?.refresh() }
+            #endif
         }
         .onChange(of: model.opening) { _, message in
             if message != nil { place = .chat }
@@ -119,6 +140,16 @@ struct MainView: View {
         #endif
     }
 }
+
+#if os(iOS)
+    extension MainView {
+        /// Ari's voice and calls, made once there's a server to talk to.
+        fileprivate func makeTalk() {
+            if voices == nil, let client = model.client() { voices = Voices(client: client) }
+            if talk == nil, let voices { talk = Talk(session: session, voices: voices) }
+        }
+    }
+#endif
 
 /// The gear in the corner: a small glass circle, quiet until you need it.
 struct SettingsButton: View {

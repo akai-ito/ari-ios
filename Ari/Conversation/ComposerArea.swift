@@ -20,6 +20,7 @@ struct ComposerArea: View, Equatable {
     let detach: (AttachmentID) -> Void
     /// Starts a call, where Ari can take one.
     var talk: (() -> Void)?
+    var talkReady = true
 
     /// What you're writing. Saved a moment after you stop typing, and when Ari leaves the screen,
     /// so it survives Ari closing; saved on every keystroke, the field kept waiting on it.
@@ -34,7 +35,8 @@ struct ComposerArea: View, Equatable {
         Composer(
             draft: secret ? $secretAnswer : $draft, role: role,
             prompt: asking.map(Self.takesTypedAnswer) == true ? "Answer Ari" : "Message Ari",
-            secret: secret, send: submit, stop: stop, talk: secret ? nil : talk
+            secret: secret, send: submit, stop: stop, talk: secret ? nil : talk,
+            talkReady: talkReady
         ) {
             // A secret answer is only ever typed.
             if !secret {
@@ -102,7 +104,7 @@ struct ComposerArea: View, Equatable {
     /// Only what the composer shows: the closures are the conversation's own, the same each time.
     static func == (a: ComposerArea, b: ComposerArea) -> Bool {
         a.attached == b.attached && a.attachProblem == b.attachProblem && a.working == b.working
-            && a.stopping == b.stopping && a.asking == b.asking
+            && a.stopping == b.stopping && a.asking == b.asking && a.talkReady == b.talkReady
     }
 
     /// Whether an ask takes a typed answer. Any message still answers it, but the composer only

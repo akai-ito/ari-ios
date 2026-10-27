@@ -89,6 +89,9 @@
         nonisolated private static let log = Logger(
             subsystem: "io.github.akai-ito.ari", category: "talk")
 
+        /// Asks Talk to end the call, with why: set by Talk.
+        var ended: (String?) -> Void = { _ in }
+
         /// Whether a call is on, so nothing else takes its audio.
         private(set) static var isOn = false
 
@@ -318,8 +321,12 @@
 
             let voicePlayer = AVAudioPlayerNode()
             let tonePlayer = AVAudioPlayerNode()
-            let voice = Voice(player: voicePlayer)
+            let session = session
+            let voice = Voice(player: voicePlayer) { text throws(RequestError) in
+                try await session.speak(text)
+            }
             voice.finished = { [weak self] in self?.finishedSpeaking() }
+            voice.failed = { [weak self] _ in self?.voiceFailed() }
             self.voice = voice
             self.tonePlayer = tonePlayer
             audio.attach(voicePlayer)
@@ -365,6 +372,13 @@
             let session = AVAudioSession.sharedInstance()
             let speaker = session.currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
             return !speaker || session.isEchoCancelledInputEnabled
+        }
+
+        /// The server couldn't say a sentence: the call ends, rather than going on without Ari's
+        /// voice.
+        private func voiceFailed() {
+            problem = "Ari's voice stopped on your server, so the call ended."
+            ended(problem)
         }
 
         /// Ari's voice went quiet. Without echo cancellation, what the recogniser still holds is

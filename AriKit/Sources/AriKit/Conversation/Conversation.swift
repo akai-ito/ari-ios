@@ -239,7 +239,8 @@ extension Conversation {
         case .callAudioDeleted(let event):
             record(event.call)
             forgetAudio(of: event.call.id)
-        case .unknown:
+        case .voiceStatus, .unknown:
+            // The server's voice is Talk's business, not the conversation's.
             break
         }
 

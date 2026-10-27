@@ -92,6 +92,13 @@ struct ProtocolDecodingTests {
                     #expect(
                         taught.corrections.map(\.meant) == sent.corrections.map(\.meant), "\(place)"
                     )
+                case .voices:
+                    #expect(try !body.decode(VoiceList.self).voices.isEmpty, "\(place)")
+                case .chooseVoice:
+                    let sent = try #require(request.body).decode(VoiceChoice.self)
+                    #expect(try body.decode(VoiceChoice.self) == sent, "\(place)")
+                case .speech:
+                    continue
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
                 }
@@ -147,6 +154,14 @@ struct ProtocolDecodingTests {
                 let values = try body.decode(CapabilitySetup.self).values
                 #expect(
                     try JSONValue(encoding: CapabilitySetup(values: values)) == body, "\(place)")
+            case .chooseVoice:
+                let voice = try body.decode(VoiceChoice.self).voice
+                #expect(try JSONValue(encoding: VoiceChoice(voice: voice)) == body, "\(place)")
+            case .speech:
+                let speech = try body.decode(SpeechRequest.self)
+                #expect(
+                    try JSONValue(encoding: SpeechRequest(text: speech.text, voice: speech.voice))
+                        == body, "\(place)")
             case .teachVocabulary:
                 let pairs = try body.decode(VocabularyCorrections.self).corrections.map {
                     VocabularyCorrections.Pair(heard: $0.heard, meant: $0.meant)
@@ -174,7 +189,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 9) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 10) > .supported)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
@@ -208,6 +223,7 @@ extension Event.Payload {
         case .callStarted: "call.started"
         case .callEnded: "call.ended"
         case .callAudioDeleted: "call.audio_deleted"
+        case .voiceStatus: "voice.status"
         case .unknown: nil
         }
     }

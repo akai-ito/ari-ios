@@ -16,8 +16,13 @@
         var showsCall = false
         /// Why a call couldn't start, in plain words.
         private(set) var problem: String?
+        /// Why the last call ended or couldn't start, for the chat to say: Talk is off rather than
+        /// worse, and this is why.
+        var notice: String?
 
         @ObservationIgnored private let session: Session
+        /// Whether the server can talk: a call needs its voice.
+        @ObservationIgnored private let voices: Voices
         @ObservationIgnored private let provider: CXProvider
         @ObservationIgnored private let controller = CXCallController()
         /// Getting speech recognition ready since Ari opened.
@@ -27,8 +32,9 @@
 
         private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
-        init(session: Session) {
+        init(session: Session, voices: Voices) {
             self.session = session
+            self.voices = voices
             let configuration = CXProviderConfiguration()
             configuration.supportsVideo = false
             configuration.maximumCallGroups = 1
@@ -49,8 +55,14 @@
                 return
             }
             guard !starting else { return }
+            // Without the server's voice there's no call, rather than a call in a worse voice.
+            guard voices.canTalk else {
+                notice = voices.reason ?? "Ari's voice isn't ready on your server yet."
+                return
+            }
             starting = true
             problem = nil
+            notice = nil
             Task {
                 // Asked here in the chat, before the call: once CallKit has the screen, the
                 // prompt never came and the call waited for it.
@@ -76,6 +88,7 @@
 
         private func begin() {
             let call = CallEngine(session: session, after: warming)
+            call.ended = { [weak self] reason in self?.end(because: reason) }
             self.call = call
             showsCall = true
             #if targetEnvironment(simulator)
@@ -94,6 +107,13 @@
                     Task { @MainActor in self?.couldNotStart(error) }
                 }
             #endif
+        }
+
+        /// The call can't go on, such as when the server's voice stops: it ends, and the chat says
+        /// why.
+        func end(because reason: String?) {
+            notice = reason
+            end()
         }
 
         /// You tapped End, on the call screen or the lock screen.

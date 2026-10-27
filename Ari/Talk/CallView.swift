@@ -145,6 +145,27 @@
         }
     }
 
+    /// Why Talk is off, or why the last call ended, in a line above the composer for a few seconds.
+    struct TalkNotice: View {
+        let text: String
+        let dismiss: () -> Void
+
+        var body: some View {
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.ariSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .onTapGesture(perform: dismiss)
+                .task(id: text) {
+                    try? await Task.sleep(for: .seconds(6))
+                    if !Task.isCancelled { dismiss() }
+                }
+        }
+    }
+
     /// While a call carries on behind the chat: a quiet bar to go back to it.
     struct OnCallBar: View {
         let call: CallEngine

@@ -18,13 +18,16 @@ struct Composer<Leading: View, Above: View>: View {
     let stop: () -> Void
     /// Starts a call, where Ari can take one.
     var talk: (() -> Void)?
+    /// Whether the server can talk now; while it can't, Talk is dimmed, and a tap says why.
+    var talkReady = true
     let leading: Leading
     let above: Above
 
     init(
         draft: Binding<String>, role: ComposerRole, prompt: String = "Message Ari",
         secret: Bool = false, send: @escaping () -> Void, stop: @escaping () -> Void,
-        talk: (() -> Void)? = nil, @ViewBuilder leading: () -> Leading = { EmptyView() },
+        talk: (() -> Void)? = nil, talkReady: Bool = true,
+        @ViewBuilder leading: () -> Leading = { EmptyView() },
         @ViewBuilder above: () -> Above = { EmptyView() }
     ) {
         _draft = draft
@@ -34,6 +37,7 @@ struct Composer<Leading: View, Above: View>: View {
         self.send = send
         self.stop = stop
         self.talk = talk
+        self.talkReady = talkReady
         self.leading = leading()
         self.above = above()
     }
@@ -76,7 +80,7 @@ struct Composer<Leading: View, Above: View>: View {
                 }
                 Image(systemName: role == .stop ? "stop.fill" : talks ? "waveform" : "arrow.up")
                     .font(.system(size: role == .stop ? 14 : 18, weight: .bold))
-                    .foregroundStyle(talks ? .ariText : glyph)
+                    .foregroundStyle(talks ? (talkReady ? .ariText : .ariTertiary) : glyph)
                     .contentTransition(.symbolEffect(.replace))
             }
             .frame(width: 44, height: 44)

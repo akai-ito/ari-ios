@@ -28,6 +28,8 @@ public final class Session {
     public private(set) var isLoadingEarlier = false
     /// Messages the server refused outright, which Ari won't retry. This needs a bug on one side.
     public private(set) var refusedMessages: [MessageID: RequestError] = [:]
+    /// The server's voice, as the stream last said: for Talk to follow.
+    public private(set) var voiceStatus: VoiceStatus?
 
     public enum Link: Equatable, Sendable {
         /// The first attempt since ``start()``.
@@ -336,6 +338,11 @@ public final class Session {
         wake(.call)
     }
 
+    /// A sentence in Ari's chosen voice, as a WAV, for a call to play.
+    public func speak(_ text: String) async throws(RequestError) -> Data {
+        try await client.speak(SpeechRequest(text: text))
+    }
+
     /// The words to steer recognition, from memory and conversation; `nil` if the server can't
     /// say right now.
     public func vocabulary() async -> Vocabulary? {
@@ -478,6 +485,7 @@ public final class Session {
 
     private func receive(_ event: Event) {
         conversation.apply(event)
+        if case .voiceStatus(let status) = event.payload { voiceStatus = status }
         switch event.payload {
         case .snapshot:
             wantsSnapshot = false

@@ -49,6 +49,8 @@ struct ConversationView: View {
     #if os(iOS)
         /// Calls with Ari.
         @Environment(Talk.self) private var talk: Talk?
+        /// Whether the server can talk.
+        @Environment(Voices.self) private var voices: Voices?
     #endif
 
     var body: some View {
@@ -211,6 +213,9 @@ struct ConversationView: View {
                     // While Ari waits for your answer, the composer takes it, as a secret if asked.
                     VStack(spacing: 0) {
                         #if os(iOS)
+                            if let talk, let notice = talk.notice, talk.call == nil {
+                                TalkNotice(text: notice) { talk.notice = nil }
+                            }
                             if let talk, let call = talk.call, !talk.showsCall {
                                 OnCallBar(call: call) { talk.showsCall = true }
                             }
@@ -220,7 +225,7 @@ struct ConversationView: View {
                             working: working, stopping: conversation.pendingStop != nil,
                             asking: revealing ? nil : conversation.waitingAsk,
                             send: send, stop: stop, attach: attach, detach: detach,
-                            talk: talkAction
+                            talk: talkAction, talkReady: talkReady
                         )
                         .equatable()
                     }
@@ -420,6 +425,15 @@ struct ConversationView: View {
             return { talk.start() }
         #else
             return nil
+        #endif
+    }
+
+    /// Whether the server can talk now, so Talk shows as ready.
+    private var talkReady: Bool {
+        #if os(iOS)
+            voices?.canTalk ?? false
+        #else
+            false
         #endif
     }
 

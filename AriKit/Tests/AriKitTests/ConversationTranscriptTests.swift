@@ -727,6 +727,10 @@ extension ConversationTranscriptTests {
         ],
         // The recogniser's vocabulary, not the conversation: nothing changes in it.
         "39-ari-learns-a-name": [],
+        // Talk's readiness and Settings' voices, not the conversation: nothing changes in it.
+        "42-choose-ari-s-voice": [],
+        "43-before-the-voice-is-ready": [],
+        "44-when-the-server-can-t-talk": [],
         "41-another-device-sees-the-call": [
             you("914f3838-aaa0-49a3-89cd-57b1b6391d24", "What did Bora say about the QRT panel?"),
             reply(
