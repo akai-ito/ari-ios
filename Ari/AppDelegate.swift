@@ -1,4 +1,5 @@
 #if os(iOS)
+    import AppIntents
     import AriKit
     import UIKit
     import UserNotifications
@@ -14,6 +15,9 @@
             didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
         ) -> Bool {
             UNUserNotificationCenter.current().delegate = self
+            // Siri's and Shortcuts' intents send through the same model.
+            let model = model
+            AppDependencyManager.shared.add(dependency: model)
             #if DEBUG
                 DebugScript.adoptNotificationKey(into: model.notifications)
             #endif

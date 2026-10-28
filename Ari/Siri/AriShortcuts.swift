@@ -12,6 +12,14 @@
                     "Walk with \(.applicationName)",
                 ],
                 shortTitle: "Talk to Ari", systemImageName: "waveform")
+            // Not "Tell Ari": Siri takes that as a text to the contact named Ari.
+            AppShortcut(
+                intent: AskAriIntent(),
+                phrases: [
+                    "Ask \(.applicationName)",
+                    "Note for \(.applicationName)",
+                ],
+                shortTitle: "Ask Ari", systemImageName: "bubble.left")
         }
     }
 #endif
