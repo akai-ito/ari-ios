@@ -107,7 +107,8 @@ struct MainView: View {
         #endif
         #if os(iOS)
             .sheet(isPresented: $showsSettings) {
-                SettingsView(model: model, session: session)
+                // A sheet takes the environment from where it's attached, outside the one above.
+                SettingsView(model: model, session: session).environment(voices)
             }
         #else
             // On the Mac, Settings is a window of its own.

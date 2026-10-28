@@ -17,11 +17,20 @@
                 Spacer(minLength: 24)
                 PresenceView(history: poses, size: 132)
                     .frame(height: 180)
-                Text(stateLine)
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .contentTransition(.opacity)
-                    .padding(.top, 12)
+                // One line at a time: the old one fades out before the new one fades in, so two
+                // never read as one.
+                ZStack {
+                    Text(stateLine)
+                        .id(stateLine)
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.animation(.easeIn(duration: 0.2).delay(0.15)),
+                                removal: .opacity.animation(.easeOut(duration: 0.15))))
+                }
+                .font(.subheadline)
+                .foregroundStyle(.ariSecondary)
+                .padding(.top, 12)
+                .animation(.default, value: stateLine)
                 Spacer(minLength: 24)
                 captions
                 Spacer(minLength: 24)
@@ -32,6 +41,7 @@
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ariBackground)
             .animation(.easeInOut(duration: 0.3), value: call.phase)
+            .animation(.easeInOut(duration: 0.3), value: session.conversation.waitingAsk?.id)
             .onChange(of: pose, initial: true) { _, pose in poses.set(pose) }
         }
 
@@ -64,7 +74,8 @@
             }
         }
 
-        /// Ari's words on top, larger; yours below, live while you talk.
+        /// Ari's words on top, larger; yours below, live while you talk. Once Ari has said what it
+        /// asked, the question stays in its place until you answer.
         private var captions: some View {
             VStack(spacing: 18) {
                 if !call.saying.isEmpty {
@@ -72,6 +83,13 @@
                         .font(.ariBody)
                         .foregroundStyle(.ariText)
                         .transition(.opacity)
+                } else if let ask = session.conversation.waitingAsk {
+                    CallAsk(ask: ask) { option in
+                        session.send(option.label, answers: ask.id)
+                    } openChat: {
+                        talk.showsCall = false
+                    }
+                    .transition(.opacity)
                 }
                 let yours = call.hearing.isEmpty ? call.lastSaid : call.hearing
                 if !yours.isEmpty {
@@ -142,6 +160,79 @@
             case .working:
                 session.conversation.turn?.status.map { Pose(kind: $0.kind) } ?? .thinking
             }
+        }
+    }
+
+    /// What Ari asked, while it waits on a call. Ari says the question and its choices, and saying
+    /// one answers it; the choices are here too, large, for when tapping is easier than talking. A
+    /// secret, such as a code, is never said out loud: it's typed in the chat.
+    struct CallAsk: View {
+        let ask: Ask
+        let answer: (Ask.Option) -> Void
+        let openChat: () -> Void
+
+        var body: some View {
+            VStack(spacing: 14) {
+                Text(ask.question)
+                    .font(.ariBody)
+                    .foregroundStyle(.ariText)
+                if let preview = ask.preview {
+                    Text(preview)
+                        .font(.footnote)
+                        .foregroundStyle(.ariSecondary)
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
+                }
+                if ask.secret {
+                    choice("Type it in the chat", filled: true, action: openChat)
+                    Text("It stays out of your history in Ari.")
+                        .font(.caption)
+                        .foregroundStyle(.ariTertiary)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(ask.options, id: \.label) { option in
+                            choice(option.label, detail: option.description, filled: option.acts) {
+                                answer(option)
+                            }
+                        }
+                    }
+                    Text(ask.options.isEmpty ? "Say your answer." : "Tap one, or just say it.")
+                        .font(.caption)
+                        .foregroundStyle(.ariTertiary)
+                }
+            }
+        }
+
+        /// A choice as wide as the screen, filled when it goes ahead, like Send.
+        private func choice(
+            _ label: String, detail: String? = nil, filled: Bool, action: @escaping () -> Void
+        ) -> some View {
+            Button(action: action) {
+                VStack(spacing: 2) {
+                    Text(label)
+                        .font(.body.weight(filled ? .semibold : .regular))
+                    if let detail {
+                        Text(detail)
+                            .font(.caption)
+                            .opacity(0.7)
+                    }
+                }
+                .foregroundStyle(filled ? Color.ariBackground : .ariText)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .padding(.horizontal, 16)
+                .background {
+                    if filled {
+                        Capsule().fill(.ariText)
+                    } else {
+                        Capsule().strokeBorder(.ariLine, lineWidth: 1)
+                    }
+                }
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
         }
     }
 
