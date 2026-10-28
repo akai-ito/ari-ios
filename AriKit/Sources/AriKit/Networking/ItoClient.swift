@@ -287,7 +287,8 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     /// A request whose answer is bytes, not JSON.
     private func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
-        let request = authorize(request)
+        var request = authorize(request)
+        if request.body != nil { request.headers["Content-Type"] = "application/json" }
         let response: HTTPResponse
         do {
             response = try await transport.send(request, to: address.url)

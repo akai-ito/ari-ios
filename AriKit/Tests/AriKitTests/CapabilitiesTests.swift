@@ -282,6 +282,10 @@ actor TranscriptServer: Transport {
                 "line \(expected.line): expected \(expected.method) \(expected.path), got "
                     + "\(request.method.rawValue) \(request.path)")
         }
+        // As the server does, which refuses a body it isn't told is JSON.
+        if body != nil, request.headers["Content-Type"] != "application/json" {
+            mismatches.append("line \(expected.line): a JSON body sent without saying it's JSON")
+        }
         lastAnswer = response
         return HTTPResponse(
             status: response.status, headers: response.headers.lowercasedKeys,
