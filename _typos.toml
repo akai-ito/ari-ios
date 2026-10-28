@@ -1,0 +1,4 @@
+# Words the shared spelling check would correct but that are right here.
+[default.extend-words]
+# SF Symbols names, such as "mappin.circle".
+mappin = "mappin"

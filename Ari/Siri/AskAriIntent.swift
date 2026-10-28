@@ -70,11 +70,11 @@
         }
 
         /// A reply as it's said aloud, as on a call: only what comes before a line holding `---`,
-        /// as plain words.
+        /// as plain words, without the blocks Ari draws.
         static func spoken(_ markdown: String) -> String {
             let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
             let said = lines.prefix { $0.trimmingCharacters(in: .whitespaces) != "---" }
-            return ReplyDocument(markdown: said.joined(separator: "\n")).plainText
+            return ReplyDocument(markdown: said.joined(separator: "\n")).withoutShapes.plainText
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }

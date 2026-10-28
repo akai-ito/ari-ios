@@ -23,6 +23,7 @@ struct ReplyView: View {
     static let edge = 10.0
 
     var body: some View {
+        let shapes = document.shapes
         VStack(alignment: .leading, spacing: 0) {
             ForEach(document.blocks.indices, id: \.self) { index in
                 let block = document.blocks[index]
@@ -33,7 +34,8 @@ struct ReplyView: View {
                     BlockView(
                         block: block,
                         position: position >= Double(end) + Self.edge ? .infinity : position,
-                        tone: tone
+                        tone: tone,
+                        shape: shapes[index]
                     )
                     .padding(.top, index == 0 ? 0 : gap(before: index))
                 }
@@ -110,6 +112,8 @@ private struct BlockView: View {
     let block: ReplyDocument.Block
     let position: Double
     let tone: ReplyView.Tone
+    /// An `ari:` block's part, and its shape if it reads.
+    var shape: (part: Int, shape: ReplyShape?)?
 
     var body: some View {
         content
@@ -130,6 +134,18 @@ private struct BlockView: View {
         case .heading:
             item(
                 Text(ReplyView.text(block.runs, position: position, base: .ariHeading, tone: tone)))
+        case .code where shape != nil:
+            // Drawn once it's all here; a quiet card while Ari writes it; its text if it never
+            // reads.
+            if let drawn = shape?.shape, position == .infinity {
+                ShapeView(shape: drawn, part: shape?.part ?? 0)
+            } else if position != .infinity {
+                ShapePlaceholder()
+            } else {
+                CodeBlockView(
+                    language: nil, code: block.runs.first?.text ?? "",
+                    text: Text(ReplyView.text(block.runs, position: position, base: .code)))
+            }
         case .code(let language):
             CodeBlockView(
                 language: language, code: block.runs.first?.text ?? "",
