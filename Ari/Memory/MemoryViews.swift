@@ -194,7 +194,8 @@ struct ShelfView: View {
         .scrollContentBackground(.hidden)
         .background(.ariBackground)
         .navigationTitle(MemoryList.title(ofShelf: shelf))
-        .task {
+        // Again once there's a server to ask, when the shelf opened first.
+        .task(id: memory != nil) {
             guard let memory else { return }
             do throws(RequestError) {
                 pages = try await memory.pages(on: shelf)
@@ -205,36 +206,38 @@ struct ShelfView: View {
     }
 }
 
-/// One page, read-only, drawn from Ari's Markdown: the present first, then *Earlier*, then links.
+/// One page, read-only, drawn from Ari's Markdown: the pages it links to as chips on top, then
+/// the present, then *Earlier*. Names in the words open their pages.
 struct PageView: View {
     let memory: Memory?
     let address: PageAddress
 
     @State private var page: MemoryPage?
     @State private var problem: String?
+    /// A page opened from a name in the words.
+    @State private var opened: PageAddress?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let page {
-                    ReplyView(document: ReplyDocument(markdown: page.markdown), position: .infinity)
+                    let linked = PageLink.named(page.links, in: memory)
+                    if !linked.isEmpty {
+                        WrappingStack(spacing: 8) {
+                            ForEach(linked, id: \.address) { link in
+                                NavigationLink(value: link.address) {
+                                    PageChip(title: link.title)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    ReplyView(document: PageLink.reading(page, linked: linked), position: .infinity)
                     Text(
                         "\(MemoryList.title(ofShelf: page.shelf)) · as of \(MemoryList.ago(page.changedAt))"
                     )
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)
-                    if !page.links.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Linked").font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.ariSecondary)
-                            ForEach(page.links) { link in
-                                NavigationLink(value: link) {
-                                    Text(link.plainName + " ›").font(.footnote)
-                                        .foregroundStyle(.ariSecondary)
-                                }
-                            }
-                        }
-                    }
                     Text("Ari keeps this page. To change it, just tell Ari.")
                         .font(.caption)
                         .foregroundStyle(.ariTertiary)
@@ -252,20 +255,89 @@ struct PageView: View {
         }
         .background(.ariBackground)
         .navigationTitle(page?.title ?? "")
-        .task {
+        .opensPageLinks { opened = $0 }
+        .navigationDestination(item: $opened) { PageView(memory: memory, address: $0) }
+        // Again once there's a server to ask, when the page opened first.
+        .task(id: memory != nil) {
             guard let memory else { return }
             do throws(RequestError) {
                 page = try await memory.page(address)
             } catch {
                 problem = "Couldn't load this page: \(error.plainWords)"
             }
+            // The linked pages' titles come from the shelves.
+            if memory.shelfPages.isEmpty { await memory.refresh() }
         }
+    }
+}
+
+/// A linked page, named: outlined like an option, in your hand.
+private struct PageChip: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.footnote)
+            .foregroundStyle(.ariSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().strokeBorder(.ariLine, lineWidth: 1))
+            .contentShape(Capsule())
+    }
+}
+
+/// A link from a page's words to another page: `ari-page:` and its address.
+enum PageLink {
+    static let scheme = "ari-page"
+
+    static func url(_ address: PageAddress) -> URL? {
+        URL(string: "\(scheme):\(address.rawValue)")
+    }
+
+    static func address(_ url: URL) -> PageAddress? {
+        guard url.scheme == scheme else { return nil }
+        return PageAddress(String(url.absoluteString.dropFirst(scheme.count + 1)))
+    }
+
+    /// The linked pages Ari knows the titles of; one it doesn't is left out rather than named
+    /// from its address.
+    @MainActor
+    static func named(_ links: [PageAddress], in memory: Memory?) -> [(
+        address: PageAddress, title: String
+    )] {
+        links.compactMap { link in memory?.title(of: link).map { (link, $0) } }
+    }
+
+    /// A page's words as the Library shows them: stamps quiet, and each linked page linked where
+    /// the words first name it.
+    static func reading(
+        _ page: MemoryPage, linked: [(address: PageAddress, title: String)]
+    ) -> ReplyDocument {
+        ReplyDocument(markdown: page.markdown)
+            .quietingStamps()
+            .linking(linked.compactMap { link in url(link.address).map { (link.title, $0) } })
+    }
+}
+
+extension View {
+    /// Opens a page of memory when its name is tapped in the words; any other link opens as usual.
+    func opensPageLinks(_ open: @escaping (PageAddress) -> Void) -> some View {
+        environment(
+            \.openURL,
+            OpenURLAction { url in
+                guard let address = PageLink.address(url) else { return .systemAction }
+                open(address)
+                return .handled
+            })
     }
 }
 
 /// Tapping Ari's presence: the three pages that go into every reply, as they are right now.
 struct InMindSheet: View {
     let memory: Memory
+
+    /// A page opened from a name in the words.
+    @State private var opened: PageAddress?
 
     var body: some View {
         NavigationStack {
@@ -286,9 +358,9 @@ struct InMindSheet: View {
                                     .foregroundStyle(.ariTertiary)
                             }
                             ReplyView(
-                                document: ReplyDocument(markdown: page.markdown),
-                                position: .infinity,
-                                tone: .note)
+                                document: PageLink.reading(
+                                    page, linked: PageLink.named(page.links, in: memory)),
+                                position: .infinity)
                         }
                     }
                     if memory.inMind.isEmpty {
@@ -306,6 +378,8 @@ struct InMindSheet: View {
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
+            .opensPageLinks { opened = $0 }
+            .navigationDestination(item: $opened) { PageView(memory: memory, address: $0) }
         }
         .task { await memory.refresh() }
     }

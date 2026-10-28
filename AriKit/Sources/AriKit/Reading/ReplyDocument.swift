@@ -47,6 +47,8 @@ public struct ReplyDocument: Sendable, Equatable {
         public static let emphasis = Style(rawValue: 1 << 1)
         public static let code = Style(rawValue: 1 << 2)
         public static let strikethrough = Style(rawValue: 1 << 3)
+        /// When a page's words were true, such as "as of 21 Oct": small, at the end of its block.
+        public static let stamp = Style(rawValue: 1 << 4)
     }
 
     /// Reads `markdown`, which may be a reply still arriving: a bold or code span left open at

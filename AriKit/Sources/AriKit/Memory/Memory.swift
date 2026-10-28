@@ -17,6 +17,8 @@ public final class Memory {
     /// Recently changed pages, newest first.
     public private(set) var recent: [PageSummary] = []
     public private(set) var shelves: [Shelf] = []
+    /// Each shelf's pages, most recently changed first, as of the last refresh.
+    public private(set) var shelfPages: [String: [PageSummary]] = [:]
     public private(set) var load = Load.loading
 
     @ObservationIgnored private let client: ItoClient
@@ -35,7 +37,28 @@ public final class Memory {
             load = .loaded
         } catch {
             if load != .loaded { load = .failed(RequestError(error)) }
+            return
         }
+        // Every shelf's pages, for what's on each and every page's title. A shelf that fails keeps
+        // what it had.
+        let client = client
+        await withTaskGroup(of: (String, [PageSummary]?).self) { group in
+            for shelf in shelves.map(\.shelf) {
+                group.addTask { (shelf, try? await client.pages(on: shelf).pages) }
+            }
+            for await (shelf, pages) in group {
+                if let pages { shelfPages[shelf] = pages }
+            }
+        }
+    }
+
+    /// A page's title, if Ari has seen the page on a shelf, in the recent changes or in mind.
+    public func title(of address: PageAddress) -> String? {
+        if let page = inMind.first(where: { $0.address == address }) { return page.title }
+        for pages in [recent] + Array(shelfPages.values) {
+            if let page = pages.first(where: { $0.address == address }) { return page.title }
+        }
+        return nil
     }
 
     public func pages(on shelf: String) async throws(RequestError) -> [PageSummary] {
