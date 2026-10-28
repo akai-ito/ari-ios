@@ -2,7 +2,8 @@ import AriKit
 import SwiftUI
 
 /// The Library's front page, as Ari's notebook: what's going on now, in a few lines you can read at
-/// a glance, the other pages always in mind, then the shelves, each with a peek at what's on it.
+/// a glance, the other pages always in mind, what Ari learnt lately, then the shelves, each with a
+/// peek at what's on it.
 struct LibraryHome: View {
     let memory: Memory
 
@@ -23,6 +24,7 @@ struct LibraryHome: View {
                     .foregroundStyle(.ariTertiary)
                 case .loaded:
                     inMind
+                    lately
                     if !memory.shelves.isEmpty { shelves }
                 }
             }
@@ -54,6 +56,50 @@ struct LibraryHome: View {
                 }
             }
         }
+    }
+
+    /// What Ari learnt lately, in its own notes: the newest note for each page, a few pages. Only
+    /// changes with a note: a page's name alone says nothing about what changed.
+    @ViewBuilder
+    private var lately: some View {
+        let changes = Self.latestNotes(memory.recent)
+        if !changes.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Lately, Ari learnt").font(.ariHeading).foregroundStyle(.ariText)
+                VStack(spacing: 0) {
+                    ForEach(changes) { change in
+                        NavigationLink(value: change.address) {
+                            Text(
+                                "\(Text(change.title).fontWeight(.semibold).foregroundStyle(.ariText))  \(change.note ?? "")"
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.ariSecondary)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if change.id != changes.last?.id {
+                            Divider().overlay(Color.ariLine)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .background(.ariSurface, in: .rect(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+
+    static func latestNotes(_ changes: [RecentChange]) -> [RecentChange] {
+        var seen: Set<PageAddress> = []
+        return changes.filter { change in
+            guard change.note != nil, !seen.contains(change.address) else { return false }
+            seen.insert(change.address)
+            return true
+        }
+        .prefix(4)
+        .map { $0 }
     }
 
     private var shelves: some View {

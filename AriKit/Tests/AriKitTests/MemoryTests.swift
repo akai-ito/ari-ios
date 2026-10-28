@@ -54,6 +54,27 @@ struct MemoryTests {
         #expect(steps.contains { $0.memoryAction == .journaled })
     }
 
+    @Test("plays transcript 57: Ari's notes on what changed, the journal by headline, named links")
+    func learntLately() async throws {
+        let transcript = try Fixtures.transcript("57-what-ari-learnt-lately")
+        let server = TranscriptServer(
+            transcript, only: { [.memoryRecent, .memoryPages, .memoryPage].contains($0) })
+        let recent = try await server.client.recentChanges()
+        #expect(recent.changes.first?.note == "Florence with Janki")
+        #expect(recent.changes.first?.title == "27 October 2026")
+        let journal = try await server.client.pages(on: "journal")
+        #expect(journal.pages.first?.gist == "Florence planned with Janki")
+        let trip = try await server.client.page("memory:projects/florence-trip")
+        #expect(trip.gist == "With Janki, 6–9 November; nothing booked yet")
+        #expect(
+            trip.links == [
+                MemoryLink(address: "memory:people/janki", title: "Janki", aliases: ["Janks"])
+            ])
+        let mismatches = await server.mismatches
+        #expect(mismatches.isEmpty, "\(mismatches)")
+        #expect(await server.unanswered == 0)
+    }
+
     @Test("names a link readably from its address alone")
     func plainNames() {
         #expect(PageAddress("memory:places/lisbon-trip").plainName == "Lisbon trip")
@@ -74,7 +95,7 @@ struct MemoryTests {
             switch request.route {
             case .memoryInMind: _ = try await client.inMind()
             case .memoryShelves: _ = try await client.shelves()
-            case .memoryRecent: _ = try await client.recentPages()
+            case .memoryRecent: _ = try await client.recentChanges()
             case .memoryPages: _ = try await memory.pages(on: value("shelf"))
             case .memoryPage: _ = try? await memory.page(PageAddress(value("address")))
             case .memoryChange(let change): _ = try await memory.change(change)
