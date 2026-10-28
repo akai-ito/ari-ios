@@ -54,6 +54,8 @@
         @ObservationIgnored private var playback: CallPlayback?
         @ObservationIgnored private var soundPlayer: AVAudioPlayerNode?
         @ObservationIgnored private var microphoneStream: MicrophoneStream?
+        /// How loud the call is, for Ari's dots to breathe with.
+        @ObservationIgnored let level = CallLevel()
         @ObservationIgnored private var chime: AVAudioPCMBuffer?
         @ObservationIgnored private var tone: AVAudioPCMBuffer?
         @ObservationIgnored private var engineObserver: (any NSObjectProtocol)?
@@ -256,7 +258,8 @@
             chime = CallSounds.chime(format: soundFormat)
             tone = CallSounds.tone(format: soundFormat)
 
-            let microphoneStream = MicrophoneStream(microphone: micFormat) { [weak self] frame in
+            let microphoneStream = MicrophoneStream(microphone: micFormat, level: level) {
+                [weak self] frame in
                 Task { @MainActor in self?.stream?.send(audio: frame) }
             }
             microphoneStream.isMuted = muted
@@ -265,6 +268,7 @@
             microphone = "\(Int(micFormat.sampleRate / 1000)) kHz, \(micFormat.channelCount) ch"
             input.installTap(
                 onBus: 0, bufferSize: 2048, format: micFormat, block: microphoneStream.block())
+            voicePlayer.installTap(onBus: 0, bufferSize: 1024, format: nil, block: level.voiceTap())
             audio.prepare()
             try audio.start()
             voicePlayer.play()

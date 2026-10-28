@@ -38,6 +38,49 @@
         var value = false
     }
 
+    /// How loud the call is right now, for Ari's dots to breathe with: your voice as you speak, and
+    /// Ari's as it plays. The audio threads report; the presence reads it once a frame.
+    nonisolated final class CallLevel: @unchecked Sendable {
+        enum Side { case you, ari }
+
+        private let levels = Mutex<(you: Float, ari: Float)>((0, 0))
+        /// What the presence last drew: read and eased on the main thread only.
+        private var shown = 0.0
+
+        func report(_ side: Side, rms: Float) {
+            levels.withLock { levels in
+                if side == .you { levels.you = rms } else { levels.ari = rms }
+            }
+        }
+
+        /// From 0 to 1, quick to rise and slow to fall, so the dots breathe rather than flicker:
+        /// silence below -50 dB, full by -12.
+        func breath() -> Double {
+            let loudest = levels.withLock { max($0.you, $0.ari) }
+            let decibels = 20 * log10(max(Double(loudest), 1e-5))
+            let target = min(max((decibels + 50) / 38, 0), 1)
+            shown += (target - shown) * (target > shown ? 0.3 : 0.06)
+            return shown
+        }
+
+        /// The tap for Ari's voice, on its player: the level as it's heard, not as it arrives.
+        func voiceTap() -> AVAudioNodeTapBlock {
+            { [self] buffer, _ in report(.ari, rms: Self.rms(buffer)) }
+        }
+
+        static func rms(_ buffer: AVAudioPCMBuffer) -> Float {
+            guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else {
+                return 0
+            }
+            var sum: Float = 0
+            for index in 0..<Int(buffer.frameLength) {
+                let sample = samples[index * buffer.stride]
+                sum += sample * sample
+            }
+            return (sum / Float(buffer.frameLength)).squareRoot()
+        }
+    }
+
     /// What the microphone's tap does on the audio thread: turns your voice into the stream's
     /// format (16-bit PCM, mono, 16 kHz) and sends it in 40 ms frames, silence included, since the
     /// server times your pauses. While muted, nothing goes.
@@ -61,13 +104,17 @@
         private let counted = Mutex(Counts())
         private let pending = Mutex(Data())
         private let resampler: Resampler
+        private let level: CallLevel
         private let send: @Sendable (Data) -> Void
         /// The microphone's sample rate in one channel: some iPhones report several channels.
         let mono: AVAudioFormat
 
-        init(microphone: AVAudioFormat, send: @escaping @Sendable (Data) -> Void) {
+        init(
+            microphone: AVAudioFormat, level: CallLevel, send: @escaping @Sendable (Data) -> Void
+        ) {
             mono = AVAudioFormat(standardFormatWithSampleRate: microphone.sampleRate, channels: 1)!
             resampler = Resampler(from: mono, to: Self.format)
+            self.level = level
             self.send = send
         }
 
@@ -92,6 +139,8 @@
                 counted.withLock { $0.failed += 1 }
                 return
             }
+            // Muted, Ari doesn't breathe with you either.
+            level.report(.you, rms: isMuted ? 0 : CallLevel.rms(mono))
             guard !isMuted else { return }
             guard let converted = resampler.convert(mono), let samples = converted.int16ChannelData
             else {
