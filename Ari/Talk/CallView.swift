@@ -157,6 +157,7 @@
             case .connecting, .ended: .resting
             case .listening: call.isHearing ? .adjusting : .asking
             case .speaking: .writing
+            case .working where session.conversation.waitingAsk != nil: .asking
             case .working:
                 session.conversation.turn?.status.map { Pose(kind: $0.kind) } ?? .thinking
             }

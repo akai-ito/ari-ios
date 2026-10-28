@@ -593,6 +593,8 @@ struct ConversationView: View {
         if header.linkDown { return .offline }
         if let turn = session.conversation.turn {
             if session.conversation.pendingStop != nil { return .stopping }
+            // An app waits on your approval inside the turn: Ari is asking you, not working.
+            if session.conversation.waitingAsk != nil { return .asking }
             // Writing and adjusting come from the status; anything else from the newest step in the
             // turn, running or just ended, with its prop. Not the oldest one still running: a plan
             // stays open the whole turn and would hide everything after it.

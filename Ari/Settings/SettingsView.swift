@@ -269,9 +269,11 @@ struct SettingsView: View {
 }
 
 #if os(iOS)
-    /// How calls with Ari go: Ari's voice, from the server.
+    /// How calls with Ari go: Ari's voice, from the server, and whether it knows yours.
     private struct TalkSettings: View {
         @Environment(Voices.self) private var voices: Voices?
+        @State private var confirmsRelearning = false
+        @State private var problem: String?
 
         var body: some View {
             Section {
@@ -279,14 +281,48 @@ struct SettingsView: View {
                     LabeledContent("Voice", value: voices?.chosen?.name ?? "")
                 }
                 .disabled(voices == nil)
+                if let voices, let voiceprint = voices.voiceprint {
+                    LabeledContent(
+                        "Your voice", value: voiceprint == .learnt ? "Ari knows it" : "Learning")
+                    Button("Relearn my voice") { confirmsRelearning = true }
+                        .disabled(voices.relearning)
+                        .confirmationDialog(
+                            "Relearn your voice?", isPresented: $confirmsRelearning,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Relearn") { relearn(voices) }
+                        } message: {
+                            Text(
+                                "Ari forgets how you sound and learns again from the next couple of "
+                                    + "minutes you talk on a call. Until then, any voice can hold "
+                                    + "a turn open.")
+                        }
+                }
             } header: {
                 Text("Talk")
             } footer: {
-                if let voices, !voices.canTalk, let reason = voices.reason {
+                if let problem {
+                    Text(problem)
+                } else if let voices, !voices.canTalk, let reason = voices.reason {
                     Text(reason)
+                } else if voices?.voiceprint == .learning {
+                    Text(
+                        "Ari learns your voice from your first couple of minutes on calls, so "
+                            + "only you hold a turn open.")
                 }
             }
             .listRowBackground(Color.ariSurface)
+        }
+
+        private func relearn(_ voices: Voices) {
+            problem = nil
+            Task {
+                do throws(RequestError) {
+                    try await voices.relearn()
+                } catch {
+                    problem = "Couldn't relearn your voice: \(error.plainWords)"
+                }
+            }
         }
     }
 #endif

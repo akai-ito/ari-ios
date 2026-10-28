@@ -205,6 +205,12 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/voices"))
     }
 
+    /// `DELETE /v0/voice/voiceprint`: forgets your voice, so the server learns it again from your
+    /// next calls. The answer is the voice list, now `learning`.
+    public func forgetVoiceprint() async throws(RequestError) -> VoiceList {
+        try await call(HTTPRequest(.delete, "/v0/voice/voiceprint"))
+    }
+
     /// `PUT /v0/voice`: Ari's voice for the whole server, from the next sentence.
     public func choose(voice: VoiceChoice) async throws(RequestError) -> VoiceChoice {
         try await call(HTTPRequest(.put, "/v0/voice", body: try Self.json(voice)))

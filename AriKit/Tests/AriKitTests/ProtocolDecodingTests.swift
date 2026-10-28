@@ -92,6 +92,8 @@ struct ProtocolDecodingTests {
                     )
                 case .voices:
                     #expect(try !body.decode(VoiceList.self).voices.isEmpty, "\(place)")
+                case .forgetVoiceprint:
+                    #expect(try body.decode(VoiceList.self).voiceprint == .learning, "\(place)")
                 case .chooseVoice:
                     let sent = try #require(request.body).decode(VoiceChoice.self)
                     #expect(try body.decode(VoiceChoice.self) == sent, "\(place)")
@@ -183,7 +185,9 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 10) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 11) > .supported)
+        // By number, not by text: 0.10 comes after 0.9.
+        #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")

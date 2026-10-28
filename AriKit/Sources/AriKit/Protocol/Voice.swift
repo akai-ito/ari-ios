@@ -37,7 +37,20 @@ public struct VoiceAccent: OpenValue {
     public static let known = [american, british]
 }
 
-/// `GET /v0/voices`: every voice, the one chosen, and whether the server can talk.
+/// Whether the server knows your voice from your calls, so that only a voice like yours holds a
+/// turn open.
+public struct VoiceprintState: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Until it has heard about two minutes of you on calls.
+    public static let learning = VoiceprintState(rawValue: "learning")
+    public static let learnt = VoiceprintState(rawValue: "learnt")
+    public static let known = [learning, learnt]
+}
+
+/// `GET /v0/voices`: every voice, the one chosen, whether the server can talk, and whether it
+/// knows your voice.
 public struct VoiceList: Sendable, Equatable, Codable {
     public let voices: [VoiceOption]
     /// The id of the voice Ari speaks in, for the whole server.
@@ -45,12 +58,27 @@ public struct VoiceList: Sendable, Equatable, Codable {
     public let state: VoiceState
     /// Why it isn't ready, in a plain line to show.
     public let reason: String?
+    public let voiceprint: VoiceprintState
 
-    public init(voices: [VoiceOption], chosen: String, state: VoiceState, reason: String? = nil) {
+    public init(
+        voices: [VoiceOption], chosen: String, state: VoiceState, reason: String? = nil,
+        voiceprint: VoiceprintState
+    ) {
         self.voices = voices
         self.chosen = chosen
         self.state = state
         self.reason = reason
+        self.voiceprint = voiceprint
+    }
+
+    /// The same list with some of it changed.
+    func with(
+        chosen: String? = nil, state: VoiceState? = nil, reason: String?? = nil,
+        voiceprint: VoiceprintState? = nil
+    ) -> VoiceList {
+        VoiceList(
+            voices: voices, chosen: chosen ?? self.chosen, state: state ?? self.state,
+            reason: reason ?? self.reason, voiceprint: voiceprint ?? self.voiceprint)
     }
 }
 
