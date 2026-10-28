@@ -46,6 +46,10 @@ struct AriApp: App {
                     model.collectShares()
                     model.refreshServer()
                 case .background:
+                    // A call carries on in your pocket: Ari's replies still have to arrive.
+                    #if os(iOS)
+                        if CallEngine.isOn { break }
+                    #endif
                     model.session?.pause()
                 default:
                     break

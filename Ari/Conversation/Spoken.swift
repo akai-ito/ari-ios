@@ -142,8 +142,8 @@ final class AudioReplay: NSObject, AVAudioPlayerDelegate {
             return
         }
         #if os(iOS)
-            // A call keeps its own audio session; otherwise play as media.
-            if AVAudioSession.sharedInstance().category != .playAndRecord {
+            // A call keeps its own audio session; otherwise play as media, out of the speaker.
+            if !CallEngine.isOn {
                 try? AVAudioSession.sharedInstance().setCategory(.playback)
                 try? AVAudioSession.sharedInstance().setActive(true)
             }

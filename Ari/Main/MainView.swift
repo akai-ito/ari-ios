@@ -14,6 +14,8 @@ struct MainView: View {
     #if os(iOS)
         /// Calls with Ari, registered with iOS.
         @State private var talk: Talk?
+        /// The calls Siri asked for that have started here.
+        @State private var startedCalls = 0
     #endif
     @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
@@ -64,6 +66,14 @@ struct MainView: View {
                 #if DEBUG
                     if DebugScript.talks { talk?.start() }
                 #endif
+            }
+            // "Hey Siri, talk to Ari", including when it opened Ari.
+            .onChange(of: TalkRequests.shared.count, initial: true) { _, count in
+                guard count > startedCalls else { return }
+                startedCalls = count
+                if talk == nil { talk = Talk(session: session) }
+                place = .chat
+                talk?.start()
             }
             .fullScreenCover(
                 isPresented: Binding(
