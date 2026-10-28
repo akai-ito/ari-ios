@@ -8,7 +8,8 @@ import SwiftUI
     /// composer (`\n` for a new line), `ARI_OPEN_TRAIL` opens every run and step on the trail,
     /// `ARI_PLACE` opens a tab (`chat`, `goals` or `library`), `ARI_SETTINGS` opens Settings (or, with
     /// `capabilities`, `capability:<id>`, `setup:<id>`, `model` or `voice`, goes on to that place), `ARI_IN_MIND`
-    /// opens In mind, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`), and
+    /// opens In mind, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
+    /// `ARI_SHELF` opens a shelf (`people`, or `journal` and with `ARI_CALENDAR` its calendar), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code, and
@@ -29,6 +30,8 @@ import SwiftUI
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensInMind = environment["ARI_IN_MIND"] != nil
         static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))
+        static let shelf = environment["ARI_SHELF"]
+        static let showsCalendar = environment["ARI_CALENDAR"] != nil
 
         /// Where `ARI_SETTINGS` goes past the top of Settings.
         static var settingsPath: [SettingsRoute] {
