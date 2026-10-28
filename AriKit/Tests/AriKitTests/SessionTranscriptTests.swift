@@ -16,6 +16,9 @@ struct SessionTranscriptTests {
                 "01-first-connection", "31-pair-with-a-qr-code", "32-set-up-a-capability",
                 "33-a-capability-needs-you", "37-choose-the-model", "39-ari-learns-a-name",
                 "42-choose-ari-s-voice", "56-relearn-my-voice",
+                // Its last request pages back from a message the phone still holds, to show a
+                // history page carries ticks: the store plays it, but a session never would.
+                "59-a-plan-you-can-tick",
             ].contains($0.name)
         })
     func plays(_ transcript: Transcript) async throws {

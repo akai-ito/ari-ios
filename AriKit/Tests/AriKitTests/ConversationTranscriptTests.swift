@@ -797,6 +797,21 @@ extension ConversationTranscriptTests {
             )
         ],
         "56-relearn-my-voice": [],
+        "59-a-plan-you-can-tick": [
+            you(
+                "1b659879-69a7-4624-b98c-81a1847cedce",
+                "Can you plan our three days in Florence? We land on Friday morning."),
+            reply("m_0001_87815", 667, "\"lat\":43.7678,\"lon\":11.2553}\n```"),
+            you(
+                "efff4d79-8fbf-46e3-b399-1a1d470745a0",
+                "Booked! How do we get from the station to the hotel?"),
+            reply("m_0002_12545", 59, "flat all the way, past San Lorenzo."),
+        ],
+        "60-pictures-ari-found": [
+            you(
+                "486c34a5-fffa-4b19-9774-2274b8460478", "What does the Lungarno look like at dusk?"),
+            reply("m_0001_68134", 304, "\"credit\":\"Photo by M. Rossi, CC BY-SA 4.0\"}]}\n```"),
+        ],
         "58-topics": [
             you(
                 "f65434eb-176c-4547-a4b5-f1abc606ee0b", "Can you help me plan Florence with Janki?"),

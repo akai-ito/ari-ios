@@ -364,6 +364,7 @@ struct ConversationView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if !text.isEmpty {
                         ReplyView(document: document, position: position)
+                            .environment(\.replyActions, replyActions(for: entry, in: conversation))
                     }
                     if position == .infinity { footer(for: entry, in: conversation) }
                 }
@@ -387,6 +388,27 @@ struct ConversationView: View {
         case .offer:
             NotificationOffer(answer: answerOffer)
         }
+    }
+
+    /// What a reply's shapes can do here: tick its plans, fetch its pictures, and, while it's the
+    /// latest thing said and Ari is idle, send one of its choices.
+    private func replyActions(for entry: Conversation.Entry, in conversation: Conversation)
+        -> ReplyActions
+    {
+        let latest =
+            conversation.turn == nil && conversation.entries.last(where: \.isShown)?.id == entry.id
+        let session = session
+        return ReplyActions(
+            ticks: entry.ticks,
+            tick: { part, item, done in
+                await session.tick(entry.id, part: part, item: item, done: done)
+            },
+            choose: latest
+                ? { label in
+                    guard session.send(label) != nil else { return }
+                    scrollToEnd()
+                } : nil,
+            image: { await session.bytes(of: $0) })
     }
 
     /// Under your message: whether the server has it, and whether Ari took it in or it waits.

@@ -94,6 +94,8 @@ struct ProtocolDecodingTests {
                     )
                 case .voices:
                     #expect(try !body.decode(VoiceList.self).voices.isEmpty, "\(place)")
+                case .tickItem:
+                    _ = try body.decode(TickList.self)
                 case .forgetVoiceprint:
                     #expect(try body.decode(VoiceList.self).voiceprint == .learning, "\(place)")
                 case .chooseVoice:
@@ -152,6 +154,9 @@ struct ProtocolDecodingTests {
                 let values = try body.decode(CapabilitySetup.self).values
                 #expect(
                     try JSONValue(encoding: CapabilitySetup(values: values)) == body, "\(place)")
+            case .tickItem:
+                let done = try body.decode(TickItem.self).done
+                #expect(try JSONValue(encoding: TickItem(done: done)) == body, "\(place)")
             case .chooseVoice:
                 let voice = try body.decode(VoiceChoice.self).voice
                 #expect(try JSONValue(encoding: VoiceChoice(voice: voice)) == body, "\(place)")
@@ -225,6 +230,7 @@ extension Event.Payload {
         case .callAudioDeleted: "call.audio_deleted"
         case .voiceStatus: "voice.status"
         case .topicStarted: "topic.started"
+        case .planTicked: "plan.ticked"
         case .unknown: nil
         }
     }

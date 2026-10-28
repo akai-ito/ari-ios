@@ -205,6 +205,16 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/voices"))
     }
 
+    /// `PUT /v0/messages/{message}/parts/{part}/items/{item}`: ticks or unticks an item in a reply's
+    /// plan. Every device hears it as `plan.ticked`; the answer is the reply's ticks.
+    public func tick(_ message: MessageID, part: Int, item: String, done: Bool)
+        async throws(RequestError) -> TickList
+    {
+        let path =
+            "/v0/messages/\(Self.segment(message.rawValue))/parts/\(part)/items/\(Self.segment(item))"
+        return try await call(HTTPRequest(.put, path, body: try Self.json(TickItem(done: done))))
+    }
+
     /// `DELETE /v0/voice/voiceprint`: forgets your voice, so the server learns it again from your
     /// next calls. The answer is the voice list, now `learning`.
     public func forgetVoiceprint() async throws(RequestError) -> VoiceList {

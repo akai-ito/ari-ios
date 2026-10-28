@@ -112,6 +112,8 @@ extension Conversation {
         public internal(set) var attachments: [Attachment] = []
         /// Your messages: how one you spoke on a call came to be.
         public internal(set) var spoken: Spoken?
+        /// Replies: the items ticked or unticked in its plans, each at its latest.
+        public internal(set) var ticks: [Tick] = []
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -148,6 +150,7 @@ extension Conversation {
             isSecret = message.secret ?? false
             attachments = message.attachments ?? []
             spoken = message.spoken
+            ticks = message.ticks ?? []
         }
 
         init(
@@ -244,6 +247,12 @@ extension Conversation {
             forgetAudio(of: event.call.id)
         case .topicStarted(let started):
             record(started.topic)
+        case .planTicked(let ticked):
+            if let index = positions[ticked.message] {
+                let tick = Tick(part: ticked.part, item: ticked.item, done: ticked.done)
+                entries[index].ticks.removeAll { $0.part == tick.part && $0.item == tick.item }
+                entries[index].ticks.append(tick)
+            }
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.
             break

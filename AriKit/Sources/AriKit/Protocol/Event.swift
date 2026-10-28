@@ -29,6 +29,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case callAudioDeleted(CallEvent)
         case voiceStatus(VoiceStatus)
         case topicStarted(TopicStarted)
+        case planTicked(PlanTicked)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -38,7 +39,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "turn.ended", "call.started",
-        "call.ended", "call.audio_deleted", "voice.status", "topic.started",
+        "call.ended", "call.audio_deleted", "voice.status", "topic.started", "plan.ticked",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -71,6 +72,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "call.audio_deleted": .callAudioDeleted(try CallEvent(from: decoder))
             case "voice.status": .voiceStatus(try VoiceStatus(from: decoder))
             case "topic.started": .topicStarted(try TopicStarted(from: decoder))
+            case "plan.ticked": .planTicked(try PlanTicked(from: decoder))
             default: .unknown
             }
     }

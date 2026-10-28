@@ -281,6 +281,12 @@ public final class Session {
         }
     }
 
+    /// Ticks or unticks an item in a reply's plan: `true` once the server has it. Every device, this
+    /// one included, hears it as `plan.ticked`, which updates the conversation.
+    public func tick(_ message: MessageID, part: Int, item: String, done: Bool) async -> Bool {
+        (try? await client.tick(message, part: part, item: item, done: done)) != nil
+    }
+
     /// Notifications are allowed: register this device, with its push token and notification key,
     /// so the server can reach it while you're not looking. Call it again when either changes.
     public func register(device: String, _ registration: RegisterDevice) {
