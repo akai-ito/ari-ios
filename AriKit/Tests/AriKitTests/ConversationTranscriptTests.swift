@@ -765,6 +765,38 @@ extension ConversationTranscriptTests {
             you("m_0001_54439", "Find me a quiet café near Brighton station."),
             reply("m_0002_32214", 55, " on Queens Road. It's quiet before noon."),
         ],
+        "51-asked-on-a-call": [
+            you("m_0001_27022", "Remind me to call Mum on Sunday at two."),
+            you("m_0002_31819", "Add it."),
+            reply("m_0003_68062", 33, "Added. I'll remind you on Sunday."),
+        ],
+        "52-a-code-on-a-call": [
+            you("m_0001_12051", "Confirm the Juno booking."),
+            you("m_0002_45817", "It's four eight one five one six."),
+            reply("m_0003_75492", 58, "I won't take a code by voice."),
+            you("8df648e2-9813-4dc2-939f-92cbe710bcdf", ""),
+            reply("m_0004_36257", 45, "Confirmed. You're booked at Juno on Saturday."),
+        ],
+        "53-an-app-asks-first": [
+            you(
+                "ecf0acb3-3ee8-433c-a4ea-4443d713da17", "Add a reminder to call Mum on Sunday at 2."
+            ),
+            you("ddcf47d4-2612-47c6-b92d-6a60db65d51d", "Allow"),
+            reply("m_0001_00549", 31, "Added: Call Mum, Sunday at 2pm."),
+        ],
+        "54-an-approval-answered-in-words": [
+            you(
+                "c6b16785-8519-4778-bedd-6619a109fd94", "Add a reminder to call Mum on Sunday at 2."
+            ),
+            you("b4f701a0-b37e-4f3d-aa02-a02a7a8fb86f", "Do it at 3 instead"),
+            reply("m_0001_90205", 52, "Shall I add it at 3pm instead?"),
+        ],
+        "55-stopped-while-an-app-waits": [
+            you(
+                "3aa665cb-530d-4b80-b428-b19a14aa3ebe", "Add a reminder to call Mum on Sunday at 2."
+            )
+        ],
+        "56-relearn-my-voice": [],
         "42-choose-ari-s-voice": [],
         "43-before-the-voice-is-ready": [],
         "44-when-the-server-can-t-talk": [],

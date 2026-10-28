@@ -84,6 +84,16 @@ final class Rehearsal {
             }
         }
         await settle()
+        // On a busy machine, yielding isn't always enough for the session to take the stream's
+        // last event: wait for it, for a few real seconds at most.
+        let last = transcript.steps.last { if case .event = $0 { true } else { false } }
+        if case .event(let logged) = last, let id = logged.event.id {
+            let deadline = ContinuousClock.now + .seconds(3)
+            while session.conversation.cursor != id, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(10))
+                await settle()
+            }
+        }
     }
 
     /// Ends the session and removes its outbox.

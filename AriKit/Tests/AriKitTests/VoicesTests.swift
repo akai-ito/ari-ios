@@ -37,6 +37,22 @@ struct VoicesTests {
         #expect(await server.unanswered == 0)
     }
 
+    @Test("plays transcript 56: the server knows your voice, and relearns it when you ask")
+    func relearn() async throws {
+        let transcript = try Fixtures.transcript("56-relearn-my-voice")
+        let server = TranscriptServer(transcript)
+        let voices = Voices(client: server.client)
+
+        await voices.refresh()
+        #expect(voices.voiceprint == .learnt)
+        try await voices.relearn()
+        #expect(voices.voiceprint == .learning)
+        #expect(voices.canTalk, "relearning leaves the voice ready")
+        let mismatches = await server.mismatches
+        #expect(mismatches.isEmpty, "\(mismatches)")
+        #expect(await server.unanswered == 0)
+    }
+
     @Test("plays transcript 43: no Talk while the voice loads, then Talk once it's ready")
     func loading() async throws {
         let transcript = try Fixtures.transcript("43-before-the-voice-is-ready")

@@ -81,6 +81,28 @@ struct TalkTests {
         #expect(await server.unanswered == 0)
     }
 
+    @Test(
+        "Scenario 53: an app's approval waits inside the running turn, which carries on after Allow"
+    )
+    func approvalInsideTurn() throws {
+        var replay = Replay(try Fixtures.transcript("53-an-app-asks-first"))
+        try replay.play(throughLine: 12, expecting: "turn.status e_0006_98446")
+        #expect(replay.conversation.turn != nil, "the turn is still running")
+        #expect(replay.conversation.waitingAsk?.kind == .approval)
+        #expect(replay.conversation.turn?.status?.kind == .waiting)
+        try replay.play()
+        #expect(replay.conversation.waitingAsk == nil && replay.conversation.turn == nil)
+        #expect(replay.conversation[ask: "a_0001_06578"]?.outcome == .answered)
+    }
+
+    @Test("Scenario 55: Stop cancels an app's approval that waits inside the turn")
+    func stoppedApproval() throws {
+        var replay = Replay(try Fixtures.transcript("55-stopped-while-an-app-waits"))
+        try replay.play()
+        #expect(replay.conversation[ask: "a_0001_72312"]?.outcome == .cancelled)
+        #expect(replay.conversation.waitingAsk == nil && replay.conversation.turn == nil)
+    }
+
     @Test("a call decodes as the contract says")
     func decoding() throws {
         let call = try JSONValue(

@@ -14,6 +14,8 @@ public final class Voices {
     public private(set) var reason: String?
     /// A choice on its way to the server.
     public private(set) var choosing: String?
+    /// Forgetting your voice is on its way to the server.
+    public private(set) var relearning = false
 
     @ObservationIgnored private let client: ItoClient
 
@@ -38,15 +40,14 @@ public final class Voices {
         reason = list.reason
     }
 
+    /// Whether the server knows your voice; `nil` until the first fetch.
+    public var voiceprint: VoiceprintState? { list?.voiceprint }
+
     /// The server said its voice changed.
     public func apply(_ status: VoiceStatus) {
         state = status.state
         reason = status.reason
-        if let list {
-            self.list = VoiceList(
-                voices: list.voices, chosen: list.chosen, state: status.state,
-                reason: status.reason)
-        }
+        list = list?.with(state: status.state, reason: .some(status.reason))
     }
 
     /// Chooses Ari's voice for the whole server.
@@ -54,10 +55,18 @@ public final class Voices {
         choosing = voice
         defer { choosing = nil }
         let saved = try await client.choose(voice: VoiceChoice(voice: voice))
-        if let list {
-            self.list = VoiceList(
-                voices: list.voices, chosen: saved.voice, state: list.state, reason: list.reason)
-        }
+        list = list?.with(chosen: saved.voice)
+    }
+
+    /// Forgets your voice, so the server learns it again from your next calls, starting with one
+    /// on now.
+    public func relearn() async throws(RequestError) {
+        relearning = true
+        defer { relearning = false }
+        let list = try await client.forgetVoiceprint()
+        self.list = list
+        state = list.state
+        reason = list.reason
     }
 
     /// A line in a voice, or the chosen one, as a WAV: for previews.
