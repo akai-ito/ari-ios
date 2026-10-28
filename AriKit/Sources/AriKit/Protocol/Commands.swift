@@ -114,11 +114,13 @@ public struct MessagePage: Sendable, Equatable, Decodable {
     public let asks: [Ask]
     /// Every call that started in the same span.
     public let calls: [Call]
+    /// The topics Ari marked on these messages.
+    public let topics: [Topic]
     /// Whether even older messages exist.
     public let hasMore: Bool
 
     enum CodingKeys: String, CodingKey {
-        case messages, steps, asks, calls
+        case messages, steps, asks, calls, topics
         case hasMore = "has_more"
     }
 }

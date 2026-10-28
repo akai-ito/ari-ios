@@ -28,6 +28,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case callEnded(CallEvent)
         case callAudioDeleted(CallEvent)
         case voiceStatus(VoiceStatus)
+        case topicStarted(TopicStarted)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -37,7 +38,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "turn.ended", "call.started",
-        "call.ended", "call.audio_deleted", "voice.status",
+        "call.ended", "call.audio_deleted", "voice.status", "topic.started",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -69,6 +70,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "call.ended": .callEnded(try CallEvent(from: decoder))
             case "call.audio_deleted": .callAudioDeleted(try CallEvent(from: decoder))
             case "voice.status": .voiceStatus(try VoiceStatus(from: decoder))
+            case "topic.started": .topicStarted(try TopicStarted(from: decoder))
             default: .unknown
             }
     }
@@ -88,6 +90,8 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let asks: [Ask]
     /// The calls that started within those messages, and one still on.
     public let calls: [Call]
+    /// The topics Ari marked on those messages, in position order.
+    public let topics: [Topic]
     /// Whether older messages exist.
     public let hasMore: Bool
     /// The running turn, or `nil` when the agent is idle.
@@ -96,7 +100,7 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let next: [MessageID]
 
     enum CodingKeys: String, CodingKey {
-        case at, reason, messages, steps, asks, calls, turn, next
+        case at, reason, messages, steps, asks, calls, topics, turn, next
         case hasMore = "has_more"
     }
 }

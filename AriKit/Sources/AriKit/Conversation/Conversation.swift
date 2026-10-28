@@ -26,6 +26,10 @@ public struct Conversation: Sendable, Equatable {
     public private(set) var calls: [Call] = [] {
         didSet { changes.count &+= 1 }
     }
+    /// Where Ari marked the subject changing, from the oldest message on, in conversation order.
+    public private(set) var topics: [Topic] = [] {
+        didSet { changes.count &+= 1 }
+    }
     /// Asks you've answered or cancelled here, until the server says they've ended.
     public private(set) var settling: [AskID: Settling] = [:] {
         didSet { changes.count &+= 1 }
@@ -238,6 +242,8 @@ extension Conversation {
         case .callAudioDeleted(let event):
             record(event.call)
             forgetAudio(of: event.call.id)
+        case .topicStarted(let started):
+            record(started.topic)
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.
             break
@@ -264,6 +270,7 @@ extension Conversation {
         replaceSteps(with: snapshot.steps)
         replaceAsks(with: snapshot.asks)
         replaceCalls(with: snapshot.calls)
+        replaceTopics(with: snapshot.topics)
 
         hasEarlierMessages = snapshot.hasMore
         turn = snapshot.turn.map {
@@ -394,6 +401,12 @@ extension Conversation {
         calls.insert(call, at: index)
     }
 
+    /// Ari marked where the subject changed. Seen again, it's the same mark.
+    private mutating func record(_ topic: Topic) {
+        guard !topics.contains(where: { $0.id == topic.id }) else { return }
+        replaceTopics(with: topics + [topic])
+    }
+
     /// The call's audio was deleted: its spoken messages keep their words, without the recording.
     private mutating func forgetAudio(of call: CallID) {
         for index in entries.indices where entries[index].spoken?.call == call {
@@ -507,6 +520,8 @@ extension Conversation {
         replaceAsks(with: page.asks.filter { askIndices[$0.id] == nil } + asks)
         let known = Set(calls.map(\.id))
         replaceCalls(with: page.calls.filter { !known.contains($0.id) } + calls)
+        let marked = Set(topics.map(\.id))
+        replaceTopics(with: page.topics.filter { !marked.contains($0.id) } + topics)
         hasEarlierMessages = page.hasMore
     }
 
@@ -522,6 +537,8 @@ extension Conversation {
             replaceSteps(with: steps.filter { $0.position > first })
             replaceAsks(with: asks.filter { $0.position > first })
             replaceCalls(with: calls.filter { $0.position > first || $0.isOn })
+            // A topic sits on its message, so it goes only with the messages before.
+            replaceTopics(with: topics.filter { $0.position >= first })
         }
         hasEarlierMessages = true
     }
@@ -607,6 +624,10 @@ extension Conversation {
 
     private mutating func replaceCalls(with new: [Call]) {
         calls = new.sorted { $0.position < $1.position }
+    }
+
+    private mutating func replaceTopics(with new: [Topic]) {
+        topics = new.sorted { $0.position < $1.position }
     }
 
     private mutating func reindexAsks(from start: Int) {
