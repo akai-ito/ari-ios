@@ -92,6 +92,8 @@ struct PoseHistory: Equatable {
 struct PresenceView: View {
     let history: PoseHistory
     var size: CGFloat = 40
+    /// How loud the voices are, from 0 to 1, read each frame: on a call, Ari breathes with them.
+    var breath: (() -> Double)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -150,7 +152,10 @@ struct PresenceView: View {
             y: area.height / 2 + (gaze.y * 0.15 - awake * 0.8) * scale)
         canvas.scaleBy(x: scale, y: scale)
         canvas.rotate(by: .degrees(gaze.x * 0.8))
-        let fill = Color.ariDusk.mix(with: .ariBone, by: glow)
+        // Swelling a little with the voice, and lighter, as if drawing breath.
+        let breath = reduceMotion ? 0 : (self.breath?() ?? 0)
+        canvas.scaleBy(x: 1 + 0.08 * breath, y: 1 + 0.08 * breath)
+        let fill = Color.ariDusk.mix(with: .ariBone, by: min(1, glow + 0.2 * breath))
         canvas.fill(Self.halftone, with: .color(fill))
 
         let open = lids * (1 - 0.92 * (reduceMotion ? 0 : blink(at: t, starts: starts)))

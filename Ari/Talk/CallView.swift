@@ -15,7 +15,7 @@
             VStack(spacing: 0) {
                 top
                 Spacer(minLength: 24)
-                PresenceView(history: poses, size: 132)
+                PresenceView(history: poses, size: 132) { call.level.breath() }
                     .frame(height: 180)
                 // One line at a time: the old one fades out before the new one fades in, so two
                 // never read as one.
