@@ -1,37 +1,40 @@
 #if os(iOS)
     import AVFoundation
+    import AriKit
     import SwiftUI
+    import os
 
-    /// Choosing Ari's voice on a call from the voices on this iPhone, best first, each heard as
-    /// you tap it. The natural ones are a free download in iOS's own Settings; Siri's voices are
-    /// only for Apple's apps.
+    /// Choosing Ari's voice: the server's voices, American and British, each heard as you tap it.
+    /// The choice is for the whole server, so every device hears the same Ari.
     struct VoicePickerView: View {
-        @AppStorage(Voice.chosenKey) private var chosen = ""
-        @State private var voices: [AVSpeechSynthesisVoice] = []
-        @State private var synthesizer = AVSpeechSynthesizer()
+        let voices: Voices
+
+        @State private var player: AVAudioPlayer?
+        /// The voice whose preview is on its way.
+        @State private var previewing: String?
+        @State private var problem: String?
+        private static let line = "Hi, I'm Ari. This is how I sound."
+        private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
         var body: some View {
             Form {
-                Section {
-                    row(title: "Best on this iPhone", detail: Voice.best()?.name, id: "")
-                }
-                ForEach(Self.qualities, id: \.title) { quality in
-                    let matching = voices.filter { $0.quality == quality.value }
-                    if !matching.isEmpty {
-                        Section(quality.title) {
-                            ForEach(matching, id: \.identifier) { voice in
-                                row(
-                                    title: voice.name, detail: Self.region(voice),
-                                    id: voice.identifier)
-                            }
-                        }
+                if !voices.canTalk {
+                    Section {
+                    } footer: {
+                        Text(voices.reason ?? "Ari's voice isn't ready on your server yet.")
                     }
                 }
-                Section {
-                } footer: {
-                    Text(
-                        "More natural voices download free in Settings › Accessibility › Spoken Content › Voices › English: look for Premium or Enhanced. Siri's own voices are only for Apple's apps."
-                    )
+                ForEach([VoiceAccent.american, .british], id: \.self) { accent in
+                    let matching = voices.list?.voices.filter { $0.accent == accent } ?? []
+                    if !matching.isEmpty {
+                        Section {
+                            ForEach(matching) { voice in row(voice) }
+                        } header: {
+                            Text(accent == .british ? "British" : "American")
+                        } footer: {
+                            if accent == .american, let problem { Text(problem) }
+                        }
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -39,27 +42,22 @@
             .background(.ariBackground)
             .navigationTitle("Ari's voice")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { voices = Voice.installed() }
-            .onReceive(
-                NotificationCenter.default.publisher(
-                    for: AVSpeechSynthesizer.availableVoicesDidChangeNotification)
-            ) { _ in voices = Voice.installed() }
+            .overlay {
+                if voices.list == nil { ProgressView() }
+            }
+            .task { await voices.refresh() }
         }
 
-        private func row(title: String, detail: String?, id: String) -> some View {
+        private func row(_ voice: VoiceOption) -> some View {
             Button {
-                chosen = id
-                preview(id)
+                choose(voice)
             } label: {
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title).foregroundStyle(.ariText)
-                        if let detail {
-                            Text(detail).font(.footnote).foregroundStyle(.ariTertiary)
-                        }
-                    }
+                    Text(voice.name).foregroundStyle(.ariText)
                     Spacer()
-                    if chosen == id {
+                    if previewing == voice.id || voices.choosing == voice.id {
+                        ProgressView()
+                    } else if voices.list?.chosen == voice.id {
                         Image(systemName: "checkmark").foregroundStyle(.ariText)
                     }
                 }
@@ -69,21 +67,38 @@
             .listRowBackground(Color.ariSurface)
         }
 
-        /// A line in the voice, as Ari might say it on a walk.
-        private func preview(_ id: String) {
-            synthesizer.stopSpeaking(at: .immediate)
-            let utterance = AVSpeechUtterance(
-                string: "Hi, it's Ari. I've put the details in the chat.")
-            utterance.voice = id.isEmpty ? Voice.best() : AVSpeechSynthesisVoice(identifier: id)
-            synthesizer.speak(utterance)
-        }
-
-        private static let qualities: [(title: String, value: AVSpeechSynthesisVoiceQuality)] = [
-            ("Premium", .premium), ("Enhanced", .enhanced), ("Standard", .default),
-        ]
-
-        private static func region(_ voice: AVSpeechSynthesisVoice) -> String {
-            Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language
+        /// Chooses the voice for the whole server, and plays how it sounds.
+        private func choose(_ voice: VoiceOption) {
+            problem = nil
+            player?.stop()
+            Task {
+                do {
+                    try await voices.choose(voice.id)
+                } catch {
+                    problem = "Ari couldn't choose that voice."
+                    return
+                }
+                guard voices.canTalk else { return }
+                previewing = voice.id
+                defer { if previewing == voice.id { previewing = nil } }
+                do {
+                    let wav = try await voices.preview(Self.line, voice: voice.id)
+                    let player = try AVAudioPlayer(data: wav)
+                    // Out of the speaker as media, unless a call has the audio.
+                    if !CallEngine.isOn {
+                        let session = AVAudioSession.sharedInstance()
+                        try? session.setCategory(.playback)
+                        try? session.setActive(true)
+                    }
+                    guard previewing == voice.id else { return }
+                    player.play()
+                    self.player = player
+                } catch {
+                    Self.log.error(
+                        "Preview \(voice.id, privacy: .public) failed: \(error, privacy: .public)")
+                    problem = "Ari couldn't play that voice."
+                }
+            }
         }
     }
 #endif

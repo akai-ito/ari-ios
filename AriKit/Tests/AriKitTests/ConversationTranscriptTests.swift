@@ -718,28 +718,61 @@ extension ConversationTranscriptTests {
         ],
         // Settings, not the conversation: nothing changes in it.
         "37-choose-the-model": [],
+        // Talk's readiness and Settings' voices, not the conversation: nothing changes in it.
+        // A call: the box posts what you said, and Ari speaks its replies on the stream.
         "38-a-walk-with-ari": [
-            you("3dc7eae9-5c32-46d8-b0a5-5e61c1bfe0bb", "What did Bora say about the QRT panel?"),
+            you("m_0001_72021", "What did Bora say about the QRT panel?"),
             Expected(
-                id: "m_0001_72021", text: "Let me check what I have on Bora.", outcome: .completed,
+                id: "m_0002_05333", text: "Let me check what I have on Bora.", outcome: .completed,
                 shown: false),
-            reply("m_0002_05333", 115, "I've put what she asked for in the chat."),
+            reply("m_0003_60545", 165, "Tighten the intro\n- Add the latency numbers"),
         ],
-        // The recogniser's vocabulary, not the conversation: nothing changes in it.
-        "39-ari-learns-a-name": [],
+        "39-ari-learns-a-name": [
+            you("m_0001_77281", "What did Bara say about the cutie panel?"),
+            reply("m_0002_58268", 58, "and the QRT panel? Tap a word to fix it."),
+            you("m_0003_74178", "When does Bora want the QRT notes?"),
+            reply("m_0004_20681", 26, "Bora wants them by Friday."),
+        ],
+        "40-delete-a-call-s-audio": [
+            you("m_0001_90849", "Today was a good day. The long run felt easy."),
+            reply("m_0002_64513", 64, "I've added it to today's journal."),
+        ],
+        "45-talking-over-ari": [
+            you("m_0001_43488", "When's the design review?"),
+            reply("m_0002_10070", 59, "t ten. Maya and Bora will both be there."),
+            you("m_0003_51829", "Actually, can we move it to Thursday?"),
+            reply("m_0004_30759", 27, "I'll ask Maya for Thursday."),
+        ],
+        "46-a-blip-in-the-signal": [
+            you("m_0001_42443", "Remind me what's for dinner."),
+            reply("m_0002_64292", 58, "tover pesto. You bought basil yesterday."),
+            you("m_0003_84636", "Say that again?"),
+            reply("m_0004_96616", 30, "Pasta with the leftover pesto."),
+        ],
+        "47-the-connection-drops": [
+            you("m_0001_82728", "Add oat milk to the shopping list."),
+            reply("m_0002_38491", 6, "Added."),
+        ],
+        "48-mute": [
+            you("m_0001_02141", "Sorry. What time is it in Lisbon?"),
+            reply("m_0002_32832", 27, "It's just after nine there."),
+        ],
+        "49-the-voice-fails-mid-call": [
+            you("m_0001_83382", "What's on tomorrow?"),
+            reply("m_0002_93163", 42, "dentist at nine, then the design review."),
+        ],
+        "50-ari-says-what-it-s-doing": [
+            you("m_0001_54439", "Find me a quiet café near Brighton station."),
+            reply("m_0002_32214", 55, " on Queens Road. It's quiet before noon."),
+        ],
+        "42-choose-ari-s-voice": [],
+        "43-before-the-voice-is-ready": [],
+        "44-when-the-server-can-t-talk": [],
         "41-another-device-sees-the-call": [
             you("914f3838-aaa0-49a3-89cd-57b1b6391d24", "What did Bora say about the QRT panel?"),
             reply(
                 "m_0001_83439", 74,
                 "She wants one more round on your design before the panel sits in November."),
-        ],
-        "40-delete-a-call-s-audio": [
-            you(
-                "4ebb2673-f9f9-4c6e-9719-11403eec63de",
-                "Today was a good day. The long run felt easy."),
-            reply(
-                "m_0001_90849", 64,
-                "That's a lovely one to end on. I've added it to today's journal."),
         ],
         "16-working-through-a-task": [
             you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),

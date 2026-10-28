@@ -55,6 +55,8 @@ struct Transcript: Sendable, CustomTestStringConvertible {
         case world(World)
         /// The server pushes a notification to a device: what the phone shows once it decrypts it.
         case push(Push)
+        /// A frame on a call's stream, either way, or the server closing it.
+        case socket(Socket)
 
         /// When it happens, in milliseconds from the start.
         var at: Int {
@@ -64,6 +66,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
             case .event(let event): event.at ?? 0
             case .world(let world): world.at
             case .push(let push): push.at
+            case .socket(let socket): socket.at
             }
         }
 
@@ -74,6 +77,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
             case .event(let event): event.line
             case .world(let world): world.line
             case .push(let push): push.line
+            case .socket(let socket): socket.line
             }
         }
 
@@ -86,8 +90,22 @@ struct Transcript: Sendable, CustomTestStringConvertible {
             case .event(let event): "\(event.event.type) \(event.event.id?.rawValue ?? "")"
             case .world(let world): world.marker
             case .push(let push): "push \(push.json["notification"]?["kind"]?.string ?? "")"
+            case .socket(let socket): "socket \(socket.fromApp ? "app" : "server")"
             }
         }
+    }
+
+    /// A frame on a call's stream: a text frame, the app's audio (a file in files), how much of
+    /// Ari's voice arrived, or the server closing the socket.
+    struct Socket: Sendable {
+        let line: Int
+        let at: Int
+        let fromApp: Bool
+        let frame: JSONValue?
+        let audio: String?
+        let audioMs: Int?
+        let closed: Int?
+        let reason: String?
     }
 
     struct Push: Sendable {
@@ -179,6 +197,14 @@ struct Transcript: Sendable, CustomTestStringConvertible {
                         headers: Self.headers(response["headers"]), body: response["body"],
                         lost: json["lost"] == .bool(true))
                     steps.append(.server(answer))
+                } else if let socket = json["socket"] {
+                    steps.append(
+                        .socket(
+                            Socket(
+                                line: line, at: json["at"]?.int ?? 0,
+                                fromApp: socket["from"]?.string == "app", frame: socket["frame"],
+                                audio: socket["audio"]?.string, audioMs: socket["audio_ms"]?.int,
+                                closed: socket["closed"]?.int, reason: socket["reason"]?.string)))
                 } else if let push = json["push"] {
                     steps.append(.push(Push(line: line, at: json["at"]?.int ?? 0, json: push)))
                 } else if let marker = json["world"]?.string {
@@ -187,7 +213,7 @@ struct Transcript: Sendable, CustomTestStringConvertible {
                             World(
                                 line: line, at: json["at"]?.int ?? 0, marker: marker, json: json)))
                 } else {
-                    throw TranscriptError("no given, event, app, server, world or push")
+                    throw TranscriptError("no given, event, app, server, world, push or socket")
                 }
             }
         }
@@ -262,8 +288,11 @@ enum Route: Equatable {
     case startCall(CallID)
     case endCall(CallID)
     case deleteCallAudio(CallID)
-    case vocabulary
     case teachVocabulary
+    case voices
+    case chooseVoice
+    case speech
+    case callStream(CallID)
     case other
 
     init(method: String, path: String) {
@@ -323,20 +352,23 @@ enum Route: Equatable {
             self = .endCall(CallID(parts[2]))
         case ("DELETE", 4) where parts[0] == "v0" && parts[1] == "calls" && parts[3] == "audio":
             self = .deleteCallAudio(CallID(parts[2]))
-        case ("GET", 2) where parts == ["v0", "vocabulary"]: self = .vocabulary
+        case ("GET", 4) where parts[0] == "v0" && parts[1] == "calls" && parts[3] == "stream":
+            self = .callStream(CallID(parts[2]))
         case ("POST", 3) where parts == ["v0", "vocabulary", "corrections"]:
             self = .teachVocabulary
+        case ("GET", 2) where parts == ["v0", "voices"]: self = .voices
+        case ("PUT", 2) where parts == ["v0", "voice"]: self = .chooseVoice
+        case ("POST", 2) where parts == ["v0", "speech"]: self = .speech
         default: self = .other
         }
     }
 
-    /// Settings, the Library and a call's recogniser ask for these, not the conversation's
-    /// session.
+    /// Settings, the Library and a call ask for these, not the conversation's session.
     var isOutsideSession: Bool {
         switch self {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability, .memoryInMind,
             .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
-            .chooseModel, .vocabulary, .teachVocabulary:
+            .chooseModel, .teachVocabulary, .voices, .chooseVoice, .speech, .callStream:
             true
         default: false
         }

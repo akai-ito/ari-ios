@@ -200,9 +200,19 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.delete, "/v0/calls/\(Self.segment(call.rawValue))/audio"))
     }
 
-    /// `GET /v0/vocabulary`: words from memory and conversation to steer recognition.
-    public func vocabulary() async throws(RequestError) -> Vocabulary {
-        try await call(HTTPRequest(.get, "/v0/vocabulary"))
+    /// `GET /v0/voices`: Ari's voices, the one chosen, and whether the server can talk.
+    public func voices() async throws(RequestError) -> VoiceList {
+        try await call(HTTPRequest(.get, "/v0/voices"))
+    }
+
+    /// `PUT /v0/voice`: Ari's voice for the whole server, from the next sentence.
+    public func choose(voice: VoiceChoice) async throws(RequestError) -> VoiceChoice {
+        try await call(HTTPRequest(.put, "/v0/voice", body: try Self.json(voice)))
+    }
+
+    /// `POST /v0/speech`: a line in Ari's voice, as a WAV (24 kHz, mono, 16-bit PCM).
+    public func speak(_ request: SpeechRequest) async throws(RequestError) -> Data {
+        try await raw(HTTPRequest(.post, "/v0/speech", body: try Self.json(request)))
     }
 
     /// `POST /v0/vocabulary/corrections`: what the recogniser heard and what you meant. The answer

@@ -56,7 +56,7 @@ struct CallBlock: View {
     }
 }
 
-/// Under a message you spoke: play it back, and what the phone corrected, each one undoable.
+/// Under a message you spoke: play it back, what Ari corrected, and teaching it a word.
 struct SpokenFooter: View {
     let spoken: Spoken
     let text: String
@@ -82,12 +82,7 @@ struct SpokenFooter: View {
             Menu {
                 ForEach(Array((spoken.corrections ?? []).enumerated()), id: \.offset) {
                     _, correction in
-                    let meant = Self.meant(correction, in: text)
-                    Section("Heard “\(correction.heard)” as \(meant)") {
-                        Button("Don't correct this again", systemImage: "arrow.uturn.backward") {
-                            Refusals.add(.init(heard: correction.heard, meant: meant))
-                        }
-                    }
+                    Text("Heard “\(correction.heard)” as \(Self.meant(correction, in: text))")
                 }
                 Button("Fix a word…", systemImage: "character.cursor.ibeam", action: fixWord)
             } label: {
@@ -219,21 +214,5 @@ struct FixWordSheet: View {
                 }
             }
         }
-    }
-}
-
-/// Corrections you undid, kept on this device so they aren't made again.
-enum Refusals {
-    private static let key = "talk.refused"
-
-    static func load() -> Set<Corrector.Refusal> {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
-        return (try? JSONDecoder().decode(Set<Corrector.Refusal>.self, from: data)) ?? []
-    }
-
-    static func add(_ refusal: Corrector.Refusal) {
-        var refused = load()
-        refused.insert(refusal)
-        UserDefaults.standard.set(try? JSONEncoder().encode(refused), forKey: key)
     }
 }

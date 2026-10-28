@@ -20,6 +20,10 @@ struct SettingsView: View {
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
     @State private var models: Models?
+    #if os(iOS)
+        /// Ari's voice on the server, from the main view.
+        @Environment(Voices.self) private var voices: Voices?
+    #endif
     @State private var path = Self.startingPath
 
     var body: some View {
@@ -58,7 +62,7 @@ struct SettingsView: View {
                     if let models { ModelPickerView(models: models, chosen: model.refreshServer) }
                 case .voice:
                     #if os(iOS)
-                        VoicePickerView()
+                        if let voices { VoicePickerView(voices: voices) }
                     #endif
                 }
             }
@@ -265,29 +269,22 @@ struct SettingsView: View {
 }
 
 #if os(iOS)
-    /// How calls with Ari go: how long a pause ends your turn.
+    /// How calls with Ari go: Ari's voice, from the server.
     private struct TalkSettings: View {
-        @AppStorage("talk.pause") private var pause = 1.5
-        @AppStorage(Voice.chosenKey) private var voice = ""
+        @Environment(Voices.self) private var voices: Voices?
 
         var body: some View {
             Section {
                 NavigationLink(value: SettingsRoute.voice) {
-                    LabeledContent("Voice", value: Voice.chosen()?.name ?? "None")
+                    LabeledContent("Voice", value: voices?.chosen?.name ?? "")
                 }
-                .id(voice)
-                Picker("Pause before Ari answers", selection: $pause) {
-                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { seconds in
-                        Text(seconds.formatted(.number.precision(.fractionLength(0...1))) + " s")
-                            .tag(seconds)
-                    }
-                }
+                .disabled(voices == nil)
             } header: {
                 Text("Talk")
             } footer: {
-                Text(
-                    "On a call, Ari answers once you've been quiet this long. Longer suits thinking aloud."
-                )
+                if let voices, !voices.canTalk, let reason = voices.reason {
+                    Text(reason)
+                }
             }
             .listRowBackground(Color.ariSurface)
         }

@@ -127,7 +127,7 @@
         private var stateLine: String {
             switch call.phase {
             case .connecting: "Getting ready"
-            case .listening: call.muted ? "Muted" : "Listening"
+            case .listening: call.muted ? "Muted" : call.isHearing ? "Hearing you" : "Listening"
             case .working: session.conversation.turn?.status?.label ?? "Thinking it through"
             case .speaking: "Speaking"
             case .ended: "Call ended"
@@ -137,11 +137,32 @@
         private var pose: Pose {
             switch call.phase {
             case .connecting, .ended: .resting
-            case .listening: .asking
+            case .listening: call.isHearing ? .adjusting : .asking
             case .speaking: .writing
             case .working:
                 session.conversation.turn?.status.map { Pose(kind: $0.kind) } ?? .thinking
             }
+        }
+    }
+
+    /// Why Talk is off, or why the last call ended, in a line above the composer for a few seconds.
+    struct TalkNotice: View {
+        let text: String
+        let dismiss: () -> Void
+
+        var body: some View {
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.ariSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .onTapGesture(perform: dismiss)
+                .task(id: text) {
+                    try? await Task.sleep(for: .seconds(6))
+                    if !Task.isCancelled { dismiss() }
+                }
         }
     }
 

@@ -1,9 +1,8 @@
 #if os(iOS)
     import AVFoundation
-    import Speech
     import Synchronization
 
-    /// Converts audio from one format to another, such as the microphone's to the recogniser's.
+    /// Converts audio from one format to another, such as the microphone's to the stream's.
     nonisolated final class Resampler: @unchecked Sendable {
         let output: AVAudioFormat
         private let converter: AVAudioConverter?
@@ -39,38 +38,45 @@
         var value = false
     }
 
-    /// What the microphone's tap does on the audio thread: feeds the recogniser and writes your
-    /// turn's recording, in mono. The call swaps the recording between turns from the main actor.
-    nonisolated final class MicrophoneTap: @unchecked Sendable {
-        private struct State {
-            var recording: AVAudioFile?
-            var muted = false
-        }
-
+    /// What the microphone's tap does on the audio thread: turns your voice into the stream's
+    /// format (16-bit PCM, mono, 16 kHz) and sends it in 40 ms frames, silence included, since the
+    /// server times your pauses. While muted, nothing goes.
+    nonisolated final class MicrophoneStream: @unchecked Sendable {
         /// What the tap has seen, for saying why Ari hears nothing.
         struct Counts: Sendable {
             var buffers = 0
-            var fed = 0
+            var sent = 0
             var failed = 0
-            /// The loudest sample in the last second or so, 0 to 1.
+            /// The loudest sample since the last look, 0 to 1.
             var peak: Float = 0
         }
 
-        private let state = Mutex(State())
+        /// The stream's format for your voice.
+        static let format = AVAudioFormat(
+            commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)!
+        /// 40 ms at 16 kHz, 16-bit.
+        private static let frameBytes = 1_280
+
+        private let muted = Mutex(false)
         private let counted = Mutex(Counts())
-        private let input: AsyncStream<AnalyzerInput>.Continuation
+        private let pending = Mutex(Data())
         private let resampler: Resampler
-        /// The microphone's sample rate in one channel: with echo cancellation on, some iPhones
-        /// report several channels, and converting those straight to the recogniser's one fails.
+        private let send: @Sendable (Data) -> Void
+        /// The microphone's sample rate in one channel: some iPhones report several channels.
         let mono: AVAudioFormat
 
-        init(
-            input: AsyncStream<AnalyzerInput>.Continuation, microphone: AVAudioFormat,
-            recogniser: AVAudioFormat
-        ) {
-            self.input = input
+        init(microphone: AVAudioFormat, send: @escaping @Sendable (Data) -> Void) {
             mono = AVAudioFormat(standardFormatWithSampleRate: microphone.sampleRate, channels: 1)!
-            resampler = Resampler(from: mono, to: recogniser)
+            resampler = Resampler(from: mono, to: Self.format)
+            self.send = send
+        }
+
+        var isMuted: Bool {
+            get { muted.withLock { $0 } }
+            set {
+                muted.withLock { $0 = newValue }
+                pending.withLock { $0 = Data() }
+            }
         }
 
         /// What the tap has seen so far; the peak starts again.
@@ -81,34 +87,29 @@
             }
         }
 
-        var muted: Bool {
-            get { state.withLock(\.muted) }
-            set { state.withLock { $0.muted = newValue } }
-        }
-
-        /// Starts a new recording, returning the one it replaces, now closed.
-        func record(to file: AVAudioFile?) -> AVAudioFile? {
-            state.withLock { state in
-                defer { state.recording = file }
-                return state.recording
-            }
-        }
-
         func take(_ buffer: AVAudioPCMBuffer) {
             guard let mono = firstChannel(of: buffer) else {
                 counted.withLock { $0.failed += 1 }
                 return
             }
-            let (muted, recording) = state.withLock { ($0.muted, $0.recording) }
-            if muted {
-                // The recogniser hears silence, so it isn't left waiting mid-word.
-                if let channel = mono.floatChannelData?[0] {
-                    channel.update(repeating: 0, count: Int(mono.frameLength))
-                }
-            } else {
-                try? recording?.write(from: mono)
+            guard !isMuted else { return }
+            guard let converted = resampler.convert(mono), let samples = converted.int16ChannelData
+            else {
+                counted.withLock { $0.failed += 1 }
+                return
             }
-            feed(mono)
+            let bytes = Data(bytes: samples[0], count: Int(converted.frameLength) * 2)
+            let frames = pending.withLock { pending -> [Data] in
+                pending.append(bytes)
+                var frames: [Data] = []
+                while pending.count >= Self.frameBytes {
+                    frames.append(Data(pending.prefix(Self.frameBytes)))
+                    pending.removeFirst(Self.frameBytes)
+                }
+                return frames
+            }
+            for frame in frames { send(frame) }
+            counted.withLock { $0.sent += frames.count }
         }
 
         /// The buffer's first channel, as a buffer of its own in `mono`.
@@ -133,31 +134,29 @@
             return mono
         }
 
-        private func feed(_ buffer: AVAudioPCMBuffer) {
-            guard let converted = resampler.convert(buffer) else {
-                counted.withLock { $0.failed += 1 }
-                return
-            }
-            input.yield(AnalyzerInput(buffer: converted))
-            counted.withLock { $0.fed += 1 }
-        }
-
-        func finish() {
-            input.finish()
-        }
-
         /// The block for the input node's tap, made off the main actor: the audio thread calls it.
         func block() -> AVAudioNodeTapBlock {
             { [self] buffer, _ in take(buffer) }
         }
     }
 
-    /// A short, soft two-note tone for the gaps while Ari works, so silence never sounds like a
-    /// dropped call.
-    nonisolated enum WorkingTone {
-        static func buffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+    /// Short, soft sounds Ari makes on a call: the chime when your turn ends, and the tone in the
+    /// gaps while Ari works, so silence never sounds like a dropped call.
+    nonisolated enum CallSounds {
+        /// Two quick rising notes: Ari has your turn.
+        static func chime(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+            buffer(format: format, notes: [(659.25, 0.09), (987.77, 0.14)], loudness: 0.07)
+        }
+
+        /// Two gentle notes, quiet under speech: Ari is working.
+        static func tone(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+            buffer(format: format, notes: [(587.33, 0.16), (880, 0.22)], loudness: 0.08)
+        }
+
+        private static func buffer(
+            format: AVAudioFormat, notes: [(frequency: Double, seconds: Double)], loudness: Double
+        ) -> AVAudioPCMBuffer? {
             let rate = format.sampleRate
-            let notes: [(frequency: Double, seconds: Double)] = [(587.33, 0.16), (880, 0.22)]
             let frames = AVAudioFrameCount(notes.reduce(0) { $0 + $1.seconds } * rate)
             guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames),
                 let channels = buffer.floatChannelData
@@ -168,9 +167,9 @@
                 let count = Int(note.seconds * rate)
                 for index in 0..<count {
                     let t = Double(index) / rate
-                    // A gentle rise and a longer fall, quiet under speech.
+                    // A gentle rise and a longer fall.
                     let envelope = min(1, t / 0.02) * exp(-t * 9)
-                    let sample = Float(0.08 * envelope * sin(2 * .pi * note.frequency * t))
+                    let sample = Float(loudness * envelope * sin(2 * .pi * note.frequency * t))
                     for channel in 0..<Int(format.channelCount) {
                         channels[channel][frame + index] = sample
                     }

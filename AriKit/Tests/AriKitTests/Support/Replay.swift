@@ -67,7 +67,7 @@ struct Replay {
         case .server(let response):
             try answer(response)
             request = nil
-        case .world, .push:
+        case .world, .push, .socket:
             break
         }
         check(after: step, before: before)
@@ -80,15 +80,9 @@ struct Replay {
         case .send:
             let message = try #require(request.body).decode(SendMessage.self)
             let secret = message.answers.flatMap { conversation[ask: $0]?.secret } ?? false
-            let spoken = message.spoken.map {
-                Spoken(
-                    call: $0.call, audio: $0.audio.flatMap { uploaded[$0] },
-                    corrections: $0.corrections)
-            }
             conversation.send(
                 message.id, text: message.text, answers: message.answers, secret: secret,
-                attachments: (message.attachments ?? []).compactMap { uploaded[$0] },
-                spoken: spoken)
+                attachments: (message.attachments ?? []).compactMap { uploaded[$0] })
         case .stop(let turn):
             let cut = try request.body?.decode(StopTurn.self).cut
             if let cut, conversation.turn?.id == turn { tapped = (turn, cut) }
