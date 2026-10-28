@@ -611,7 +611,7 @@ private struct OptionButton: View {
 }
 
 /// Lays its views out in rows, starting a new row when the next one wouldn't fit.
-private struct WrappingStack: Layout {
+struct WrappingStack: Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

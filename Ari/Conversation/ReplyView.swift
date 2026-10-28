@@ -60,12 +60,14 @@ struct ReplyView: View {
             if run.style.contains(.strikethrough) { attributes.strikethroughStyle = .single }
             if let link = run.link {
                 attributes.link = link
-                attributes.underlineStyle = .single
+                // Another page of memory is a quiet dotted line; the web, a full one.
+                attributes.underlineStyle =
+                    link.scheme == PageLink.scheme ? Text.LineStyle(pattern: .dot) : .single
             }
             let fullyShown =
                 position == .infinity || Double(run.start + run.text.utf16.count) + edge <= position
             if fullyShown {
-                attributes.foregroundColor = tone.color
+                attributes.foregroundColor = run.style.contains(.stamp) ? .ariTertiary : tone.color
                 result += AttributedString(run.text, attributes: attributes)
                 continue
             }
@@ -97,6 +99,7 @@ struct ReplyView: View {
 
     private static func font(for style: ReplyDocument.Style, base: Font, italic: Bool) -> Font {
         if style.contains(.code) { return .code }
+        if style.contains(.stamp) { return .caption }
         var font = style.contains(.strong) ? Font.ariStrong : base
         if style.contains(.emphasis) != italic { font = font.italic() }
         return font
