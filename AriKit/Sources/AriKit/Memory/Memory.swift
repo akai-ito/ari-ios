@@ -14,8 +14,8 @@ public final class Memory {
 
     /// Portrait, Now and How to help you, in full.
     public private(set) var inMind: [MemoryPage] = []
-    /// Recently changed pages, newest first.
-    public private(set) var recent: [PageSummary] = []
+    /// What Ari changed lately, newest first, with its notes.
+    public private(set) var recent: [RecentChange] = []
     public private(set) var shelves: [Shelf] = []
     /// Each shelf's pages, most recently changed first, as of the last refresh.
     public private(set) var shelfPages: [String: [PageSummary]] = [:]
@@ -30,17 +30,16 @@ public final class Memory {
     /// Asks for In mind, the recent changes and the shelves together.
     public func refresh() async {
         async let mind = client.inMind()
-        async let changed = client.recentPages()
+        async let changed = client.recentChanges()
         async let counts = client.shelves()
         do {
-            (inMind, recent, shelves) = try await (mind.pages, changed.pages, counts.shelves)
+            (inMind, recent, shelves) = try await (mind.pages, changed.changes, counts.shelves)
             load = .loaded
         } catch {
             if load != .loaded { load = .failed(RequestError(error)) }
             return
         }
-        // Every shelf's pages, for what's on each and every page's title. A shelf that fails keeps
-        // what it had.
+        // Every shelf's pages, for a peek at what's on each. A shelf that fails keeps what it had.
         let client = client
         await withTaskGroup(of: (String, [PageSummary]?).self) { group in
             for shelf in shelves.map(\.shelf) {
@@ -50,15 +49,6 @@ public final class Memory {
                 if let pages { shelfPages[shelf] = pages }
             }
         }
-    }
-
-    /// A page's title, if Ari has seen the page on a shelf, in the recent changes or in mind.
-    public func title(of address: PageAddress) -> String? {
-        if let page = inMind.first(where: { $0.address == address }) { return page.title }
-        for pages in [recent] + Array(shelfPages.values) {
-            if let page = pages.first(where: { $0.address == address }) { return page.title }
-        }
-        return nil
     }
 
     public func pages(on shelf: String) async throws(RequestError) -> [PageSummary] {

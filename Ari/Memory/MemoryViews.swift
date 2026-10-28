@@ -72,10 +72,9 @@ struct PageView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let page {
-                    let linked = PageLink.named(page.links, in: memory)
-                    if !linked.isEmpty {
+                    if !page.links.isEmpty {
                         WrappingStack(spacing: 8) {
-                            ForEach(linked, id: \.address) { link in
+                            ForEach(page.links, id: \.address) { link in
                                 NavigationLink(value: link.address) {
                                     PageChip(title: link.title)
                                 }
@@ -83,7 +82,7 @@ struct PageView: View {
                             }
                         }
                     }
-                    ReplyView(document: PageLink.reading(page, linked: linked), position: .infinity)
+                    ReplyView(document: PageLink.reading(page), position: .infinity)
                     Text(
                         "\(LibraryHome.title(ofShelf: page.shelf)) · as of \(LibraryHome.ago(page.changedAt))"
                     )
@@ -116,8 +115,6 @@ struct PageView: View {
             } catch {
                 problem = "Couldn't load this page: \(error.plainWords)"
             }
-            // The linked pages' titles come from the shelves.
-            if memory.shelfPages.isEmpty { await memory.refresh() }
         }
     }
 }
@@ -150,23 +147,15 @@ enum PageLink {
         return PageAddress(String(url.absoluteString.dropFirst(scheme.count + 1)))
     }
 
-    /// The linked pages Ari knows the titles of; one it doesn't is left out rather than named
-    /// from its address.
-    @MainActor
-    static func named(_ links: [PageAddress], in memory: Memory?) -> [(
-        address: PageAddress, title: String
-    )] {
-        links.compactMap { link in memory?.title(of: link).map { (link, $0) } }
-    }
-
     /// A page's words as the Library shows them: stamps quiet, and each linked page linked where
-    /// the words first name it.
-    static func reading(
-        _ page: MemoryPage, linked: [(address: PageAddress, title: String)]
-    ) -> ReplyDocument {
+    /// the words first name it, by its title or another name.
+    static func reading(_ page: MemoryPage) -> ReplyDocument {
         ReplyDocument(markdown: page.markdown)
             .quietingStamps()
-            .linking(linked.compactMap { link in url(link.address).map { (link.title, $0) } })
+            .linking(
+                page.links.compactMap { link in
+                    url(link.address).map { ([link.title] + link.aliases, $0) }
+                })
     }
 }
 
@@ -209,8 +198,7 @@ struct InMindSheet: View {
                                     .foregroundStyle(.ariTertiary)
                             }
                             ReplyView(
-                                document: PageLink.reading(
-                                    page, linked: PageLink.named(page.links, in: memory)),
+                                document: PageLink.reading(page),
                                 position: .infinity)
                         }
                     }

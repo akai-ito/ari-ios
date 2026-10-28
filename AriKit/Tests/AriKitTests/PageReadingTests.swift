@@ -27,7 +27,7 @@ struct PageReadingTests {
         let document = ReplyDocument(
             markdown:
                 "## Bora\n\nYou paced bora to a sub-two; Bora was thrilled. Ali Wilson sent [Ali](https://x.y) a CV."
-        ).linking([("Bora", bora), ("Ali", ali), ("Ali Wilson", wilson)])
+        ).linking([(["Bora"], bora), (["Ali"], ali), (["Ali Wilson"], wilson)])
         #expect(document.blocks[0].runs.allSatisfy { $0.link == nil }, "not in a heading")
         let linked = document.blocks[1].runs.filter { $0.link != nil }
         #expect(linked.map(\.text) == ["bora", "Ali Wilson", "Ali"])
@@ -35,5 +35,14 @@ struct PageReadingTests {
         #expect(
             text(document.blocks[1])
                 == "You paced bora to a sub-two; Bora was thrilled. Ali Wilson sent Ali a CV.")
+    }
+
+    @Test("a page links once, by whichever of its names comes first")
+    func aliases() throws {
+        let janki = try #require(URL(string: "ari-page:memory:people/janki"))
+        let document = ReplyDocument(markdown: "Janks booked Florence. Janki is thrilled.")
+            .linking([(["Janki", "Janks"], janki)])
+        let linked = document.blocks[0].runs.filter { $0.link != nil }
+        #expect(linked.map(\.text) == ["Janks"], "once, at the first mention")
     }
 }

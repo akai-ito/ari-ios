@@ -37,14 +37,22 @@ extension ReplyDocument {
         return document
     }
 
-    /// The first mention of each name links to its page, longest names first, so "Ali Wilson"
-    /// wins over "Ali". Only plain text links: never inside a heading, code or another link.
-    public func linking(_ names: [(name: String, link: URL)]) -> ReplyDocument {
+    /// The first mention of each page, by any of its names, links to it. Longer names are tried
+    /// first, so "Ali Wilson" wins over "Ali". Only plain text links: never inside a heading, code
+    /// or another link.
+    public func linking(_ pages: [(names: [String], link: URL)]) -> ReplyDocument {
         var document = self
-        for (name, link) in names.sorted(by: { $0.name.count > $1.name.count }) {
-            guard !name.isEmpty,
+        let longestFirst = pages.map { page in
+            (names: page.names.filter { !$0.isEmpty }.sorted { $0.count > $1.count }, page.link)
+        }
+        .filter { !$0.names.isEmpty }
+        .sorted { $0.names[0].count > $1.names[0].count }
+        for (names, link) in longestFirst {
+            // One pattern for all its names, so the earliest mention wins, by whichever name.
+            let alternatives = names.map(NSRegularExpression.escapedPattern(for:))
+            guard
                 let pattern = try? Regex(
-                    "\\b" + NSRegularExpression.escapedPattern(for: name) + "\\b"
+                    "\\b(?:" + alternatives.joined(separator: "|") + ")\\b"
                 ).ignoresCase()
             else { continue }
             document.linkFirst(pattern, to: link)

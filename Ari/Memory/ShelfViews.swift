@@ -97,7 +97,7 @@ private struct ShelfList: View {
     }
 }
 
-/// The journal's days, by month: the weekday and the day.
+/// The journal's days, by month: the weekday and the day, with the headline Ari wrote for it.
 private struct JournalList: View {
     let months: [ShelfReading.Month]
 
@@ -106,19 +106,30 @@ private struct JournalList: View {
             ForEach(months) { month in
                 Section {
                     ForEach(month.days, id: \.page.address) { day in
-                        NavigationLink(value: day.page.address) {
-                            Text(
-                                Journal.date(month, day.day).formatted(
-                                    Date.FormatStyle(timeZone: .gmt).weekday(.wide).day())
-                            )
-                            .foregroundStyle(.ariText)
-                        }
+                        NavigationLink(value: day.page.address) { row(day, in: month) }
                     }
                     .listRowBackground(Color.ariSurface)
                 } header: {
                     heading(Journal.title(of: month))
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ day: ShelfReading.Day, in month: ShelfReading.Month) -> some View {
+        let date = Journal.date(month, day.day)
+        if let gist = day.page.gist {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text(date.formatted(Date.FormatStyle(timeZone: .gmt).weekday(.abbreviated).day()))
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.ariTertiary)
+                    .frame(width: 58, alignment: .leading)
+                Text(gist).foregroundStyle(.ariText)
+            }
+        } else {
+            Text(date.formatted(Date.FormatStyle(timeZone: .gmt).weekday(.wide).day()))
+                .foregroundStyle(.ariText)
         }
     }
 }

@@ -797,6 +797,12 @@ extension ConversationTranscriptTests {
             )
         ],
         "56-relearn-my-voice": [],
+        "57-what-ari-learnt-lately": [
+            you(
+                "2b3878ca-83c1-4b5e-984e-6084e35ca1f3",
+                "Janki and I are off to Florence together, 6 to 9 November!"),
+            reply("m_0001_80782", 62, "I've started a page for the trip."),
+        ],
         "42-choose-ari-s-voice": [],
         "43-before-the-voice-is-ready": [],
         "44-when-the-server-can-t-talk": [],

@@ -158,8 +158,8 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/memory/shelves"))
     }
 
-    /// `GET /v0/memory/recent`: pages, most recently changed first.
-    public func recentPages() async throws(RequestError) -> PageList {
+    /// `GET /v0/memory/recent`: what Ari changed lately, newest first, with its notes.
+    public func recentChanges() async throws(RequestError) -> RecentChanges {
         try await call(HTTPRequest(.get, "/v0/memory/recent"))
     }
 

@@ -71,8 +71,10 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(MemoryPages.self)
                 case .memoryShelves:
                     _ = try body.decode(ShelfList.self)
-                case .memoryPages, .memoryRecent:
+                case .memoryPages:
                     _ = try body.decode(PageList.self)
+                case .memoryRecent:
+                    _ = try body.decode(RecentChanges.self)
                 case .memoryPage:
                     #expect(try !body.decode(MemoryPage.self).title.isEmpty, "\(place)")
                 case .memoryChange(let change):
@@ -185,7 +187,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 11) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 12) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }

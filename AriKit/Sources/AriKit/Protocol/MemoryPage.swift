@@ -17,8 +17,10 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
     public let shelf: String
     /// Other names Ari knows it by.
     public let aliases: [String]
-    /// The addresses of related pages.
-    public let links: [PageAddress]
+    /// The related pages that exist, in Ari's order.
+    public let links: [MemoryLink]
+    /// What the page is now, in a line Ari keeps current; absent until Ari has written one.
+    public let gist: String?
     public let changedAt: Timestamp
     /// The page as Ari wrote it, in Markdown without its front matter: the present first, then
     /// *Earlier* with dates.
@@ -28,20 +30,35 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
 
     public init(
         address: PageAddress, title: String, shelf: String, aliases: [String] = [],
-        links: [PageAddress] = [], changedAt: Timestamp, markdown: String
+        links: [MemoryLink] = [], gist: String? = nil, changedAt: Timestamp, markdown: String
     ) {
         self.address = address
         self.title = title
         self.shelf = shelf
         self.aliases = aliases
         self.links = links
+        self.gist = gist
         self.changedAt = changedAt
         self.markdown = markdown
     }
 
     enum CodingKeys: String, CodingKey {
-        case address, title, shelf, aliases, links, markdown
+        case address, title, shelf, aliases, links, gist, markdown
         case changedAt = "changed_at"
+    }
+}
+
+/// A page another links to, as it is now: its name, and the other names it goes by, for finding
+/// where the words mention it.
+public struct MemoryLink: Sendable, Hashable, Codable {
+    public let address: PageAddress
+    public let title: String
+    public let aliases: [String]
+
+    public init(address: PageAddress, title: String, aliases: [String] = []) {
+        self.address = address
+        self.title = title
+        self.aliases = aliases
     }
 }
 
@@ -50,20 +67,44 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
 public struct PageSummary: Sendable, Hashable, Identifiable, Codable {
     public let address: PageAddress
     public let title: String
+    /// What the page is now, in a line: a journal day's headline, who someone is to you.
+    public let gist: String?
     public let changedAt: Timestamp?
 
     public var id: PageAddress { address }
 
-    public init(address: PageAddress, title: String, changedAt: Timestamp? = nil) {
+    public init(
+        address: PageAddress, title: String, gist: String? = nil, changedAt: Timestamp? = nil
+    ) {
         self.address = address
         self.title = title
+        self.gist = gist
         self.changedAt = changedAt
     }
 
     enum CodingKeys: String, CodingKey {
-        case address, title
+        case address, title, gist
         case changedAt = "changed_at"
     }
+}
+
+/// One change Ari made to memory, with its note on what changed.
+public struct RecentChange: Sendable, Hashable, Identifiable, Codable {
+    public let change: String
+    public let address: PageAddress
+    /// The page's title when it changed.
+    public let title: String
+    public let at: Timestamp
+    /// What the change did, in a few words, such as "Florence together 6–9 Nov". Absent for pages
+    /// that came from outside, and for changes from before Ari wrote notes.
+    public let note: String?
+
+    public var id: String { change }
+}
+
+/// `GET /v0/memory/recent`: the newest changes, newest first, one row per change.
+public struct RecentChanges: Sendable, Equatable, Codable {
+    public let changes: [RecentChange]
 }
 
 /// A shelf and how many pages are on it.
@@ -84,7 +125,7 @@ public struct ShelfList: Sendable, Equatable, Codable {
     public let shelves: [Shelf]
 }
 
-/// `GET /v0/memory/pages?shelf=…` and `GET /v0/memory/recent`: pages, most recently changed first.
+/// `GET /v0/memory/pages?shelf=…`: a shelf's pages, most recently changed first.
 public struct PageList: Sendable, Equatable, Codable {
     public let pages: [PageSummary]
 }
