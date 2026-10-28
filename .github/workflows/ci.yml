@@ -96,7 +96,7 @@ jobs:
       - uses: ./.github/actions/xcode
       - name: Check the Swift sources with swift-format
         run: |
-          paths=(Ari AriShare AriNotificationService AriUITests AriKit/Package.swift AriKit/Sources AriKit/Tests)
+          paths=(Ari AriShare AriNotificationService AriControls Shared AriUITests AriKit/Package.swift AriKit/Sources AriKit/Tests)
           if ! swift format lint --strict --recursive --parallel "${paths[@]}" 2> "$RUNNER_TEMP/lint"; then
             sed -E 's/^([^:]+):([0-9]+):([0-9]+): (error|warning): (.*)$/::error file=\1,line=\2,col=\3::\5/' "$RUNNER_TEMP/lint"
             echo "::error title=Swift format::Some Swift isn't formatted as .swift-format says. Run: swift format format --in-place --recursive ${paths[*]}"

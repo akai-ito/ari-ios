@@ -28,6 +28,8 @@ targets:
     sources:
       - path: Ari
         type: syncedFolder
+      # Code the app shares with its extensions.
+      - path: Shared
     dependencies:
       - package: AriKit
       # The notification service extension decrypts each push on the iPhone.
@@ -35,6 +37,9 @@ targets:
         destinationFilters: [iOS]
       # Share to Ari, from any app's share sheet.
       - target: AriShare
+        destinationFilters: [iOS]
+      # Talk to Ari from Control Centre, the Lock Screen or the Action button.
+      - target: AriControls
         destinationFilters: [iOS]
     settings:
       base:
@@ -165,6 +170,29 @@ targets:
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+  AriControls:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AriControls
+      # The control's button runs the app's intent, which starts a call.
+      - path: Shared
+    info:
+      path: AriControls/Info.plist
+      properties:
+        CFBundleDisplayName: Ari
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ARI_BUNDLE_ID).Controls
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
   # The app's interactions, driven as you would on the phone. Opt in: they need ito-core's demo
   # engine running and Ari connected to it in the Simulator, so CI doesn't run them (see README).
   AriUITests:
