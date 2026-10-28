@@ -725,7 +725,7 @@ extension ConversationTranscriptTests {
             Expected(
                 id: "m_0002_05333", text: "Let me check what I have on Bora.", outcome: .completed,
                 shown: false),
-            reply("m_0003_60545", 165, "hten the intro\n- Add the latency numbers"),
+            reply("m_0003_60545", 165, "Tighten the intro\n- Add the latency numbers"),
         ],
         "39-ari-learns-a-name": [
             you("m_0001_77281", "What did Bara say about the cutie panel?"),
@@ -735,7 +735,7 @@ extension ConversationTranscriptTests {
         ],
         "40-delete-a-call-s-audio": [
             you("m_0001_90849", "Today was a good day. The long run felt easy."),
-            reply("m_0002_64513", 64, "nd on. I've added it to today's journal."),
+            reply("m_0002_64513", 64, "I've added it to today's journal."),
         ],
         "45-talking-over-ari": [
             you("m_0001_43488", "When's the design review?"),
