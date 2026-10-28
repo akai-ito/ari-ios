@@ -5,9 +5,9 @@ import SwiftUI
 /// tell Ari.
 struct LibraryView: View {
     let memory: Memory?
+    /// Where the Library is: kept by the app, so a search result can open a page in it.
+    @Binding var path: NavigationPath
     let openSettings: () -> Void
-
-    @State private var path = Self.startingPath
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -42,7 +42,7 @@ struct LibraryView: View {
 
 extension LibraryView {
     /// Where the Library opens: at the top, or, in debug builds, at the page `ARI_PAGE` names.
-    fileprivate static var startingPath: NavigationPath {
+    static var startingPath: NavigationPath {
         var path = NavigationPath()
         #if DEBUG
             if let shelf = DebugScript.shelf { path.append(ShelfRoute(shelf: shelf)) }

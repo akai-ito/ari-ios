@@ -1,4 +1,5 @@
 import AriKit
+import CoreSpotlight
 import SwiftUI
 
 /// Ari's three places, as the map plans them: Chat, where you talk; Goals, what's in motion; and
@@ -9,6 +10,7 @@ struct MainView: View {
 
     @State private var place = Place.chat
     @State private var showsSettings = false
+    @State private var libraryPath = LibraryView.startingPath
     /// What Ari knows, for the Library, In mind and memory steps on the trail.
     @State private var memory: Memory?
     #if os(iOS)
@@ -56,11 +58,24 @@ struct MainView: View {
                 ) { showsSettings = true }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                LibraryView(memory: memory) { showsSettings = true }
+                LibraryView(memory: memory, path: $libraryPath) { showsSettings = true }
             }
         }
         .environment(memory)
-        .task { if memory == nil { memory = model.client().map(Memory.init(client:)) } }
+        .task {
+            if memory == nil { memory = model.client().map(Memory.init(client:)) }
+            // Every page in the device's search, from the start, not only once the Library opens.
+            if let memory {
+                await memory.refresh()
+                await Spotlight.index(memory)
+            }
+        }
+        // A search result opens its page in the Library.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let page = Spotlight.page(from: activity) else { return }
+            place = .library
+            libraryPath = NavigationPath([page])
+        }
         #if os(iOS)
             .environment(talk)
             .environment(voices)
