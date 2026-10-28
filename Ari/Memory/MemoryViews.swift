@@ -1,8 +1,8 @@
 import AriKit
 import SwiftUI
 
-/// The Library tab: Memory, what Ari knows about you. Recently changed first, then the three pages
-/// always in mind, then the shelves. Read-only: to change anything, you tell Ari.
+/// The Library tab: what Ari knows about you, as Ari's notebook. Read-only: to change anything, you
+/// tell Ari.
 struct LibraryView: View {
     let memory: Memory?
     let openSettings: () -> Void
@@ -13,7 +13,7 @@ struct LibraryView: View {
         NavigationStack(path: $path) {
             Group {
                 if let memory {
-                    MemoryList(memory: memory)
+                    LibraryHome(memory: memory)
                 } else {
                     Text("Connect to your server to see what Ari knows.")
                         .font(.ariBody)
@@ -45,6 +45,7 @@ extension LibraryView {
     fileprivate static var startingPath: NavigationPath {
         var path = NavigationPath()
         #if DEBUG
+            if let shelf = DebugScript.shelf { path.append(ShelfRoute(shelf: shelf)) }
             if let page = DebugScript.page { path.append(page) }
         #endif
         return path
@@ -54,156 +55,6 @@ extension LibraryView {
 /// A shelf, as a navigation value.
 struct ShelfRoute: Hashable {
     let shelf: String
-}
-
-private struct MemoryList: View {
-    let memory: Memory
-
-    var body: some View {
-        Form {
-            switch memory.load {
-            case .failed(let error):
-                Section {
-                    Text("Couldn't reach your server: \(error.plainWords)")
-                        .foregroundStyle(.ariSecondary)
-                }
-                .listRowBackground(Color.ariSurface)
-            case .loading:
-                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
-            case .loaded where memory.inMind.isEmpty && memory.recent.isEmpty:
-                Text(
-                    "Nothing yet. As you talk, Ari keeps what matters here, and you can see all of it."
-                )
-                .font(.ariBody)
-                .foregroundStyle(.ariTertiary)
-                .listRowBackground(Color.clear)
-            case .loaded:
-                if !memory.recent.isEmpty {
-                    Section {
-                        ForEach(memory.recent.prefix(6)) { page in
-                            NavigationLink(value: page.address) {
-                                LabeledContent(
-                                    page.title, value: page.changedAt.map(Self.ago) ?? "")
-                            }
-                        }
-                    } header: {
-                        heading("Recently changed")
-                    }
-                    .listRowBackground(Color.ariSurface)
-                }
-                Section {
-                    ForEach(memory.inMind) { page in
-                        NavigationLink(value: page.address) {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(page.title).foregroundStyle(.ariText)
-                                    Text(Self.blurb(for: page))
-                                        .font(.footnote)
-                                        .foregroundStyle(.ariTertiary)
-                                }
-                            } icon: {
-                                Image(systemName: Self.symbol(for: page)).foregroundStyle(
-                                    .ariTertiary)
-                            }
-                        }
-                    }
-                } header: {
-                    heading("Always in mind")
-                }
-                .listRowBackground(Color.ariSurface)
-                if !memory.shelves.isEmpty {
-                    Section {
-                        ForEach(memory.shelves) { shelf in
-                            NavigationLink(value: ShelfRoute(shelf: shelf.shelf)) {
-                                LabeledContent(
-                                    Self.title(ofShelf: shelf.shelf), value: "\(shelf.count)"
-                                )
-                                .monospacedDigit()
-                            }
-                        }
-                    } header: {
-                        heading("Shelves")
-                    }
-                    .listRowBackground(Color.ariSurface)
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .task { await memory.refresh() }
-        .refreshable { await memory.refresh() }
-    }
-
-    private func heading(_ text: String) -> some View {
-        Text(text)
-            .font(.ariHeading)
-            .foregroundStyle(.ariText)
-            .textCase(nil)
-    }
-
-    static func title(ofShelf shelf: String) -> String {
-        shelf.prefix(1).uppercased() + shelf.dropFirst()
-    }
-
-    private static func symbol(for page: MemoryPage) -> String {
-        switch page.shelf {
-        case "portrait": "person.crop.circle"
-        case "now": "sun.max"
-        default: "hand.raised"
-        }
-    }
-
-    private static func blurb(for page: MemoryPage) -> String {
-        switch page.shelf {
-        case "portrait": "Who you are"
-        case "now": "What's going on these days"
-        case "helping-you": "What Ari has learnt"
-        default: "Updated \(ago(page.changedAt))"
-        }
-    }
-
-    static func ago(_ time: Timestamp) -> String {
-        time.date.formatted(.relative(presentation: .named))
-    }
-}
-
-/// The pages on one shelf, most recently changed first.
-struct ShelfView: View {
-    let memory: Memory?
-    let shelf: String
-
-    @State private var pages: [PageSummary]?
-    @State private var problem: String?
-
-    var body: some View {
-        Form {
-            if let problem {
-                Text(problem).foregroundStyle(.ariSecondary).listRowBackground(Color.ariSurface)
-            } else if let pages {
-                ForEach(pages) { page in
-                    NavigationLink(value: page.address) {
-                        LabeledContent(page.title, value: page.changedAt.map(MemoryList.ago) ?? "")
-                    }
-                }
-                .listRowBackground(Color.ariSurface)
-            } else {
-                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
-            }
-        }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .background(.ariBackground)
-        .navigationTitle(MemoryList.title(ofShelf: shelf))
-        // Again once there's a server to ask, when the shelf opened first.
-        .task(id: memory != nil) {
-            guard let memory else { return }
-            do throws(RequestError) {
-                pages = try await memory.pages(on: shelf)
-            } catch {
-                problem = "Couldn't load this shelf: \(error.plainWords)"
-            }
-        }
-    }
 }
 
 /// One page, read-only, drawn from Ari's Markdown: the pages it links to as chips on top, then
@@ -234,7 +85,7 @@ struct PageView: View {
                     }
                     ReplyView(document: PageLink.reading(page, linked: linked), position: .infinity)
                     Text(
-                        "\(MemoryList.title(ofShelf: page.shelf)) · as of \(MemoryList.ago(page.changedAt))"
+                        "\(LibraryHome.title(ofShelf: page.shelf)) · as of \(LibraryHome.ago(page.changedAt))"
                     )
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)
@@ -272,7 +123,7 @@ struct PageView: View {
 }
 
 /// A linked page, named: outlined like an option, in your hand.
-private struct PageChip: View {
+struct PageChip: View {
     let title: String
 
     var body: some View {
@@ -354,7 +205,7 @@ struct InMindSheet: View {
                                 Text(page.title).font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.ariText)
                                 Spacer()
-                                Text("Updated \(MemoryList.ago(page.changedAt))").font(.caption)
+                                Text("Updated \(LibraryHome.ago(page.changedAt))").font(.caption)
                                     .foregroundStyle(.ariTertiary)
                             }
                             ReplyView(
