@@ -2,10 +2,11 @@
     import AppIntents
     import Observation
 
-    /// "Hey Siri, talk to Ari": opens Ari and starts a call, so a walk can begin without touching
-    /// the phone.
+    /// Opens Ari and starts a call, so a walk can begin without touching the phone: from Siri, the
+    /// Action button, Control Centre or the Lock Screen. Ari's controls build it too, to name it;
+    /// it runs in the app.
     struct CallAriIntent: AppIntent {
-        static let title: LocalizedStringResource = "Call Ari"
+        static let title: LocalizedStringResource = "Talk to Ari"
         static let description = IntentDescription("Start a call with Ari, to talk hands-free.")
         static let supportedModes: IntentModes = .foreground
 
@@ -13,20 +14,6 @@
         func perform() async throws -> some IntentResult {
             TalkRequests.shared.call()
             return .result()
-        }
-    }
-
-    struct AriShortcuts: AppShortcutsProvider {
-        static var appShortcuts: [AppShortcut] {
-            // "Call Ari" alone could reach a contact of that name, so the others say it plainly.
-            AppShortcut(
-                intent: CallAriIntent(),
-                phrases: [
-                    "Talk to \(.applicationName)",
-                    "Start a call with \(.applicationName)",
-                    "Call \(.applicationName)",
-                ],
-                shortTitle: "Call Ari", systemImageName: "phone")
         }
     }
 
