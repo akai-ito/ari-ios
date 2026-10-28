@@ -3,7 +3,6 @@
     import AriKit
     import CallKit
     import Foundation
-    import Speech
     import UIKit
     import os
 
@@ -25,10 +24,6 @@
         @ObservationIgnored private let voices: Voices
         @ObservationIgnored private let provider: CXProvider
         @ObservationIgnored private let controller = CXCallController()
-        /// Getting speech recognition ready since Ari opened.
-        @ObservationIgnored private var warming: Task<Void, Never>?
-        /// Asking for speech recognition, before the call starts.
-        @ObservationIgnored private var starting = false
 
         private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
@@ -44,8 +39,6 @@
             provider = CXProvider(configuration: configuration)
             super.init()
             provider.setDelegate(self, queue: nil)
-            // So the first call doesn't wait for the speech model or your vocabulary's.
-            warming = Task { _ = try? await CallEngine.warmUp(session) }
         }
 
         /// You tapped Talk.
@@ -54,40 +47,18 @@
                 showsCall = true
                 return
             }
-            guard !starting else { return }
-            // Without the server's voice there's no call, rather than a call in a worse voice.
+            // Without the server's voice there's no call, rather than a worse one.
             guard voices.canTalk else {
                 notice = voices.reason ?? "Ari's voice isn't ready on your server yet."
                 return
             }
-            starting = true
             problem = nil
             notice = nil
-            Task {
-                // Asked here in the chat, before the call: once CallKit has the screen, the
-                // prompt never came and the call waited for it.
-                let speech = await Self.askForSpeechRecognition()
-                Self.log.info("Speech recognition: \(speech.rawValue, privacy: .public)")
-                starting = false
-                begin()
-            }
-        }
-
-        /// Asks for speech recognition the first time, off the main actor: iOS answers on a queue
-        /// of its own.
-        nonisolated private static func askForSpeechRecognition() async
-            -> SFSpeechRecognizerAuthorizationStatus
-        {
-            guard SFSpeechRecognizer.authorizationStatus() == .notDetermined else {
-                return SFSpeechRecognizer.authorizationStatus()
-            }
-            return await withCheckedContinuation { done in
-                SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0) }
-            }
+            begin()
         }
 
         private func begin() {
-            let call = CallEngine(session: session, after: warming)
+            let call = CallEngine(session: session)
             call.ended = { [weak self] reason in self?.end(because: reason) }
             self.call = call
             showsCall = true

@@ -127,7 +127,7 @@
         private var stateLine: String {
             switch call.phase {
             case .connecting: "Getting ready"
-            case .listening: call.muted ? "Muted" : "Listening"
+            case .listening: call.muted ? "Muted" : call.isHearing ? "Hearing you" : "Listening"
             case .working: session.conversation.turn?.status?.label ?? "Thinking it through"
             case .speaking: "Speaking"
             case .ended: "Call ended"
@@ -137,7 +137,7 @@
         private var pose: Pose {
             switch call.phase {
             case .connecting, .ended: .resting
-            case .listening: .asking
+            case .listening: call.isHearing ? .adjusting : .asking
             case .speaking: .writing
             case .working:
                 session.conversation.turn?.status.map { Pose(kind: $0.kind) } ?? .thinking

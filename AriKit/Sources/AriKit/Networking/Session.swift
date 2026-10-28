@@ -338,15 +338,10 @@ public final class Session {
         wake(.call)
     }
 
-    /// A sentence in Ari's chosen voice, as a WAV, for a call to play.
-    public func speak(_ text: String) async throws(RequestError) -> Data {
-        try await client.speak(SpeechRequest(text: text))
-    }
-
-    /// The words to steer recognition, from memory and conversation; `nil` if the server can't
-    /// say right now.
-    public func vocabulary() async -> Vocabulary? {
-        try? await client.vocabulary()
+    /// A call's stream to the server: your voice up, and Ari's voice and the call's state down.
+    public func callStream(_ call: CallID) -> CallStream {
+        let client = client
+        return CallStream(connect: { client.callStream(call) })
     }
 
     /// You undid a correction or fixed a word: the server learns what was heard and what you
