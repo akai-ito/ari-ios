@@ -79,6 +79,22 @@ struct CallStreamTests {
         #expect(socket.sent.contains(.text(CallStreamCommand.mute.json)))
     }
 
+    @Test("your voice goes up in the order it was spoken, however long each frame takes to send")
+    func inOrder() async throws {
+        let frames = (0..<40).map { Data([UInt8($0)]) }
+        let socket = FakeSocket(slowSends: true)
+        socket.script([
+            .message(.text(Data(#"{"type":"state","state":"listening"}"#.utf8))),
+            .awaitSent(frames.count),
+        ])
+        let stream = CallStream(connect: { socket })
+        stream.start()
+        for await event in stream.events where event == .state(.listening) {
+            for frame in frames { stream.send(audio: frame) }
+        }
+        #expect(socket.sent == frames.map(WebSocketMessage.binary))
+    }
+
     @Test("a dropped connection is tried again, and the call carries on")
     func reconnects() async throws {
         let first = FakeSocket()
@@ -135,10 +151,18 @@ final class FakeSocket: WebSocketChannel, @unchecked Sendable {
         case message(WebSocketMessage)
         case closed(Int)
         case refused(Int)
+        /// Stays open until Ari has sent this many frames.
+        case awaitSent(Int)
     }
 
     private let steps = Mutex<[Step]>([])
     private let outbox = Mutex<[WebSocketMessage]>([])
+    /// Each send takes its own while, as a real socket's may.
+    private let slowSends: Bool
+
+    init(slowSends: Bool = false) {
+        self.slowSends = slowSends
+    }
 
     var sent: [WebSocketMessage] { outbox.withLock { $0 } }
 
@@ -147,6 +171,7 @@ final class FakeSocket: WebSocketChannel, @unchecked Sendable {
     }
 
     func send(_ message: WebSocketMessage) async throws {
+        if slowSends { try await Task.sleep(for: .microseconds(Int.random(in: 0...3_000))) }
         outbox.withLock { $0.append(message) }
     }
 
@@ -158,6 +183,9 @@ final class FakeSocket: WebSocketChannel, @unchecked Sendable {
         case .message(let message): return message
         case .closed(let code): throw WebSocketClosed(code: code)
         case .refused(let status): throw WebSocketRefused(status: status)
+        case .awaitSent(let count):
+            while sent.count < count { try await Task.sleep(for: .milliseconds(5)) }
+            return try await receive()
         }
     }
 

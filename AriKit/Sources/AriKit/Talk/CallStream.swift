@@ -129,6 +129,8 @@ public final class CallStream {
     private let clock: any Clock<Duration>
     private let continuation: AsyncStream<CallStreamEvent>.Continuation
     private var channel: (any WebSocketChannel)?
+    /// What goes up the connection, sent one at a time so it arrives in the order it went.
+    private var outgoing: AsyncStream<WebSocketMessage>.Continuation?
     private var running: Task<Void, Never>?
     private var closing = false
     private var finished = false
@@ -154,13 +156,11 @@ public final class CallStream {
     /// Your voice: 16-bit PCM, mono, 16 kHz, little-endian, in frames of 20–40 ms. Dropped while
     /// the connection is down, as the server would lose it anyway.
     public func send(audio: Data) {
-        guard let channel else { return }
-        Task { try? await channel.send(.binary(audio)) }
+        outgoing?.yield(.binary(audio))
     }
 
     public func send(_ command: CallStreamCommand) {
-        guard let channel else { return }
-        Task { try? await channel.send(.text(command.json)) }
+        outgoing?.yield(.text(command.json))
     }
 
     /// You ended the call: the server ends it, and closes the stream.
@@ -184,6 +184,16 @@ public final class CallStream {
         while !Task.isCancelled, !finished {
             let channel = connect()
             self.channel = channel
+            // One sender for the connection: a frame goes once the one before it has.
+            let (messages, outgoing) = AsyncStream<WebSocketMessage>.makeStream()
+            self.outgoing = outgoing
+            let sender = Task {
+                for await message in messages { try? await channel.send(message) }
+            }
+            defer {
+                outgoing.finish()
+                sender.cancel()
+            }
             do {
                 while true {
                     let message = try await channel.receive()
@@ -201,6 +211,7 @@ public final class CallStream {
                 return finish(Self.reason(refused.status))
             } catch {
                 self.channel = nil
+                self.outgoing = nil
                 let code = (error as? WebSocketClosed)?.code
                 if closing || code == WebSocketClosed.normal { return finish(nil) }
                 if code == WebSocketClosed.replaced {
@@ -230,6 +241,7 @@ public final class CallStream {
         finished = true
         endReason = reason
         channel = nil
+        outgoing = nil
         continuation.finish()
     }
 }
