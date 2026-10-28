@@ -727,6 +727,12 @@ extension ConversationTranscriptTests {
         ],
         // The recogniser's vocabulary, not the conversation: nothing changes in it.
         "39-ari-learns-a-name": [],
+        "41-another-device-sees-the-call": [
+            you("914f3838-aaa0-49a3-89cd-57b1b6391d24", "What did Bora say about the QRT panel?"),
+            reply(
+                "m_0001_83439", 74,
+                "She wants one more round on your design before the panel sits in November."),
+        ],
         "40-delete-a-call-s-audio": [
             you(
                 "4ebb2673-f9f9-4c6e-9719-11403eec63de",
