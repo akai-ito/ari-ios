@@ -52,6 +52,119 @@ struct DayLabel: View {
     }
 }
 
+/// Where the subject changed: Ari's quiet label above the message that changed it, with a hairline
+/// running on after it. A heading, so VoiceOver can jump between topics.
+struct TopicLabel: View {
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(1.2)
+                .foregroundStyle(.ariTertiary)
+                .lineLimit(1)
+            Rectangle().fill(.ariLine).frame(height: 1)
+        }
+        .padding(.top, 10)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A slim rail at the conversation's edge while you scroll, marked at each topic and each day.
+/// Drag along it: the topic or day under your finger is named, and the conversation goes there.
+struct TopicScrubber: View {
+    struct Mark: Equatable {
+        let id: String
+        let label: String
+        let isTopic: Bool
+    }
+
+    let marks: [Mark]
+    let visible: Bool
+    let jump: (String) -> Void
+
+    @State private var selected: Int?
+
+    /// The topics and days among the rows, in the conversation's order.
+    static func marks(in rows: [ConversationRow]) -> [Mark] {
+        rows.compactMap { row in
+            switch row.kind {
+            case .topic(let topic): Mark(id: row.id, label: topic.label, isTopic: true)
+            case .day(let date):
+                Mark(
+                    id: row.id, label: date.formatted(.dateTime.weekday(.wide).day().month(.wide)),
+                    isTopic: false)
+            default: nil
+            }
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let height = geometry.size.height
+            ZStack(alignment: .top) {
+                Capsule().fill(.ariLine).frame(width: 2)
+                ForEach(marks.indices, id: \.self) { index in
+                    let mark = marks[index]
+                    Circle()
+                        .fill(
+                            index == selected
+                                ? Color.ariText : mark.isTopic ? .ariSecondary : .ariTertiary
+                        )
+                        .frame(width: mark.isTopic ? 6 : 4, height: mark.isTopic ? 6 : 4)
+                        .position(x: geometry.size.width / 2, y: y(index, height))
+                }
+            }
+            .frame(width: geometry.size.width, height: height)
+            .overlay(alignment: .topTrailing) {
+                if let selected {
+                    Text(marks[selected].label)
+                        .font(.footnote.weight(marks[selected].isTopic ? .semibold : .regular))
+                        .foregroundStyle(.ariText)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ariSurface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(.ariLine, lineWidth: 1))
+                        .fixedSize()
+                        .offset(x: -geometry.size.width - 4, y: y(selected, height) - 15)
+                        .allowsHitTesting(false)
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let index = nearest(value.location.y, height)
+                        guard index != selected else { return }
+                        selected = index
+                        jump(marks[index].id)
+                    }
+                    .onEnded { _ in selected = nil }
+            )
+        }
+        .frame(width: 28)
+        .padding(.trailing, 2)
+        .opacity(visible || selected != nil ? 1 : 0)
+        .allowsHitTesting(visible || selected != nil)
+        .sensoryFeedback(.selection, trigger: selected)
+        .animation(.easeOut(duration: 0.15), value: selected)
+        // VoiceOver jumps between topics by their headings instead.
+        .accessibilityHidden(true)
+    }
+
+    private func y(_ index: Int, _ height: CGFloat) -> CGFloat {
+        (CGFloat(index) + 0.5) / CGFloat(marks.count) * height
+    }
+
+    private func nearest(_ y: CGFloat, _ height: CGFloat) -> Int {
+        let index = Int((y / max(height, 1) * CGFloat(marks.count)).rounded(.down))
+        return min(max(index, 0), marks.count - 1)
+    }
+}
+
 /// Your message, in a thin outline.
 struct YourMessage<Attachments: View, Footer: View>: View {
     let text: String

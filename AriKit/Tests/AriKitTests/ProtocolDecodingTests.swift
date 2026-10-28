@@ -224,6 +224,7 @@ extension Event.Payload {
         case .callEnded: "call.ended"
         case .callAudioDeleted: "call.audio_deleted"
         case .voiceStatus: "voice.status"
+        case .topicStarted: "topic.started"
         case .unknown: nil
         }
     }

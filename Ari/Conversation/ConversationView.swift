@@ -29,6 +29,8 @@ struct ConversationView: View {
     @State private var distanceFromEnd = Distance.atEnd
     /// Whether your finger is on the conversation.
     @State private var scrolling = false
+    /// The scrubber shows while you scroll, and a moment after.
+    @State private var showsScrubber = false
     /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
     /// latest.
     @State private var firstShown: String?
@@ -194,6 +196,25 @@ struct ConversationView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             HeaderView(poses: header.poses, name: name, status: header.status)
         }
+        .overlay(alignment: .trailing) {
+            let marks = TopicScrubber.marks(in: rows)
+            if marks.count > 1 {
+                TopicScrubber(marks: marks, visible: showsScrubber) { open(at: $0, in: rows) }
+                    .padding(.top, 70)
+                    .padding(.bottom, 150)
+            }
+        }
+        .onChange(of: scrolling) { _, scrolling in
+            if scrolling {
+                withAnimation(.easeOut(duration: 0.2)) { showsScrubber = true }
+            } else {
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    guard !self.scrolling else { return }
+                    withAnimation(.easeIn(duration: 0.4)) { showsScrubber = false }
+                }
+            }
+        }
         .overlay(alignment: .bottom) {
             if let pill = pillText(working: working) {
                 Pill(text: pill) { scrollToEnd() }
@@ -312,6 +333,8 @@ struct ConversationView: View {
         switch row.kind {
         case .day(let date):
             DayLabel(date: date)
+        case .topic(let topic):
+            TopicLabel(label: topic.label)
         case .yours(let entry):
             YourMessage(
                 text: entry.isSecret ? "••••••" : entry.text,

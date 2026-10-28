@@ -797,6 +797,21 @@ extension ConversationTranscriptTests {
             )
         ],
         "56-relearn-my-voice": [],
+        "58-topics": [
+            you(
+                "f65434eb-176c-4547-a4b5-f1abc606ee0b", "Can you help me plan Florence with Janki?"),
+            reply("m_0001_93508", 72, "fits the Uffizi, the Duomo and a morning in Siena."),
+            you(
+                "be0f8920-f03b-49fd-a28a-bcbd21c203c5",
+                "Different thing: what should I tell Bora about the QRT panel?"),
+            reply("m_0002_02978", 85, "and ask which part worries her most."),
+            you("cb9b4fdb-78c4-4977-9a19-a86f2ec1a221", "And when should I send it?"),
+            reply("m_0003_58468", 49, "Before Friday, so she has the weekend to read it."),
+            you(
+                "e1c3b313-f5b0-48a9-9124-09b4b6c49406",
+                "Back to Florence: which day should we do the Uffizi?"),
+            reply("m_0004_97406", 59, "morning, before it gets busy. Book the 8:15 slot."),
+        ],
         "57-what-ari-learnt-lately": [
             you(
                 "2b3878ca-83c1-4b5e-984e-6084e35ca1f3",

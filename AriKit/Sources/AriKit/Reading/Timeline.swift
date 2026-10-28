@@ -19,12 +19,15 @@ public struct Timeline: Equatable, Sendable {
         case trail(Trail)
         /// A call, where it started: the block that opens the stretch it covered.
         case call(Call)
+        /// Where the subject changed: Ari's label, just above the message that changed it.
+        case topic(Topic)
 
         public var id: String {
             switch self {
             case .message(let entry): entry.id.rawValue
             case .trail(let trail): trail.id
             case .call(let call): "call \(call.id)"
+            case .topic(let topic): "topic \(topic.id)"
             }
         }
     }
@@ -69,6 +72,9 @@ public struct Timeline: Equatable, Sendable {
             case .call(let call):
                 close()
                 items.append(.call(call))
+            case .topic(let topic):
+                close()
+                items.append(.topic(topic))
             }
         }
         close()
@@ -118,6 +124,7 @@ public struct Timeline: Equatable, Sendable {
         case step(Step)
         case ask(Ask)
         case call(Call)
+        case topic(Topic)
 
         var position: Int {
             switch self {
@@ -125,19 +132,25 @@ public struct Timeline: Equatable, Sendable {
             case .step(let step): step.position
             case .ask(let ask): ask.position
             case .call(let call): call.position
+            case .topic(let topic): topic.position
             }
+        }
+
+        /// A topic shares its message's position, and goes before it.
+        var rank: Int {
+            if case .topic = self { 0 } else { 1 }
         }
     }
 
-    /// Entries, steps, asks and calls in one order. Your messages the server hasn't placed yet come
-    /// last.
+    /// Entries, steps, asks, calls and topics in one order. Your messages the server hasn't placed
+    /// yet come last.
     private static func merged(_ conversation: Conversation) -> [Piece] {
         let placed =
             conversation.entries.filter { $0.position != nil }.map(Piece.entry)
             + conversation.steps.map(Piece.step) + conversation.asks.map(Piece.ask)
-            + conversation.calls.map(Piece.call)
+            + conversation.calls.map(Piece.call) + conversation.topics.map(Piece.topic)
         let waiting = conversation.entries.filter { $0.position == nil }.map(Piece.entry)
-        return placed.sorted { $0.position < $1.position } + waiting
+        return placed.sorted { ($0.position, $0.rank) < ($1.position, $1.rank) } + waiting
     }
 }
 
