@@ -163,3 +163,40 @@ final class FakeSocket: WebSocketChannel, @unchecked Sendable {
 
     func close(code: Int) {}
 }
+
+/// Every frame on every call's stream in the transcripts, read and written as Ari does.
+@Suite("A call's stream, in the transcripts")
+struct CallStreamTranscriptTests {
+    @Test(
+        "the server's frames read as events Ari knows, and the app's are frames Ari sends",
+        arguments: try Fixtures.transcripts().filter { transcript in
+            transcript.steps.contains { if case .socket = $0 { true } else { false } }
+        })
+    func frames(_ transcript: Transcript) throws {
+        for case .socket(let socket) in transcript.steps {
+            guard let frame = socket.frame else { continue }
+            let place = "\(transcript.name).jsonl line \(socket.line)"
+            let json = try JSONEncoder().encode(frame)
+            if socket.fromApp {
+                let command = try #require(
+                    Self.command(frame), "\(place): a frame Ari doesn't send")
+                #expect(try JSONValue(data: command.json) == frame, "\(place)")
+            } else {
+                #expect(
+                    CallStreamEvent(json: json) != .unknown, "\(place): a frame Ari doesn't read")
+            }
+        }
+    }
+
+    /// The command a transcript's app frame stands for.
+    private static func command(_ frame: JSONValue) -> CallStreamCommand? {
+        switch frame["type"]?.string {
+        case "mute": .mute
+        case "unmute": .unmute
+        case "end": .end
+        case "played":
+            frame["id"]?.string.map { .played(id: $0, cut: frame["cut"] == .bool(true)) }
+        default: nil
+        }
+    }
+}

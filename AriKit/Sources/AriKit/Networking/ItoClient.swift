@@ -215,11 +215,6 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await raw(HTTPRequest(.post, "/v0/speech", body: try Self.json(request)))
     }
 
-    /// `GET /v0/vocabulary`: words from memory and conversation to steer recognition.
-    public func vocabulary() async throws(RequestError) -> Vocabulary {
-        try await call(HTTPRequest(.get, "/v0/vocabulary"))
-    }
-
     /// `POST /v0/vocabulary/corrections`: what the recogniser heard and what you meant. The answer
     /// says which page each mishearing joined.
     public func teach(_ corrections: VocabularyCorrections) async throws(RequestError)

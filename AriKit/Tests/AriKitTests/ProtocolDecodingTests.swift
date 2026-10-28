@@ -84,8 +84,6 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(ModelChoice.self) == sent, "\(place)")
                 case .startCall(let call), .endCall(let call), .deleteCallAudio(let call):
                     #expect(try body.decode(CallResult.self).call.id == call, "\(place)")
-                case .vocabulary:
-                    #expect(try !body.decode(Vocabulary.self).terms.isEmpty, "\(place)")
                 case .teachVocabulary:
                     let sent = try #require(request.body).decode(VocabularyCorrections.self)
                     let taught = try body.decode(VocabularyCorrections.self)
@@ -97,7 +95,7 @@ struct ProtocolDecodingTests {
                 case .chooseVoice:
                     let sent = try #require(request.body).decode(VoiceChoice.self)
                     #expect(try body.decode(VoiceChoice.self) == sent, "\(place)")
-                case .speech:
+                case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
                     Issue.record("\(place): an unexpected body")
@@ -121,11 +119,7 @@ struct ProtocolDecodingTests {
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
                     id: message.id, text: message.text, answers: message.answers,
-                    attachments: message.attachments ?? [],
-                    spoken: message.spoken.map {
-                        SendSpoken(
-                            call: $0.call, audio: $0.audio, corrections: $0.corrections ?? [])
-                    })
+                    attachments: message.attachments ?? [])
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .stop:
                 let stop = try body.decode(StopTurn.self)

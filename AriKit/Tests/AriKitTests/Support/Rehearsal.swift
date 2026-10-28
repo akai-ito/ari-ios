@@ -117,6 +117,9 @@ final class Rehearsal {
         case .push:
             // A notification reaches the phone's notification extension, not the session.
             break
+        case .socket:
+            // A call's stream is the call's, not the session's.
+            break
         case .world(let world):
             switch world.marker {
             case "offline":
@@ -165,10 +168,9 @@ final class Rehearsal {
             let secret = answers.flatMap { session.conversation[ask: $0]?.secret } ?? false
             let attachments = request.body?["attachments"]?.array?.compactMap(\.string)
                 .map(AttachmentID.init(rawValue:))
-            let spoken = try? request.body?["spoken"]?.decode(SendSpoken.self)
             session.send(
                 text, id: MessageID(id), answers: answers, secret: secret,
-                attachments: attachments ?? [], spoken: spoken)
+                attachments: attachments ?? [])
         case .upload(let attachment, let name):
             // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
             guard let bytes = try? request.uploadBytes() else { return }

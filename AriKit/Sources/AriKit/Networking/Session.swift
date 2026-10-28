@@ -13,8 +13,7 @@ import Observation
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
 ///   A secret answer goes from memory only, never through the outbox on disk.
-/// - **Calls** start and end on their own lane, in order. A spoken message waits for its call's
-///   start, and the end waits for the call's spoken messages, so none arrives after it.
+/// - **Calls** start and end on their own lane, in order; a call's stream carries the rest.
 @MainActor
 @Observable
 public final class Session {
@@ -126,7 +125,7 @@ public final class Session {
     public func start() {
         if lanes.isEmpty {
             let waiting = (try? outbox.load()) ?? []
-            let named = Set(waiting.flatMap(\.uploads))
+            let named = Set(waiting.flatMap { $0.attachments ?? [] })
             for attachment in outbox.attachments() where uploads[attachment.id] == nil {
                 // A draft doesn't survive a restart, so what no waiting message names goes.
                 guard named.contains(attachment.id) else {
@@ -141,9 +140,7 @@ public final class Session {
                 let waiting = (message.attachments ?? []).compactMap { id in
                     uploadQueue.first { $0.id == id }?.attachment
                 }
-                conversation.send(
-                    message.id, text: message.text, attachments: waiting,
-                    spoken: message.spoken.map { shown($0) })
+                conversation.send(message.id, text: message.text, attachments: waiting)
                 queue.append(message)
             }
             let network = network
@@ -198,22 +195,18 @@ public final class Session {
     ///     device, and the conversation keeps nothing of it.
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
-    ///   - spoken: For what you said on a call: the call, the recording attached with
-    ///     ``attach(_:)``, and the words the phone corrected.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = [],
-        spoken: SendSpoken? = nil
+        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = []
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(
-            id: id, text: text, answers: answers, attachments: attachments, spoken: spoken)
+        let message = SendMessage(id: id, text: text, answers: answers, attachments: attachments)
         conversation.send(
             id, text: text, answers: answers, secret: secret,
-            attachments: attachments.compactMap(attachment), spoken: spoken.map { shown($0) })
+            attachments: attachments.compactMap(attachment))
         if secret {
             secrets.insert(id)
         } else {
@@ -228,12 +221,6 @@ public final class Session {
     private func attachment(_ id: AttachmentID) -> Attachment? {
         if case .uploaded(let uploaded) = uploads[id] { return uploaded }
         return uploadQueue.first { $0.id == id }?.attachment
-    }
-
-    private func shown(_ spoken: SendSpoken) -> Spoken {
-        Spoken(
-            call: spoken.call, audio: spoken.audio.flatMap(attachment),
-            corrections: spoken.corrections)
     }
 
     /// You attached a photo or file: it starts uploading at once, while you write, saved on the
@@ -315,8 +302,8 @@ public final class Session {
         wake(.presence)
     }
 
-    /// You started a call: it starts on the server as soon as it can, and spoken messages wait
-    /// for it. Returns its id, for its spoken messages and its end.
+    /// You started a call: it starts on the server as soon as it can. Returns its id, for its
+    /// stream and its end.
     @discardableResult
     public func startCall(id: CallID = CallID(UUID().uuidString.lowercased())) -> CallID {
         callRequests.append(.start(id))
@@ -324,7 +311,7 @@ public final class Session {
         return id
     }
 
-    /// You ended the call: it ends once its spoken messages have gone.
+    /// You ended the call.
     public func endCall(_ id: CallID) {
         guard !callRequests.contains(.end(id)) else { return }
         callRequests.append(.end(id))
@@ -518,13 +505,8 @@ public final class Session {
                 await nap(until: .live)
                 continue
             }
-            // A spoken message goes once its call has started.
-            if let call = message.spoken?.call, callRequests.contains(.start(call)) {
-                await nap(until: .call)
-                continue
-            }
             // A message goes once its attachments are on the server.
-            let attached = message.uploads
+            let attached = message.attachments ?? []
             if let refused = attached.lazy.compactMap({ self.refusal(of: $0) }).first {
                 refusedMessages[message.id] = refused
                 finish(message)
@@ -561,7 +543,7 @@ public final class Session {
     /// Uploads a message's attachments again, under the same ids, from the bytes kept in the
     /// outbox. Those the server still has answer at once and change nothing.
     private func uploadAgain(_ message: SendMessage) -> Bool {
-        let named = message.uploads
+        let named = message.attachments ?? []
         let kept = outbox.attachments().filter { named.contains($0.id) }
         guard kept.count == named.count else { return false }
         for attachment in kept where !uploadQueue.contains(where: { $0.id == attachment.id }) {
@@ -576,7 +558,7 @@ public final class Session {
     private func finish(_ message: SendMessage) {
         queue.removeAll { $0.id == message.id }
         if secrets.remove(message.id) == nil { try? outbox.remove(message.id) }
-        for attachment in message.uploads { outbox.removeAttachment(attachment) }
+        for attachment in message.attachments ?? [] { outbox.removeAttachment(attachment) }
         wake(.outbox)
     }
 
@@ -715,11 +697,6 @@ public final class Session {
             }
             guard isOnline else {
                 await nap(until: [.network, .call])
-                continue
-            }
-            // A call ends after its spoken messages have gone.
-            if case .end(let call) = request, queue.contains(where: { $0.spoken?.call == call }) {
-                await nap(until: .outbox)
                 continue
             }
             do {

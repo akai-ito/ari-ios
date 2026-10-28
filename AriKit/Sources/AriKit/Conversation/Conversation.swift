@@ -148,7 +148,7 @@ extension Conversation {
 
         init(
             sending id: MessageID, text: String, answers: AskID?, secret: Bool,
-            attachments: [Attachment], spoken: Spoken?
+            attachments: [Attachment]
         ) {
             self.id = id
             role = .user
@@ -158,7 +158,6 @@ extension Conversation {
             self.answers = answers
             isSecret = secret
             self.attachments = attachments
-            self.spoken = spoken
         }
     }
 
@@ -431,14 +430,13 @@ extension Conversation {
     /// once. A secret keeps no text here at all.
     public mutating func send(
         _ id: MessageID, text: String, answers: AskID? = nil, secret: Bool = false,
-        attachments: [Attachment] = [], spoken: Spoken? = nil
+        attachments: [Attachment] = []
     ) {
         guard positions[id] == nil else { return }
         if let waiting = waitingAsk { settling[waiting.id] = .answering(id) }
         entries.append(
             Entry(
-                sending: id, text: text, answers: answers, secret: secret, attachments: attachments,
-                spoken: spoken)
+                sending: id, text: text, answers: answers, secret: secret, attachments: attachments)
         )
         positions[id] = entries.count - 1
     }
