@@ -8,8 +8,8 @@ import { defaultVoice, voices } from "#voice/voices.ts";
 import type { Term } from "#memory/vocabulary.ts";
 import { createTranscript, type Transcript } from "./transcript.ts";
 
-const protocol = "0.11";
-const serverVersion = "0.11.0";
+const protocol = "0.12";
+const serverVersion = "0.12.0";
 const yesterdayAt = "2026-10-11T21:14:00.000Z";
 const todayAt = "2026-10-12T08:41:00.000Z";
 const authorization = "Bearer ito_example_not_a_real_token_00000000000000000000";
@@ -191,7 +191,9 @@ const nowPage = {
   markdown: "A busy fortnight at work, and training for the Valencia half marathon (as of 22 Oct).\n",
 };
 
-type SeededPage = typeof alexBefore & { readonly note?: string };
+const seededVersion = "5d41402abc";
+
+type SeededPage = typeof alexBefore & { readonly note?: string; readonly circle?: string };
 
 const shelfOf = (address: string): string => address.replace(/^memory:/u, "").split("/", 1)[0] ?? "";
 
@@ -209,6 +211,7 @@ const pageBody = (
   address: page.address,
   title: page.title,
   gist: page.gist,
+  ...(page.circle !== undefined && { circle: page.circle }),
   shelf: shelfOf(page.address),
   aliases: page.aliases,
   links: links.map((link) => linkTo(link)),
@@ -1827,14 +1830,15 @@ const scenarios: readonly (() => Transcript)[] = [
     });
     transcript.wait(900);
     const change = transcript.change();
-    agentCalls(transcript, "remember", {
+    agentCalls(transcript, "edit_page", {
       address: alexNow.address,
-      title: alexNow.title,
+      version: seededVersion,
+      old_text: "Taking things slow; you've been on two dates (as of 15 Oct).\n\n## Earlier\n\n",
+      new_text:
+        "Seeing each other a lot, and it's going really well (as of 26 Oct).\n\n## Earlier\n\n" +
+        "- 15 Oct: decided to take things slow.\n",
       gist: alexNow.gist,
       note: "Seeing each other a lot now",
-      aliases: alexNow.aliases,
-      links: alexNow.links,
-      body: alexNow.markdown,
     });
     memoryStep(
       transcript,
@@ -1875,7 +1879,7 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 36,
       title: "Forget that",
       summary:
-        "You ask Ari to forget part of a page. Ari rewrites the page without it, as an ordinary update, and " +
+        "You ask Ari to forget part of a page. Ari edits it out of the page, as an ordinary update, and " +
         "the Library shows the change first among what Ari changed lately, with Ari's note on it.",
       guarantees: ["G14", "G22"],
     });
@@ -1900,14 +1904,13 @@ const scenarios: readonly (() => Transcript)[] = [
     sendAndStart(transcript, "Please forget the bit about our first date.");
     transcript.wait(800);
     const change = transcript.change();
-    agentCalls(transcript, "remember", {
+    agentCalls(transcript, "edit_page", {
       address: alexForgotten.address,
-      title: alexForgotten.title,
-      gist: alexForgotten.gist,
+      version: seededVersion,
+      old_text: "\n- 12 Oct: first date, Dishoom Shoreditch.",
+      new_text: "",
       note: "Forgot the first date",
-      aliases: alexForgotten.aliases,
       links: alexForgotten.links,
-      body: alexForgotten.markdown,
     });
     memoryStep(
       transcript,
@@ -1953,6 +1956,7 @@ const scenarios: readonly (() => Transcript)[] = [
     memoryCall(transcript, "/v0/memory/shelves", {
       shelves: [
         { shelf: "people", count: 1 },
+        { shelf: "groups", count: 0 },
         { shelf: "goals", count: 0 },
         { shelf: "projects", count: 0 },
         { shelf: "places", count: 0 },
@@ -2430,8 +2434,9 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 48,
       title: "Mute",
       summary:
-        "You mute to cough. The server hears nothing while you're muted, and when you unmute your next words are " +
-        "an ordinary turn.",
+        "You ask something and mute to cough before the pause that would end your turn. Muting ends it at once, " +
+        "so Ari answers while you cough. The server hears nothing while you're muted, and when you unmute your " +
+        "next words are an ordinary turn.",
       guarantees: ["G25"],
     });
     transcript.begin("2026-10-27T09:05:00.000Z");
@@ -2441,19 +2446,28 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.wait(300);
     transcript.openStream(call);
     transcript.wait(3000);
-    transcript.appFrame({ type: "mute" });
+    const asked = transcript.youSay("walk-question.pcm", "What time is it in Lisbon?", {
+      heard: ["What time is it"],
+      mutedMidway: true,
+    });
+    transcript.startTurn([asked]);
     transcript.wait(100);
     transcript.appAudio("cough.pcm");
-    transcript.wait(1500);
-    transcript.appFrame({ type: "unmute" });
     transcript.wait(800);
-    const asked = transcript.youSay("walk-question.pcm", "Sorry. What time is it in Lisbon?");
-    transcript.startTurn([asked]);
-    transcript.wait(900);
     writeWhole(transcript, "It's just after nine there.", 1);
     transcript.endTurn("completed");
-    transcript.wait(1500);
+    transcript.wait(700);
+    transcript.appFrame({ type: "unmute" });
+    transcript.wait(800);
     transcript.played("s1");
+    transcript.wait(2000);
+    const thanks = transcript.youSay("walk-follow-up.pcm", "Thanks.");
+    transcript.startTurn([thanks]);
+    transcript.wait(900);
+    writeWhole(transcript, "Any time.", 1);
+    transcript.endTurn("completed");
+    transcript.wait(1500);
+    transcript.played("s2");
     transcript.wait(10_000);
     transcript.hangUp();
     return transcript;
@@ -2741,7 +2755,8 @@ const scenarios: readonly (() => Transcript)[] = [
       summary:
         "You tell Ari about a trip. Ari starts a page for it and adds to today's journal, each with a line on " +
         "what the page is now and a note on what changed. The Library leads with those notes, lists journal " +
-        "days by their headlines, and shows the trip's linked page by its name.",
+        "days by their headlines, lists people with the circle Ari keeps for each, and shows the trip's " +
+        "linked page by its name.",
       guarantees: ["G22"],
     });
     const seededAt = "2026-10-27T18:00:00.000Z";
@@ -2753,6 +2768,7 @@ const scenarios: readonly (() => Transcript)[] = [
       links: [],
       markdown: "Your oldest friend; you met at school in Pune (as of 20 Oct).\n",
       note: "Oldest friend, from school",
+      circle: "friends",
     };
     const yesterday = {
       address: "memory:journal/2026-10-26",
@@ -2780,7 +2796,7 @@ const scenarios: readonly (() => Transcript)[] = [
     sendAndStart(transcript, "Janki and I are off to Florence together, 6 to 9 November!");
     transcript.wait(700);
     const change = transcript.change();
-    agentCalls(transcript, "remember", {
+    agentCalls(transcript, "write_page", {
       address: florence.address,
       title: florence.title,
       gist: florence.gist,
@@ -2836,6 +2852,12 @@ const scenarios: readonly (() => Transcript)[] = [
       pages: [
         { ...today, gist: "Florence planned with Janki", changed_at: journaledAt },
         { address: yesterday.address, title: yesterday.title, gist: yesterday.gist, changed_at: seededAt },
+      ],
+    });
+    transcript.wait(2000);
+    memoryCall(transcript, "/v0/memory/pages?shelf=people", {
+      pages: [
+        { address: janki.address, title: janki.title, gist: janki.gist, circle: "friends", changed_at: seededAt },
       ],
     });
     transcript.wait(2000);
@@ -3001,6 +3023,40 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.endTurn("completed");
     transcript.wait(1500);
     transcript.fetchAttachment(picture);
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "61-you-carry-on",
+      scenario: 61,
+      title: "You carry on",
+      summary:
+        "You pause mid-thought long enough for your turn to end, then carry on before Ari has begun to answer. " +
+        "Your new words join the message you'd just spoken, with one recording of both parts, and Ari answers " +
+        "the whole thought once.",
+      guarantees: ["G25"],
+    });
+    transcript.begin("2026-10-29T08:00:00.000Z");
+    transcript.connect();
+    transcript.wait(1000);
+    const call = transcript.startCall();
+    transcript.wait(300);
+    transcript.openStream(call);
+    transcript.wait(4000);
+    const thought = transcript.youSay("walk-question.pcm", "I keep thinking about Florence.");
+    transcript.startTurn([thought]);
+    transcript.wait(700);
+    transcript.youSay("walk-follow-up.pcm", "Should we take a day for Pisa, or stay put?", { carriesOn: thought });
+    transcript.wait(1200);
+    writeWhole(transcript, "Stay put, I'd say: four days is short. Pisa's an easy morning if you want it.", 1);
+    transcript.endTurn("completed");
+    transcript.wait(4000);
+    transcript.played("s1");
+    transcript.wait(2000);
+    transcript.played("s2");
+    transcript.wait(5000);
+    transcript.hangUp();
     return transcript;
   },
 ];

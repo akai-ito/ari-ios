@@ -852,20 +852,27 @@ export interface components {
       images: boolean;
     };
     /**
-     * @description A shelf in memory; `journal` holds one page per day.
+     * @description A shelf in memory; `people` holds one page per person, `groups` one per group of people, and `journal` one per day.
      * @enum {unknown}
      */
-    Shelf: "people" | "goals" | "projects" | "places" | "topics" | "journal";
+    Shelf: "people" | "groups" | "goals" | "projects" | "places" | "topics" | "journal";
     /**
      * @description What the page is now, in one line, written by Ari and kept current with every change: a
      *     journal day's headline, who someone is to you, where a project stands. Absent until Ari
      *     has written one; Ari writes one for every page that lacks it, soon after the server starts.
      */
     Gist: string;
+    /**
+     * @description People pages only: who they are to you, in Ari's own words, such as `family`, `friends` or
+     *     `work`. Ari keeps it current and reuses the same words across people, so the app can group
+     *     people by it. Absent until Ari has given one.
+     */
+    Circle: string;
     MemoryPageSummary: {
       address: components["schemas"]["MemoryAddress"];
       title: string;
       gist?: components["schemas"]["Gist"];
+      circle?: components["schemas"]["Circle"];
       changed_at: components["schemas"]["Timestamp"];
     };
     /** @description A page this one links to, as it is now. */
@@ -879,11 +886,22 @@ export interface components {
       address: components["schemas"]["MemoryAddress"];
       title: string;
       gist?: components["schemas"]["Gist"];
+      circle?: components["schemas"]["Circle"];
       /**
        * @description Its shelf, or `portrait`, `now` or `helping-you` for the pages in mind.
        * @enum {unknown}
        */
-      shelf: "portrait" | "now" | "helping-you" | "people" | "goals" | "projects" | "places" | "topics" | "journal";
+      shelf:
+        | "portrait"
+        | "now"
+        | "helping-you"
+        | "people"
+        | "groups"
+        | "goals"
+        | "projects"
+        | "places"
+        | "topics"
+        | "journal";
       /** @description Other names Ari knows it by. */
       aliases: string[];
       /** @description The related pages that exist, in Ari's order. */
@@ -1032,6 +1050,7 @@ export interface components {
     Event:
       | components["schemas"]["Snapshot"]
       | components["schemas"]["MessageAccepted"]
+      | components["schemas"]["MessageAmended"]
       | components["schemas"]["MessageQueued"]
       | components["schemas"]["MessageRead"]
       | components["schemas"]["TurnStarted"]
@@ -1798,6 +1817,17 @@ export interface components {
       status: components["schemas"]["Status"] | null;
     };
     /**
+     * message.amended
+     * @description On a call you carried on speaking before Ari began to answer, so your words joined the message you'd just spoken. It carries the whole message as it is now: the text with your new words, the corrections for all of it, and one recording of both parts, in place of the earlier recording, which is gone. Replace the message you have with it.
+     */
+    MessageAmended: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "message.amended";
+      at: components["schemas"]["Timestamp"];
+      message: components["schemas"]["Message"];
+    };
+    /**
      * call.started
      * @description You started a call with Ari. While it's on, Ari speaks.
      */
@@ -2021,6 +2051,7 @@ export type ModelList = components["schemas"]["ModelList"];
 export type ModelOption = components["schemas"]["ModelOption"];
 export type Shelf = components["schemas"]["Shelf"];
 export type Gist = components["schemas"]["Gist"];
+export type Circle = components["schemas"]["Circle"];
 export type MemoryPageSummary = components["schemas"]["MemoryPageSummary"];
 export type MemoryLink = components["schemas"]["MemoryLink"];
 export type MemoryPage = components["schemas"]["MemoryPage"];
@@ -2111,6 +2142,7 @@ export type StatusKind = components["schemas"]["StatusKind"];
 export type StatusLabel = components["schemas"]["StatusLabel"];
 export type StatusDetail = components["schemas"]["StatusDetail"];
 export type LiveTurn = components["schemas"]["LiveTurn"];
+export type MessageAmended = components["schemas"]["MessageAmended"];
 export type CallStarted = components["schemas"]["CallStarted"];
 export type CallEnded = components["schemas"]["CallEnded"];
 export type CallAudioDeleted = components["schemas"]["CallAudioDeleted"];
