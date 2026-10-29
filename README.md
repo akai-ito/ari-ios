@@ -86,9 +86,10 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
 `ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
 `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_TOPICS` opens the topics sheet, `ARI_PLACE`
-opens a tab (`ARI_MOTION` then opens a thing in motion), `ARI_SHELF` opens a shelf in the Library (`ARI_CALENDAR` shows the Journal's calendar),
-`ARI_SETTINGS` opens Settings and `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy
-from `xcrun simctl launch` (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
+opens a tab (`ARI_MOTION` then opens a thing in motion), `ARI_SHELF` opens a shelf in the
+Library (`ARI_CALENDAR` shows the Journal's calendar), `ARI_SETTINGS` opens Settings and
+`ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
+(prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip.
 

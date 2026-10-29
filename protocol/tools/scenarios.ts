@@ -3070,7 +3070,10 @@ const scenarios: readonly (() => Transcript)[] = [
     );
     transcript.wait(1200);
     agentCalls(transcript, "start_motion", {
-      ...sub20Card,
+      id: sub20Id,
+      kind: sub20Card.kind,
+      title: sub20Card.title,
+      summary: sub20Card.summary,
       content: sub20Training,
       note: "Started the block",
     });
