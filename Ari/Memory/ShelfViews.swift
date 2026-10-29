@@ -134,11 +134,14 @@ private struct JournalList: View {
     }
 }
 
-/// The journal as month grids, Monday first: each day with an entry is marked, and opens it.
+/// The journal as month grids, read newest first, like the list: each month turned end to end, its
+/// last day at the top left and the 1st at the bottom right, so scrolling down goes steadily back
+/// in time. Each day with an entry is marked, and opens it.
 private struct JournalCalendar: View {
     let months: [ShelfReading.Month]
 
-    private static let weekdays = ["M", "T", "W", "T", "F", "S", "S"]
+    /// Sunday to Monday, since the weeks run backwards.
+    private static let weekdays = ["S", "S", "F", "T", "W", "T", "M"]
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
     var body: some View {
@@ -153,11 +156,12 @@ private struct JournalCalendar: View {
                                     .font(.caption2)
                                     .foregroundStyle(.ariTertiary)
                             }
-                            ForEach(0..<Journal.leadingBlanks(month), id: \.self) { _ in
-                                Color.clear.frame(height: 40)
-                            }
-                            ForEach(1...Journal.length(of: month), id: \.self) { number in
-                                cell(number, in: month)
+                            ForEach(Journal.cells(month).indices, id: \.self) { index in
+                                if let number = Journal.cells(month)[index] {
+                                    cell(number, in: month)
+                                } else {
+                                    Color.clear.frame(height: 40)
+                                }
                             }
                         }
                     }
@@ -217,6 +221,18 @@ private enum Journal {
     static func leadingBlanks(_ month: ShelfReading.Month) -> Int {
         let weekday = calendar.component(.weekday, from: date(month, 1))
         return (weekday - calendar.firstWeekday + 7) % 7
+    }
+
+    /// The month's grid, turned end to end: its days from the last to the 1st, each still under
+    /// its weekday, with `nil` for the empty cells.
+    static func cells(_ month: ShelfReading.Month) -> [Int?] {
+        let lead = leadingBlanks(month)
+        let days = length(of: month)
+        let trail = (7 - (lead + days) % 7) % 7
+        let grid =
+            [Int?](repeating: nil, count: lead) + (1...days).map(Optional.some)
+            + [Int?](repeating: nil, count: trail)
+        return grid.reversed()
     }
 }
 
