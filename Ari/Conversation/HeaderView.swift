@@ -24,6 +24,8 @@ struct HeaderView: View {
     let poses: PoseHistory
     let name: String
     let status: StatusText?
+    /// Opens the conversation's topics, from Ari's name.
+    var openTopics: (() -> Void)?
 
     @Environment(Memory.self) private var memory: Memory?
     @State private var showsInMind = Self.opensInMind
@@ -47,6 +49,9 @@ struct HeaderView: View {
             Text(name)
                 .font(.ariName)
                 .foregroundStyle(.ariText)
+                // Ari's name opens the conversation's topics and days.
+                .contentShape(Rectangle())
+                .onTapGesture { openTopics?() }
             StatusLine(status: status)
         }
         .frame(maxWidth: .infinity)
@@ -70,6 +75,7 @@ struct HeaderView: View {
         .accessibilityLabel([name, status?.spoken].compactMap(\.self).joined(separator: ", "))
         .accessibilityHint(memory == nil ? "" : "Shows what Ari has in mind")
         .accessibilityAction { if memory != nil { showsInMind = true } }
+        .accessibilityAction(named: "Topics") { openTopics?() }
         .sheet(isPresented: $showsInMind) {
             if let memory {
                 InMindSheet(memory: memory)

@@ -42,10 +42,13 @@ struct DayLabel: View {
             .padding(.top, 8)
     }
 
-    static func describe(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
-        let time = date.formatted(date: .omitted, time: .shortened)
-        if calendar.isDate(date, inSameDayAs: now) { return "Today \(time)" }
-        if calendar.isDateInYesterday(date) { return "Yesterday \(time)" }
+    /// The day, as the conversation names it: with the time it began, unless `time` is false.
+    static func describe(
+        _ date: Date, now: Date = .now, calendar: Calendar = .current, time showsTime: Bool = true
+    ) -> String {
+        let time = showsTime ? " " + date.formatted(date: .omitted, time: .shortened) : ""
+        if calendar.isDate(date, inSameDayAs: now) { return "Today\(time)" }
+        if calendar.isDateInYesterday(date) { return "Yesterday\(time)" }
         let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
         let style = Date.FormatStyle().weekday(.wide).day().month(.wide)
         return sameYear ? date.formatted(style) : date.formatted(style.year())
@@ -56,8 +59,24 @@ struct DayLabel: View {
 /// running on after it. A heading, so VoiceOver can jump between topics.
 struct TopicLabel: View {
     let label: String
+    /// Opens the conversation's topics, to jump between them.
+    var open: (() -> Void)?
 
     var body: some View {
+        Button {
+            open?()
+        } label: {
+            line
+        }
+        .buttonStyle(.plain)
+        .disabled(open == nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityHint(open == nil ? "" : "Shows all the topics")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var line: some View {
         HStack(spacing: 10) {
             Text(label.uppercased())
                 .font(.caption2.weight(.semibold))
@@ -67,101 +86,100 @@ struct TopicLabel: View {
             Rectangle().fill(.ariLine).frame(height: 1)
         }
         .padding(.top, 10)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(.isHeader)
+        .contentShape(Rectangle())
     }
 }
 
-/// A slim rail at the conversation's edge while you scroll, marked at each topic and each day.
-/// Drag along it: the topic or day under your finger is named, and the conversation goes there.
-struct TopicScrubber: View {
-    struct Mark: Equatable {
+/// The conversation's days and their topics, newest first, to jump between: from a topic's label,
+/// or Ari's name at the top. Older history comes in as you ask for it.
+struct TopicsSheet: View {
+    struct Mark: Identifiable, Equatable {
         let id: String
         let label: String
         let isTopic: Bool
     }
 
     let marks: [Mark]
-    let visible: Bool
+    let hasEarlier: Bool
+    let loadEarlier: () async -> Void
     let jump: (String) -> Void
 
-    @State private var selected: Int?
+    @State private var loading = false
 
-    /// The topics and days among the rows, in the conversation's order.
+    /// The days and topics among the rows, in the conversation's order.
     static func marks(in rows: [ConversationRow]) -> [Mark] {
         rows.compactMap { row in
             switch row.kind {
             case .topic(let topic): Mark(id: row.id, label: topic.label, isTopic: true)
             case .day(let date):
-                Mark(
-                    id: row.id, label: date.formatted(.dateTime.weekday(.wide).day().month(.wide)),
-                    isTopic: false)
+                Mark(id: row.id, label: DayLabel.describe(date, time: false), isTopic: false)
             default: nil
             }
         }
     }
 
-    var body: some View {
-        GeometryReader { geometry in
-            let height = geometry.size.height
-            ZStack(alignment: .top) {
-                Capsule().fill(.ariLine).frame(width: 2)
-                ForEach(marks.indices, id: \.self) { index in
-                    let mark = marks[index]
-                    Circle()
-                        .fill(
-                            index == selected
-                                ? Color.ariText : mark.isTopic ? .ariSecondary : .ariTertiary
-                        )
-                        .frame(width: mark.isTopic ? 6 : 4, height: mark.isTopic ? 6 : 4)
-                        .position(x: geometry.size.width / 2, y: y(index, height))
-                }
+    /// Each day with the topics marked in it, newest day first, its topics in order.
+    private var days: [(day: Mark, topics: [Mark])] {
+        var days: [(day: Mark, topics: [Mark])] = []
+        for mark in marks {
+            if mark.isTopic, !days.isEmpty {
+                days[days.count - 1].topics.append(mark)
+            } else if !mark.isTopic {
+                days.append((mark, []))
             }
-            .frame(width: geometry.size.width, height: height)
-            .overlay(alignment: .topTrailing) {
-                if let selected {
-                    Text(marks[selected].label)
-                        .font(.footnote.weight(marks[selected].isTopic ? .semibold : .regular))
-                        .foregroundStyle(.ariText)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.ariSurface, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.ariLine, lineWidth: 1))
-                        .fixedSize()
-                        .offset(x: -geometry.size.width - 4, y: y(selected, height) - 15)
-                        .allowsHitTesting(false)
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let index = nearest(value.location.y, height)
-                        guard index != selected else { return }
-                        selected = index
-                        jump(marks[index].id)
-                    }
-                    .onEnded { _ in selected = nil }
-            )
         }
-        .frame(width: 28)
-        .padding(.trailing, 2)
-        .opacity(visible || selected != nil ? 1 : 0)
-        .allowsHitTesting(visible || selected != nil)
-        .sensoryFeedback(.selection, trigger: selected)
-        .animation(.easeOut(duration: 0.15), value: selected)
-        // VoiceOver jumps between topics by their headings instead.
-        .accessibilityHidden(true)
+        return days.reversed()
     }
 
-    private func y(_ index: Int, _ height: CGFloat) -> CGFloat {
-        (CGFloat(index) + 0.5) / CGFloat(marks.count) * height
-    }
-
-    private func nearest(_ y: CGFloat, _ height: CGFloat) -> Int {
-        let index = Int((y / max(height, 1) * CGFloat(marks.count)).rounded(.down))
-        return min(max(index, 0), marks.count - 1)
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(days, id: \.day.id) { day in
+                    Section {
+                        ForEach(day.topics) { topic in
+                            Button(topic.label) { jump(topic.id) }
+                                .foregroundStyle(.ariText)
+                        }
+                    } header: {
+                        Button {
+                            jump(day.day.id)
+                        } label: {
+                            Text(day.day.label)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.ariSecondary)
+                                .textCase(nil)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listRowBackground(Color.ariSurface)
+                }
+                if hasEarlier {
+                    Section {
+                        Button {
+                            loading = true
+                            Task {
+                                await loadEarlier()
+                                loading = false
+                            }
+                        } label: {
+                            HStack {
+                                Text("Earlier days").foregroundStyle(.ariSecondary)
+                                Spacer()
+                                if loading { ProgressView() }
+                            }
+                        }
+                        .disabled(loading)
+                    }
+                    .listRowBackground(Color.ariSurface)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(.ariBackground)
+            .navigationTitle("Topics")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+        }
     }
 }
 
