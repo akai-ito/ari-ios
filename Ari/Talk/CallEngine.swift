@@ -223,6 +223,10 @@ final class CallEngine {
         case .audio(let pcm):
             playback?.append(pcm)
             lastSound = .now
+        case .said(let id):
+            // The line's audio is all here: it reports played once it has played. Without this,
+            // the last line never reported, and the server stayed on Speaking.
+            playback?.close(id)
         case .stopPlayback:
             playback?.stop()
             captions = []

@@ -41,10 +41,10 @@ final class CallPlayback {
         scheduler.schedule(buffer, done: nil)
     }
 
-    /// No more audio is coming for the sentence arriving now, such as when Ari stops speaking:
-    /// it reports once it has played.
-    func close() {
-        guard let id = arriving else { return }
+    /// No more audio is coming for the sentence arriving now, `id` if it's named: it reports once
+    /// it has played.
+    func close(_ named: String? = nil) {
+        guard let id = arriving, named == nil || named == id else { return }
         arriving = nil
         let mine = generation
         guard player.engine != nil else { return }
