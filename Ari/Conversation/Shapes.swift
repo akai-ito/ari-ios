@@ -93,10 +93,7 @@ private struct PlaceView: View {
             if let found = try? await MKLocalSearch(request: request).start().mapItems.first {
                 return found
             }
-            let item = MKMapItem(
-                location: CLLocation(latitude: lat, longitude: lon), address: nil)
-            item.name = place.name
-            return item
+            return .at(lat: lat, lon: lon, name: place.name)
         }
         return try? await MKLocalSearch(request: request).start().mapItems.first
     }
@@ -148,28 +145,7 @@ private struct PlaceSheet: View {
                     if let address = place.address {
                         Text(address).font(.subheadline).foregroundStyle(.ariSecondary)
                     }
-                    HStack(spacing: 10) {
-                        Button {
-                            item?.openInMaps(launchOptions: [
-                                MKLaunchOptionsDirectionsModeKey:
-                                    MKLaunchOptionsDirectionsModeDefault
-                            ])
-                        } label: {
-                            Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond")
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.ariText)
-                        .foregroundStyle(.ariBackground)
-                        Button {
-                            item?.openInMaps()
-                        } label: {
-                            Text("Open in Maps").frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.ariText)
-                    }
-                    .disabled(item == nil)
+                    DirectionsButtons(item: item)
                     if let url = place.url {
                         Link("Website", destination: url).font(.footnote).foregroundStyle(
                             .ariSecondary)

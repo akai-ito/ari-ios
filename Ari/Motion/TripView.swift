@@ -488,9 +488,8 @@ private struct TripMap: View {
                         StatusChip.booking(booking)
                     }
                 }
-                DirectionsButtons(
-                    name: place?.name ?? stop.stop.title, location: stop.location,
-                    booking: booking)
+                directions(
+                    to: place?.name ?? stop.stop.title, at: stop.location, booking: booking)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -516,51 +515,21 @@ private struct MapPin: View {
     }
 }
 
-/// The way there in Apple's Maps, and booking where it's still to do.
-private struct DirectionsButtons: View {
-    let name: String
-    let location: Trip.Location?
-    var booking: Trip.Booking?
-    var website: URL?
-
-    var body: some View {
-        HStack(spacing: 10) {
-            if let location {
-                Button {
-                    item(location).openInMaps(launchOptions: [
-                        MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault
-                    ])
-                } label: {
-                    Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.ariText)
-                .foregroundStyle(.ariBackground)
-            }
-            if booking?.status == .toBook, let url = booking?.url {
-                Link(destination: url) {
-                    Text("Book").font(.subheadline).frame(maxWidth: .infinity, minHeight: 42)
-                }
-                .buttonStyle(.bordered)
-                .tint(.ariText)
-            } else if let website {
-                Link(destination: website) {
-                    Text("Website").font(.subheadline).frame(maxWidth: .infinity, minHeight: 42)
-                }
-                .buttonStyle(.bordered)
-                .tint(.ariText)
-            }
+/// The way to one of the trip's places, and booking it while it's still to book, or its website.
+private func directions(
+    to name: String, at location: Trip.Location?, booking: Trip.Booking? = nil,
+    website: URL? = nil
+) -> DirectionsButtons {
+    let link: (title: String, url: URL)? =
+        if booking?.status == .toBook, let url = booking?.url {
+            ("Book", url)
+        } else if let website {
+            ("Website", website)
+        } else {
+            nil
         }
-    }
-
-    private func item(_ location: Trip.Location) -> MKMapItem {
-        let item = MKMapItem(
-            location: CLLocation(latitude: location.lat, longitude: location.lon), address: nil)
-        item.name = name
-        return item
-    }
+    return DirectionsButtons(
+        item: location.map { .at(lat: $0.lat, lon: $0.lon, name: name) }, link: link)
 }
 
 extension Trip.Location {
@@ -659,8 +628,8 @@ private struct TripPlaceSheet: View {
                     Text(facts.joined(separator: " · ")).font(.footnote).foregroundStyle(
                         .ariTertiary)
                 }
-                DirectionsButtons(
-                    name: place.name, location: place.location,
+                directions(
+                    to: place.name, at: place.location,
                     booking: TripReading.booking(
                         place.booking, of: place.id, in: trip, state: state),
                     website: place.url)
@@ -770,9 +739,8 @@ private struct StayList: View {
                         if let reference = booking?.ref {
                             Text("Ref \(reference)").font(.caption).foregroundStyle(.ariTertiary)
                         }
-                        DirectionsButtons(
-                            name: stay.name, location: stay.location, booking: booking,
-                            website: stay.url
+                        directions(
+                            to: stay.name, at: stay.location, booking: booking, website: stay.url
                         )
                         .padding(.top, 4)
                     }
