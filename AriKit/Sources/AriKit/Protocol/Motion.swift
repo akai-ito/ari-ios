@@ -65,7 +65,9 @@ public struct MotionKind: OpenValue {
 
     /// A day, a weekend or a longer trip.
     public static let trip = MotionKind(rawValue: "trip")
-    public static let known = [trip]
+    /// A training block towards a goal, such as a sub-20 5K.
+    public static let training = MotionKind(rawValue: "training")
+    public static let known = [trip, training]
 }
 
 /// Whether a thing is going on, or done. Ari treats a status it doesn't know as going on.
@@ -176,6 +178,9 @@ public struct MotionDetail: Sendable, Equatable, Decodable {
             case .trip:
                 (try? c.decode(Trip.self, forKey: .content)).map(MotionContent.trip)
                     ?? .unreadable
+            case .training:
+                (try? c.decode(Training.self, forKey: .content)).map(MotionContent.training)
+                    ?? .unreadable
             default: .unknown
             }
     }
@@ -184,6 +189,7 @@ public struct MotionDetail: Sendable, Equatable, Decodable {
 /// What a thing holds, as its kind describes.
 public enum MotionContent: Sendable, Equatable {
     case trip(Trip)
+    case training(Training)
     /// A kind this Ari doesn't know: it shows as a plain card.
     case unknown
     /// A kind Ari knows, in a shape it can't read, as from a newer server.

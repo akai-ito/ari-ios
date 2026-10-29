@@ -63,6 +63,7 @@ enum MotionSymbol {
     static func name(for kind: MotionKind) -> String {
         switch kind {
         case .trip: "airplane"
+        case .training: "figure.run"
         default: "circle.dotted.circle"
         }
     }
@@ -143,20 +144,33 @@ struct MotionLineText {
     let detail: String
     /// The to-dos left, when there's a list.
     let left: Int?
+    /// What's on today, such as "Intervals today".
+    let today: String?
     /// How much is done, from 0 to 1.
     let progress: Double?
 
     init(_ motion: Motion, _ detail: MotionDetail?) {
-        if case .trip(let trip)? = detail?.content, let state = detail?.state {
+        let state = detail?.state ?? [:]
+        switch detail?.content {
+        case .trip(let trip)?:
             let line = TripReading.line(trip, state: state)
             name = line.name
             self.detail = line.when
             left = line.left
+            today = nil
             progress = TripReading.progress(trip, state: state)
-        } else {
+        case .training(let training)?:
+            let line = TrainingReading.line(training, state: state)
+            name = line.name
+            self.detail = line.when ?? motion.summary
+            left = nil
+            today = line.today
+            progress = TrainingReading.progress(training, state: state)
+        default:
             name = motion.title
             self.detail = motion.summary
             left = nil
+            today = nil
             progress = nil
         }
     }

@@ -16,6 +16,7 @@ struct MotionView: View {
             if let detail = motions?.details[id] {
                 switch detail.content {
                 case .trip(let trip): TripView(detail: detail, trip: trip)
+                case .training(let training): TrainingView(detail: detail, training: training)
                 case .unknown, .unreadable: PlainMotionView(detail: detail)
                 }
             } else if let problem {
