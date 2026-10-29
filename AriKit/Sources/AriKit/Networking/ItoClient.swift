@@ -193,8 +193,8 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// `PATCH /v0/motion/{id}/state`: ticks or unticks an item in one of a thing's lists. Every
-    /// device hears it as `motion.state`, and Ari learns of it with your next message. The answer is
-    /// all of the thing's ticks.
+    /// device hears it as `motion.state`, and a few seconds later Ari keeps the thing up with it, as
+    /// an ordinary `motion.changed`. The answer is all of the thing's ticks.
     public func tick(_ motion: MotionID, list: String, item: String, done: Bool)
         async throws(RequestError) -> MotionState
     {
