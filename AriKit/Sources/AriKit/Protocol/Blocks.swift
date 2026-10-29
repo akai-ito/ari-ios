@@ -46,6 +46,7 @@ public enum ReplyShape: Sendable, Equatable {
     case compare(Compare)
     case choices(Choices)
     case images(Images)
+    case motion(MotionLine)
 
     /// Reads a fenced block's language and text; `nil` if it isn't a shape this Ari knows, or its
     /// JSON doesn't read.
@@ -64,6 +65,7 @@ public enum ReplyShape: Sendable, Equatable {
                 self = .compare(try decoder.decode(Compare.self, from: data).ordered(as: json))
             case "choices": self = .choices(try decoder.decode(Choices.self, from: data))
             case "images": self = .images(try decoder.decode(Images.self, from: data))
+            case "motion": self = .motion(try decoder.decode(MotionLine.self, from: data))
             default: return nil
             }
         } catch {
@@ -170,6 +172,14 @@ public enum ReplyShape: Sendable, Equatable {
     /// Short answers you might give next. A tap sends the label as a message.
     public struct Choices: Sendable, Equatable, Decodable {
         public let options: [String]
+    }
+
+    /// A compact line under a reply, when Ari starts or changes a thing in motion: "Florence with
+    /// Janki: booked the Uffizi". Tapping it opens the thing.
+    public struct MotionLine: Sendable, Equatable, Decodable {
+        public let motion: MotionID
+        /// The thing's version the line is about; its note says what changed.
+        public let change: Int?
     }
 
     /// Pictures Ari found on the web, kept on the server as attachments. Never generated.

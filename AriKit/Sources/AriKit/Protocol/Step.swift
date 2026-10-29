@@ -66,6 +66,13 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
     public var pages: [PageSummary]?
     /// For an update, the change to fetch when you open it.
     public var change: String?
+    // motion
+    /// The thing in motion Ari started or changed, for `memoryAction` started, updated or finished.
+    public var motion: MotionID?
+    /// The thing's version after the change.
+    public var version: Int?
+    /// Ari's note on the change, such as "Booked the Uffizi, 8:15 Saturday".
+    public var note: String?
 
     public struct SearchResult: Hashable, Sendable, Decodable {
         public var title: String?
@@ -114,7 +121,7 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         case id, turn, kind, title, at, position, outcome, detail
         case heading, summary, query, queries, url, pattern, results
         case command, cwd, actions, output, files, capability, operation, arguments
-        case explanation, items, path, pages, change
+        case explanation, items, path, pages, change, motion, version, note
         case memoryAction = "action"
         case endedAt = "ended_at"
         case durationMs = "duration_ms"
@@ -157,6 +164,9 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         memoryAction = try c.decodeIfPresent(MemoryAction.self, forKey: .memoryAction)
         pages = try c.decodeIfPresent([PageSummary].self, forKey: .pages)
         change = try c.decodeIfPresent(String.self, forKey: .change)
+        motion = try c.decodeIfPresent(MotionID.self, forKey: .motion)
+        version = try c.decodeIfPresent(Int.self, forKey: .version)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
     }
 }
 

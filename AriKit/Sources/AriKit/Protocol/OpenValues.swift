@@ -152,8 +152,11 @@ public struct StepKind: OpenValue {
     public static let compacting = StepKind(rawValue: "compacting")
     /// Ari's memory: the pages it used, a page it updated, or the journal.
     public static let memory = StepKind(rawValue: "memory")
+    /// A thing in motion Ari started, changed or finished.
+    public static let motion = StepKind(rawValue: "motion")
     public static let known = [
         thinking, webSearch, command, fileChange, tool, plan, wait, imageView, compacting, memory,
+        motion,
     ]
 }
 
@@ -168,7 +171,15 @@ public struct MemoryAction: OpenValue {
     public static let updated = MemoryAction(rawValue: "updated")
     /// Something added to today's journal.
     public static let journaled = MemoryAction(rawValue: "journaled")
-    public static let known = [used, updated, journaled]
+    /// A thing in motion Ari started.
+    public static let started = MemoryAction(rawValue: "started")
+    /// A thing in motion Ari finished.
+    public static let finished = MemoryAction(rawValue: "finished")
+    /// An earlier version of a thing in motion, brought back.
+    public static let restored = MemoryAction(rawValue: "restored")
+    /// A thing in motion you let Ari forget.
+    public static let forgotten = MemoryAction(rawValue: "forgotten")
+    public static let known = [used, updated, journaled, started, finished, restored, forgotten]
 }
 
 /// What a command did, as far as the engine could tell. For one Ari doesn't know, treat it as run.

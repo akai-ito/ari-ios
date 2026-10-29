@@ -180,6 +180,32 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"))
     }
 
+    // MARK: - In motion
+
+    /// `GET /v0/motion`: everything going on, then what's done, each newest first.
+    public func motions() async throws(RequestError) -> MotionList {
+        try await call(HTTPRequest(.get, "/v0/motion"))
+    }
+
+    /// `GET /v0/motion/{id}`: one thing, with its content, your ticks and what changed.
+    public func motion(_ id: MotionID) async throws(RequestError) -> MotionDetail {
+        try await call(HTTPRequest(.get, "/v0/motion/\(Self.segment(id.rawValue))"))
+    }
+
+    /// `PATCH /v0/motion/{id}/state`: ticks or unticks an item in one of a thing's lists. Every
+    /// device hears it as `motion.state`, and Ari learns of it with your next message. The answer is
+    /// all of the thing's ticks.
+    public func tick(_ motion: MotionID, list: String, item: String, done: Bool)
+        async throws(RequestError) -> MotionState
+    {
+        let patch: MotionState = [list: [item: MotionTick(done: done)]]
+        let answer: MotionStateBody = try await call(
+            HTTPRequest(
+                .patch, "/v0/motion/\(Self.segment(motion.rawValue))/state",
+                body: try Self.json(patch)))
+        return answer.state
+    }
+
     // MARK: - Talk
 
     /// `PUT /v0/calls/{call}`: start a call under the id Ari chose, so starting it again is safe.

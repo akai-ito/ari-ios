@@ -101,6 +101,14 @@ struct ProtocolDecodingTests {
                 case .chooseVoice:
                     let sent = try #require(request.body).decode(VoiceChoice.self)
                     #expect(try body.decode(VoiceChoice.self) == sent, "\(place)")
+                case .motions:
+                    #expect(try !body.decode(MotionList.self).motions.isEmpty, "\(place)")
+                case .motion(let id):
+                    let detail = try body.decode(MotionDetail.self)
+                    #expect(detail.motion.id == id, "\(place)")
+                    #expect(detail.content != .unreadable && detail.content != .unknown, "\(place)")
+                case .motionState:
+                    _ = try body.decode(MotionStateBody.self)
                 case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
@@ -165,6 +173,9 @@ struct ProtocolDecodingTests {
                 #expect(
                     try JSONValue(encoding: SpeechRequest(text: speech.text, voice: speech.voice))
                         == body, "\(place)")
+            case .motionState:
+                let state = try body.decode(MotionState.self)
+                #expect(try JSONValue(encoding: state) == body, "\(place)")
             case .teachVocabulary:
                 let pairs = try body.decode(VocabularyCorrections.self).corrections.map {
                     VocabularyCorrections.Pair(heard: $0.heard, meant: $0.meant)
@@ -192,7 +203,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 13) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 14) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
@@ -232,6 +243,11 @@ extension Event.Payload {
         case .topicStarted: "topic.started"
         case .planTicked: "plan.ticked"
         case .messageAmended: "message.amended"
+        case .motionStarted: "motion.started"
+        case .motionChanged: "motion.changed"
+        case .motionFinished: "motion.finished"
+        case .motionState: "motion.state"
+        case .motionRemoved: "motion.removed"
         case .unknown: nil
         }
     }
