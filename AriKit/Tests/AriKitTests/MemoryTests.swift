@@ -64,6 +64,8 @@ struct MemoryTests {
         #expect(recent.changes.first?.title == "27 October 2026")
         let journal = try await server.client.pages(on: "journal")
         #expect(journal.pages.first?.gist == "Florence planned with Janki")
+        let people = try await server.client.pages(on: "people")
+        #expect(people.pages.first?.circle == "friends")
         let trip = try await server.client.page("memory:projects/florence-trip")
         #expect(trip.gist == "With Janki, 6–9 November; nothing booked yet")
         #expect(

@@ -103,6 +103,22 @@ struct TalkTests {
         #expect(replay.conversation.waitingAsk == nil && replay.conversation.turn == nil)
     }
 
+    @Test("Scenario 61: words carried on before Ari answers join the message you'd just spoken")
+    func carryOn() throws {
+        var replay = Replay(try Fixtures.transcript("61-you-carry-on"))
+        let mine: MessageID = "m_0001_92355"
+        try replay.play(throughLine: 15, expecting: "message.accepted e_0002_70150")
+        #expect(replay.conversation[mine]?.text == "I keep thinking about Florence.")
+        let first = replay.conversation[mine]?.spoken?.audio?.id
+        try replay.play(throughLine: 23, expecting: "message.amended e_0004_34331")
+        #expect(
+            replay.conversation[mine]?.text
+                == "I keep thinking about Florence. Should we take a day for Pisa, or stay put?")
+        #expect(
+            replay.conversation[mine]?.spoken?.audio?.id != first, "one recording of both parts")
+        #expect(replay.conversation.entries.filter { $0.role == .user }.count == 1)
+    }
+
     @Test("a call decodes as the contract says")
     func decoding() throws {
         let call = try JSONValue(

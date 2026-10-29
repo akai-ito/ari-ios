@@ -754,8 +754,16 @@ extension ConversationTranscriptTests {
             reply("m_0002_38491", 6, "Added."),
         ],
         "48-mute": [
-            you("m_0001_02141", "Sorry. What time is it in Lisbon?"),
+            you("m_0001_02141", "What time is it in Lisbon?"),
             reply("m_0002_32832", 27, "It's just after nine there."),
+            you("m_0003_78316", "Thanks."),
+            reply("m_0004_13333", 9, "Any time."),
+        ],
+        "61-you-carry-on": [
+            you(
+                "m_0001_92355",
+                "I keep thinking about Florence. Should we take a day for Pisa, or stay put?"),
+            reply("m_0002_04269", 77, "Pisa's an easy morning if you want it."),
         ],
         "49-the-voice-fails-mid-call": [
             you("m_0001_83382", "What's on tomorrow?"),

@@ -136,7 +136,7 @@ struct Replay {
                     streamed[MessageID(id)] = Array(text.utf16)
                 }
             }
-        case "message.started", "message.accepted":
+        case "message.started", "message.accepted", "message.amended":
             if let id = json["message"]?["id"]?.string, let text = json["message"]?["text"]?.string
             {
                 streamed[MessageID(id)] = Array(text.utf16)

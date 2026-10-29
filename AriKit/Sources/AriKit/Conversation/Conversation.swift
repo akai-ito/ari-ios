@@ -219,6 +219,9 @@ extension Conversation {
             return
         case .messageAccepted(let accepted):
             accept(accepted.message)
+        case .messageAmended(let amended):
+            // Your carried-on words joined it: the message as it is now replaces the one you had.
+            if positions[amended.message.id] != nil { accept(amended.message) }
         case .messageQueued(let queued):
             mark(queued.message, .next)
         case .messageRead(let read):
