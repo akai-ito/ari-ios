@@ -8,18 +8,23 @@ import UniformTypeIdentifiers
 enum Thumbnails {
     private static let cache = NSCache<NSString, CGImage>()
 
-    static func image(for attachment: AttachmentID, from bytes: () async -> Data?) async
-        -> CGImage?
-    {
-        if let kept = cache.object(forKey: attachment.rawValue as NSString) { return kept }
+    /// The picture at most `longest` pixels on its longer side: a cover filling the screen needs
+    /// more than a thumbnail.
+    static func image(
+        for attachment: AttachmentID, longest: Int = 720, from bytes: () async -> Data?
+    ) async -> CGImage? {
+        let key = "\(attachment.rawValue)@\(longest)" as NSString
+        if let kept = cache.object(forKey: key) { return kept }
         guard let data = await bytes() else { return nil }
-        let image = await decode(data)
-        if let image { cache.setObject(image, forKey: attachment.rawValue as NSString) }
+        let image = await decode(data, longest: longest)
+        if let image { cache.setObject(image, forKey: key) }
         return image
     }
 
-    @concurrent private nonisolated static func decode(_ data: Data) async -> CGImage? {
-        AttachmentMaker.image(from: data, longest: 720)
+    @concurrent private nonisolated static func decode(_ data: Data, longest: Int) async
+        -> CGImage?
+    {
+        AttachmentMaker.image(from: data, longest: longest)
     }
 }
 

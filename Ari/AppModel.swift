@@ -24,6 +24,8 @@ final class AppModel {
     private(set) var offersNotifications = false
     /// A reply to open the conversation at, from a tapped notification.
     var opening: MessageID?
+    /// Where in the chat to go, from a thing in motion's "What changed".
+    var openingPosition: Int?
     /// Whether the conversation is on screen here.
     private(set) var isLooking = false
     /// A pairing link from `ito pair`'s QR code, opened from the Camera or another app, for the

@@ -35,6 +35,7 @@ struct ShapeView: View {
         case .compare(let compare): CompareView(compare: compare)
         case .choices(let choices): ChoicesView(choices: choices)
         case .images(let images): ImagesView(images: images)
+        case .motion(let line): CompactMotionLine(line: line)
         }
     }
 }

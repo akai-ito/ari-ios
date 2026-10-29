@@ -251,6 +251,7 @@ private struct StepDetails: View {
     let steps: [Step]
 
     @Environment(Memory.self) private var memory: Memory?
+    @Environment(\.motionOpener) private var opener
     @State private var openedPage: PageAddress?
 
     var body: some View {
@@ -289,6 +290,7 @@ private struct StepDetails: View {
         case .imageView: return step.path != nil
         case .memory:
             return step.memoryAction == .updated ? step.change != nil : !(step.pages ?? []).isEmpty
+        case .motion: return step.motion != nil
         default: return false
         }
     }
@@ -360,6 +362,16 @@ private struct StepDetails: View {
                     .buttonStyle(.plain)
                     .font(.caption)
                     .foregroundStyle(.ariSecondary)
+            }
+        case .motion:
+            // The thing itself, opened full screen: the trail never carries its content.
+            if let motion = step.motion, let open = opener.open {
+                let source = "step \(step.id)"
+                Button("Open \(step.pages?.first?.title ?? "it") ›") { open(motion, source) }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.ariSecondary)
+                    .motionSource(source, in: opener.namespace)
             }
         default:
             EmptyView()

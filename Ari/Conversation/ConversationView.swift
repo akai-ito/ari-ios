@@ -10,6 +10,8 @@ struct ConversationView: View {
     let connectAgain: () -> Void
     /// A reply to open the conversation at, from a tapped notification.
     var opening: Binding<MessageID?> = .constant(nil)
+    /// Where in the chat to go, from a thing in motion's "What changed".
+    var openingPosition: Binding<Int?> = .constant(nil)
     /// Whether Ari may offer notifications, once a turn takes a while.
     var offersNotifications = false
     var answerOffer: (Bool) -> Void = { _ in }
@@ -44,6 +46,9 @@ struct ConversationView: View {
     @State private var offering = false
     /// A linked page, open in place.
     @State private var browsing: WebPage?
+    /// A thing in motion, open full screen, and what it grew from.
+    @State private var openedMotion: OpenedMotion?
+    @Namespace private var motionSpace
     /// Rows and parsed replies, kept between frames: a reply revealing redraws the screen every
     /// frame, and working the whole conversation out again each time froze long ones.
     @State private var cache = RowsCache()
@@ -67,6 +72,14 @@ struct ConversationView: View {
         let target = conversation.turn?.id.rawValue ?? conversation.waitingAsk?.id.rawValue ?? ""
         let stopCommand = canStop ? StopCommand(target: target, perform: { stop() }) : nil
         screen
+            // The pinned line, compact lines and the trail open what's in motion over the chat.
+            .environment(
+                \.motionOpener,
+                MotionOpener(namespace: motionSpace) { id, source in
+                    openedMotion = OpenedMotion(id: id, source: source)
+                }
+            )
+            .motionCover($openedMotion, in: motionSpace)
             // Files dropped on the conversation attach to the message you're writing.
             .dropDestination(for: URL.self) { urls, _ in drop(urls) }
             .sensoryFeedback(.impact(weight: .light), trigger: sent)
@@ -241,6 +254,7 @@ struct ConversationView: View {
                                 OnCallBar(call: call) { talk.showsCall = true }
                             }
                         #endif
+                        PinnedArea(holding: working)
                         ComposerArea(
                             session: session, attached: $attached, attachProblem: $attachProblem,
                             working: working, stopping: conversation.pendingStop != nil,
@@ -289,6 +303,11 @@ struct ConversationView: View {
             guard let message else { return }
             opening.wrappedValue = nil
             open(at: message.rawValue, in: rows)
+        }
+        .onChange(of: openingPosition.wrappedValue) { _, position in
+            guard let position else { return }
+            openingPosition.wrappedValue = nil
+            jump(toPosition: position)
         }
     }
 
@@ -647,6 +666,26 @@ struct ConversationView: View {
             withoutAnimation { position.scrollTo(id: id, anchor: .top) }
             try? await Task.sleep(for: .milliseconds(200))
             withoutAnimation { position.scrollTo(id: id, anchor: .top) }
+        }
+    }
+
+    /// Goes to the message at a position, such as where Ari changed a thing in motion: older history
+    /// comes in until it reaches that far back, then the conversation opens at it.
+    private func jump(toPosition position: Int) {
+        Task {
+            while session.conversation.hasEarlierMessages,
+                (session.conversation.entries.first?.position ?? 0) > position
+            {
+                let before = session.conversation.entries.count
+                await session.loadEarlier()
+                if session.conversation.entries.count == before { break }
+            }
+            guard
+                let entry = session.conversation.entries.first(where: {
+                    ($0.position ?? .max) >= position
+                })
+            else { return }
+            jump(to: entry.id.rawValue)
         }
     }
 
