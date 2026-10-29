@@ -166,21 +166,15 @@ final class Rehearsal {
                 !sent.contains(MessageID(id))
             else { return }
             sent.insert(MessageID(id))
-            let answers = request.body?["answers"]?.string.map(AskID.init(rawValue:))
             if closed {
                 // Answered from a notification, with Ari closed.
                 let session = session
-                Task {
-                    await session.sendFromNotification(text, id: MessageID(id), answers: answers)
-                }
+                Task { await session.sendFromNotification(text, id: MessageID(id)) }
                 return
             }
-            let secret = answers.flatMap { session.conversation[ask: $0]?.secret } ?? false
             let attachments = request.body?["attachments"]?.array?.compactMap(\.string)
                 .map(AttachmentID.init(rawValue:))
-            session.send(
-                text, id: MessageID(id), answers: answers, secret: secret,
-                attachments: attachments ?? [])
+            session.send(text, id: MessageID(id), attachments: attachments ?? [])
         case .upload(let attachment, let name):
             // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
             guard let bytes = try? request.uploadBytes() else { return }
@@ -207,8 +201,7 @@ final class Rehearsal {
                 session.setLooking(presence.looking, device: device)
             }
         case .stop:
-            let cut = try? request.body?["cut"]?.decode(Cut.self)
-            session.stop(cut: cut)
+            session.stop()
         case .retry(let turn):
             session.tryAgain(turn)
         case .startCall(let call):

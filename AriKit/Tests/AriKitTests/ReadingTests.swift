@@ -198,30 +198,17 @@ struct RevealTests {
         #expect(Reveal().position(of: try #require(old["u_1"]), at: now) == .infinity)
     }
 
-    @Test("Stop names the message still being written, at how much of it is on screen")
-    func stopCut() throws {
+    @Test("Stop shows everything Ari wrote at once, the reply still being written included")
+    func stopShowsAll() throws {
         let conversation = try Story(now: now)
             .reply("m_1", String(repeating: "a", count: 50), ended: true)
             .reply("m_2", String(repeating: "b", count: 40))
             .build()
-        var lagging = Reveal()
-        lagging.advance(by: 0.2, in: conversation, at: now)
-        // The screen is still on the first reply, which the server has finished.
-        #expect(lagging.stop(in: conversation) == Cut(message: "m_2", offset: 0))
-        #expect(lagging.position(of: try #require(conversation["m_1"]), at: now) == .infinity)
-
-        var caughtUp = Reveal()
-        caughtUp.advance(by: 1.1, in: conversation, at: now)
-        #expect(caughtUp.stop(in: conversation)?.offset == 16)
-    }
-
-    @Test("Stop once the turn has ended sends no cut, and the rest shows at once")
-    func stopAfterTheEnd() throws {
-        let conversation = try Story(now: now).reply("m_1", "All done here.", ended: true)
-            .endTurn().build()
         var reveal = Reveal()
-        #expect(reveal.stop(in: conversation) == nil)
+        reveal.advance(by: 0.2, in: conversation, at: now)
+        reveal.showAll(conversation)
         #expect(reveal.position(of: try #require(conversation["m_1"]), at: now) == .infinity)
+        #expect(reveal.position(of: try #require(conversation["m_2"]), at: now) == .infinity)
     }
 }
 

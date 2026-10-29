@@ -121,20 +121,17 @@ struct NotificationStoreTests {
 
 @Suite("Answering from a notification")
 struct AskActionsTests {
-    @Test("options become buttons, a typed answer a text field, and a secret only opens Ari")
+    @Test("options become buttons, and a typed answer a text field")
     func actions() {
         let ask = PushNotification.AskSummary(
-            id: "a_1", options: ["Clapham", "Soho"], allowsText: true, secret: false)
+            id: "a_1", options: ["Clapham", "Soho"], allowsText: true)
         let category = AskActions.category(for: ask)
         #expect(category.identifier == "ask.a_1")
         #expect(category.actions.map(\.title) == ["Clapham", "Soho", "Type an answer…"])
-        let secret = AskActions.category(
-            for: .init(id: "a_2", options: ["Skip"], allowsText: true, secret: true))
-        #expect(secret.actions.map(\.identifier) == [AskActions.open])
 
         #expect(AskActions.answer(action: "option.1", typed: nil, options: ask.options) == "Soho")
         #expect(
             AskActions.answer(action: AskActions.type, typed: "Either", options: []) == "Either")
-        #expect(AskActions.answer(action: AskActions.open, typed: nil, options: []) == nil)
+        #expect(AskActions.answer(action: "open", typed: nil, options: []) == nil)
     }
 }

@@ -33,18 +33,15 @@ public struct PushNotification: Sendable, Equatable, Decodable {
         /// The options' labels, in order.
         public var options: [String]
         public var allowsText: Bool
-        /// A secret can't be typed into a notification safely: offer to open Ari instead.
-        public var secret: Bool
 
-        public init(id: AskID, options: [String], allowsText: Bool, secret: Bool) {
+        public init(id: AskID, options: [String], allowsText: Bool) {
             self.id = id
             self.options = options
             self.allowsText = allowsText
-            self.secret = secret
         }
 
         enum CodingKeys: String, CodingKey {
-            case id, options, secret
+            case id, options
             case allowsText = "allows_text"
         }
     }

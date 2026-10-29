@@ -90,10 +90,6 @@ struct ConversationView: View {
                 switch item {
                 case .details(let error): DetailsSheet(error: error)
                 case .selecting(let text): SelectTextSheet(text: text)
-                case .fixingWord(let text):
-                    FixWordSheet(text: text) { heard, meant in
-                        await session.teach([.init(heard: heard, meant: meant)])
-                    }
                 }
             }
             #if DEBUG
@@ -231,7 +227,7 @@ struct ConversationView: View {
                 if let problem = session.problem {
                     ProblemNotice(problem: problem, connectAgain: connectAgain)
                 } else {
-                    // While Ari waits for your answer, the composer takes it, as a secret if asked.
+                    // While Ari waits for your answer, the composer takes it.
                     VStack(spacing: 0) {
                         if let talk, let notice = talk.notice, talk.call == nil {
                             TalkNotice(text: notice) { talk.notice = nil }
@@ -349,9 +345,8 @@ struct ConversationView: View {
             TopicLabel(label: topic.label) { showsTopics = true }
         case .yours(let entry):
             YourMessage(
-                text: entry.isSecret ? "••••••" : entry.text,
-                tag: tag(for: entry, in: conversation),
-                corrections: entry.spoken?.corrections ?? []
+                text: entry.text,
+                tag: tag(for: entry, in: conversation)
             ) {
                 if !entry.attachments.isEmpty {
                     MessageAttachments(attachments: entry.attachments) {
@@ -360,9 +355,7 @@ struct ConversationView: View {
                 }
             } footer: {
                 if let spoken = entry.spoken {
-                    SpokenFooter(
-                        spoken: spoken, text: entry.text, bytes: { await session.bytes(of: $0) },
-                        fixWord: { sheet = .fixingWord(entry.text) })
+                    SpokenFooter(spoken: spoken) { await session.bytes(of: $0) }
                 }
             }
         case .call(let call):
@@ -370,7 +363,7 @@ struct ConversationView: View {
                 call: call, returnToCall: returnToCall(call),
                 deleteAudio: { session.deleteAudio(of: call.id) })
         case .ari(let entry):
-            let text = conversation.visibleText(of: entry)
+            let text = entry.text
             let document = cache.document(entry.id, text)
             Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
                 VStack(alignment: .leading, spacing: 8) {
@@ -411,16 +404,11 @@ struct ConversationView: View {
             conversation.turn == nil && conversation.entries.last(where: \.isShown)?.id == entry.id
         let session = session
         return ReplyActions(
-            ticks: entry.ticks,
-            tick: { part, item, done in
-                await session.tick(entry.id, part: part, item: item, done: done)
-            },
             choose: latest
                 ? { label in
                     guard session.send(label) != nil else { return }
                     scrollToEnd()
-                } : nil,
-            image: { await session.bytes(of: $0) })
+                } : nil)
     }
 
     /// Under your message: whether the server has it, and whether Ari took it in or it waits.
@@ -429,7 +417,6 @@ struct ConversationView: View {
         if entry.delivery == .sending {
             return session.link == .live ? "Sending" : "Waiting to send"
         }
-        if entry.isSecret { return "Hidden from your history" }
         switch entry.mark {
         case .next: return "Next"
         case .read:
@@ -492,15 +479,11 @@ struct ConversationView: View {
         return { talk.showsCall = true }
     }
 
-    /// Whatever you send while Ari waits answers it. A secret names the ask, and keeps no text.
-    /// Returns whether it went, so the composer can clear.
+    /// Whatever you send while Ari waits answers it. Returns whether it went, so the composer can
+    /// clear.
     private func send(_ text: String) -> Bool {
-        let asking = session.conversation.waitingAsk
-        let secret = asking?.secret ?? false
         guard !Self.anyRefused(attached, in: session),
-            session.send(
-                text, answers: secret ? asking?.id : nil, secret: secret,
-                attachments: secret ? [] : attached.map(\.id)) != nil
+            session.send(text, attachments: attached.map(\.id)) != nil
         else { return false }
         attached = []
         sent += 1
@@ -546,7 +529,7 @@ struct ConversationView: View {
 
     /// You tapped one of an ask's options: its label is your answer.
     private func answer(_ ask: Ask, _ option: Ask.Option) {
-        guard session.send(option.label, answers: ask.id) != nil else { return }
+        guard session.send(option.label) != nil else { return }
         scrollToEnd()
     }
 
@@ -662,7 +645,8 @@ struct ConversationView: View {
         }
     }
 
-    /// Stop names the message the server is still writing, at how much of it is on screen.
+    /// Stop ends the turn, and what Ari wrote shows at once. While Ari only waits for you, it
+    /// cancels what Ari asked.
     private func stop() {
         stops += 1
         let conversation = session.conversation
@@ -672,7 +656,8 @@ struct ConversationView: View {
             session.cancel(ask.id)
             return
         }
-        session.stop(cut: reveal.stop(in: conversation))
+        reveal.stop(in: conversation)
+        session.stop()
     }
 
     // MARK: - Status and poses

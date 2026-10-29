@@ -105,34 +105,26 @@ struct ConversationTranscriptTests {
     }
 
     @Test(
-        "Scenario 7: Stop holds the cut until the turn ends, a late Stop doesn't, and Stop mid-step ends the step"
+        "Scenario 7: Stop ends the turn and the reply keeps what Ari wrote; a late Stop changes nothing"
     )
     func stop() throws {
         var replay = Replay(try Fixtures.transcript("07-stop"))
         let reply: MessageID = "m_0002_81610"
-        // You tap Stop with 209 units on screen, when 266 have arrived.
         try replay.play(throughLine: 32, expecting: "POST /v0/turns/t_0002_40331/stop")
-        #expect(replay.conversation.pendingStop?.turn == "t_0002_40331")
-        #expect(replay.conversation.pendingStop?.cut == Cut(message: reply, offset: 209))
-        #expect(replay.conversation[reply]?.length == 266)
-        #expect(try visible(reply, in: replay).hasSuffix("keep it light before"))
-        #expect(try visible(reply, in: replay).utf16.count == 209)
+        #expect(replay.conversation.pendingStop == "t_0002_40331")
 
-        // The 202 says the turn is stopping; the reply still holds at the cut.
-        try replay.play(throughLine: 33, expecting: "202")
-        #expect(try visible(reply, in: replay).utf16.count == 209)
+        // The 202 says the turn is stopping.
         try replay.play(throughLine: 34, expecting: "turn.status e_0027_65057")
         #expect(replay.conversation.turn?.status?.kind == .stopping)
         // Sent while stopping, so it waits as Next.
         let next: MessageID = "21d803b8-d67b-47dc-91c6-b540fb9b4972"
         try replay.play(throughLine: 38, expecting: "message.queued e_0029_21466")
         #expect(replay.conversation[next]?.mark == .next)
-        #expect(try visible(reply, in: replay).utf16.count == 209)
 
-        // The reply ends stopped at the cut; then the turn ends.
+        // The reply ends stopped with everything Ari had written; then the turn ends.
         try replay.play(throughLine: 40, expecting: "turn.ended e_0031_84439")
         #expect(replay.conversation[reply]?.outcome == .stopped)
-        #expect(replay.conversation[reply]?.length == 209)
+        #expect(replay.conversation[reply]?.length == 266)
         #expect(replay.conversation.pendingStop == nil)
         #expect(replay.conversation.lastEndedTurn?.outcome == .stopped)
         // Next starts the following turn, and Stopped is gone.
@@ -144,21 +136,16 @@ struct ConversationTranscriptTests {
         try replay.play(throughLine: 65, expecting: "turn.ended e_0054_00574")
         try replay.play(throughLine: 66, expecting: "POST /v0/turns/t_0004_50773/stop")
         #expect(replay.conversation.pendingStop == nil)
-        #expect(try visible("m_0004_08797", in: replay).utf16.count == 66)
         try replay.play(throughLine: 67, expecting: "200")
         #expect(replay.conversation["m_0004_08797"]?.outcome == .completed)
 
-        // Stop while the second reply waits behind the first: the first is final, the second cut
-        // at nothing.
-        try replay.play(throughLine: 83, expecting: "POST /v0/turns/t_0005_27837/stop")
-        #expect(replay.conversation.pendingStop?.cut == Cut(message: "m_0006_90669", offset: 0))
+        // Stop while the second reply is being written: the first is final, the second keeps what
+        // it had.
         try replay.play(throughLine: 87, expecting: "turn.ended e_0070_67956")
         #expect(replay.conversation["m_0005_12106"]?.outcome == .completed)
-        #expect(replay.conversation["m_0006_90669"]?.length == 0)
+        #expect(replay.conversation["m_0006_90669"]?.length == 35)
 
         // Stop while a search runs: the step ends stopped, keeping its present-tense title.
-        try replay.play(throughLine: 94, expecting: "POST /v0/turns/t_0006_31337/stop")
-        #expect(replay.conversation.pendingStop?.cut == nil)
         try replay.play(throughLine: 98, expecting: "turn.ended e_0077_17737")
         let search = try #require(replay.conversation[step: "s_0004_54646"])
         #expect(search.outcome == .stopped)
@@ -386,25 +373,6 @@ struct ConversationTranscriptTests {
         #expect(replay.conversation[ask: "a_0002_64299"]?.outcome == .cancelled)
         #expect(replay.conversation.waitingAsk == nil)
     }
-
-    @Test("Scenario 25: a secret answer keeps no text, here or on the server")
-    func secret() throws {
-        var replay = Replay(try Fixtures.transcript("25-a-secret"))
-        let code: MessageID = "07fa34b1-a387-4687-bf4a-a9a7a40cc10f"
-        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_73484")
-        #expect(replay.conversation.waitingAsk?.secret == true)
-        try replay.play(throughLine: 22, expecting: "POST /v0/messages")
-        #expect(
-            replay.conversation[code]?.isSecret == true && replay.conversation[code]?.text == "")
-        try replay.play(throughLine: 23, expecting: "message.accepted e_0017_04913")
-        #expect(
-            replay.conversation[code]?.isSecret == true && replay.conversation[code]?.text == "")
-        #expect(replay.conversation[code]?.answers == "a_0001_49834")
-    }
-
-    private func visible(_ id: MessageID, in replay: Replay) throws -> String {
-        replay.conversation.visibleText(of: try #require(replay.conversation[id]))
-    }
 }
 
 extension Replay {
@@ -518,14 +486,14 @@ extension ConversationTranscriptTests {
         "07-stop": [
             you("40fad84f-9c72-47ac-b2ce-b6152b68b0c0", bike), bikeReply("m_0001_79685"),
             you("f7f3de34-9d23-457f-a7b4-28d1818238fa", saturday),
-            reply("m_0002_81610", 209, "Lunch at home; keep it light before", .stopped),
+            reply("m_0002_81610", 266, "A walk in the botanic garden,", .stopped),
             you("21d803b8-d67b-47dc-91c6-b540fb9b4972", "Actually, just plan the morning."),
             reply("m_0003_68282", 120, "the café by the bridge; it opens at 9."),
             you("d07a73b5-68d9-4d34-8dfc-984eaaa36911", "And Sunday?"),
             reply("m_0004_08797", 66, "then lunch with friends if you're up for it."),
             you("e8d134af-23b2-4510-9360-ccd762695be8", "And Saturday evening?"),
             reply("m_0005_12106", 65, "then an early night before the long run."),
-            reply("m_0006_90669", 0, "", .stopped),
+            reply("m_0006_90669", 35, "swap the walk for the ", .stopped),
             you("cdf4fa57-3822-4b94-b26f-b65fe93afdef", "Find a café for after the run."),
         ],
         "08-copy-and-share": [
@@ -641,14 +609,6 @@ extension ConversationTranscriptTests {
             you("3c2171f0-3504-49fc-a75a-f7e7b7371229", "Clapham"),
             reply("m_0002_20811", 73, "for two at 7:30 on Saturday. Shall I book it?"),
         ],
-        "25-a-secret": [
-            you("3c745eaf-6fe9-43b0-8cd5-6d3e9027ecc8", bike), bikeReply("m_0001_44119"),
-            you(
-                "837231c9-ee97-474f-9657-13e0de8086cb",
-                "Book Juno in Clapham for Saturday at 7:30, for two."),
-            you("07fa34b1-a387-4687-bf4a-a9a7a40cc10f", ""),
-            reply("m_0002_69009", 59, "n Clapham, Saturday at 7:30, a table for two."),
-        ],
         "26-turning-on-notifications": [
             you("e650397d-2de5-4f6d-b54c-30865f70c9e6", bike), bikeReply("m_0001_63846"),
             you(
@@ -727,12 +687,6 @@ extension ConversationTranscriptTests {
                 shown: false),
             reply("m_0003_60545", 165, "Tighten the intro\n- Add the latency numbers"),
         ],
-        "39-ari-learns-a-name": [
-            you("m_0001_77281", "What did Bara say about the cutie panel?"),
-            reply("m_0002_58268", 58, "and the QRT panel? Tap a word to fix it."),
-            you("m_0003_74178", "When does Bora want the QRT notes?"),
-            reply("m_0004_20681", 26, "Bora wants them by Friday."),
-        ],
         "40-delete-a-call-s-audio": [
             you("m_0001_90849", "Today was a good day. The long run felt easy."),
             reply("m_0002_64513", 64, "I've added it to today's journal."),
@@ -788,6 +742,15 @@ extension ConversationTranscriptTests {
             you("24b63d4b-0f1b-4ee6-8fa9-09fd345ce3d8", "Thanks! What's left?"),
             reply("m_0003_82783", 66, "The Pisa train's ticked off."),
         ],
+        "64-a-training-block": [
+            you(
+                "319036b9-6e27-458f-a845-500b35b9d105",
+                "I'm five weeks into a sub-20 5K block, ten weeks to the end of November. Can you "
+                    + "keep the plan? Intervals today."),
+            reply("m_0001_11871", 129, "{\"motion\":\"sub-20-5k\",\"change\":1}\n```"),
+            you("3442e640-1541-4d1c-84de-b03f3fd4e423", "Did parkrun this morning: 20:12!"),
+            reply("m_0002_67208", 119, "{\"motion\":\"sub-20-5k\",\"change\":3}\n```"),
+        ],
         "49-the-voice-fails-mid-call": [
             you("m_0001_83382", "What's on tomorrow?"),
             reply("m_0002_93163", 42, "dentist at nine, then the design review."),
@@ -800,13 +763,6 @@ extension ConversationTranscriptTests {
             you("m_0001_27022", "Remind me to call Mum on Sunday at two."),
             you("m_0002_31819", "Add it."),
             reply("m_0003_68062", 33, "Added. I'll remind you on Sunday."),
-        ],
-        "52-a-code-on-a-call": [
-            you("m_0001_12051", "Confirm the Juno booking."),
-            you("m_0002_45817", "It's four eight one five one six."),
-            reply("m_0003_75492", 58, "I won't take a code by voice."),
-            you("8df648e2-9813-4dc2-939f-92cbe710bcdf", ""),
-            reply("m_0004_36257", 45, "Confirmed. You're booked at Juno on Saturday."),
         ],
         "53-an-app-asks-first": [
             you(
@@ -828,15 +784,13 @@ extension ConversationTranscriptTests {
             )
         ],
         "56-relearn-my-voice": [],
-        "59-a-plan-you-can-tick": [
+        "59-blocks-in-a-reply": [
             you(
-                "1b659879-69a7-4624-b98c-81a1847cedce",
+                "b9a80e96-e760-4e1d-b29c-8431481ad7af",
                 "Can you plan our three days in Florence? We land on Friday morning."),
-            reply("m_0001_87815", 667, "\"lat\":43.7678,\"lon\":11.2553}\n```"),
-            you(
-                "efff4d79-8fbf-46e3-b399-1a1d470745a0",
-                "Booked! How do we get from the station to the hotel?"),
-            reply("m_0002_12545", 59, "flat all the way, past San Lorenzo."),
+            reply("m_0001_24454", 414, "[\"Book the Uffizi\",\"Swap Siena for Pisa\"]}\n```"),
+            you("022d1d4f-19be-4f73-8d0c-4594869ee25d", "Swap Siena for Pisa"),
+            reply("m_0002_97684", 67, "50 minutes by train from Santa Maria Novella."),
         ],
         "60-pictures-ari-found": [
             you(

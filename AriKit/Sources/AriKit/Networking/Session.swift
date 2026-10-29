@@ -12,7 +12,6 @@ import Observation
 /// - **Stop** has its own lane: never behind the outbox or a reconnect.
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
-///   A secret answer goes from memory only, never through the outbox on disk.
 /// - **Calls** start and end on their own lane, in order; a call's stream carries the rest.
 @MainActor
 @Observable
@@ -45,6 +44,11 @@ public final class Session {
         case paused
     }
 
+    private struct StopRequest {
+        /// `nil` until the turn it stops is announced.
+        var turn: TurnID?
+    }
+
     public enum Problem: Equatable, Sendable {
         /// The server stopped accepting the token.
         case tokenRejected(ServerError?)
@@ -60,7 +64,8 @@ public final class Session {
     @ObservationIgnored private let network: any NetworkPath
     @ObservationIgnored private let ticker: Ticker
     @ObservationIgnored private var queue: [SendMessage] = []
-    @ObservationIgnored private var stopRequest: (turn: TurnID?, cut: Cut?)?
+    /// Your Stop, until the server has it: for its turn, or for the next one to start.
+    @ObservationIgnored private var stopRequest: StopRequest?
     @ObservationIgnored private var retries: [TurnID] = []
     @ObservationIgnored private var cancels: [AskID] = []
     @ObservationIgnored private var callRequests: [CallRequest] = []
@@ -81,8 +86,6 @@ public final class Session {
         /// The server refused it, such as for being too large; its message says why.
         case refused(RequestError)
     }
-    /// Secret answers waiting to go: kept in memory only, never in the outbox on disk.
-    @ObservationIgnored private var secrets: Set<MessageID> = []
     @ObservationIgnored private var isOnline = true
     @ObservationIgnored private var wantsSnapshot = false
     @ObservationIgnored private var lastHeard: Duration = .zero
@@ -187,33 +190,23 @@ public final class Session {
     /// You tapped Send. Your message shows at once, is saved on the device, and goes as soon as it
     /// can. Returns its id, or `nil` if there's nothing to send or it's longer than the server takes.
     ///
-    /// - Parameter id: Its permanent id and retry key; a new random UUID unless a test chooses one.
-    /// While an ask waits, any message answers it.
+    /// While an ask waits, any message answers it, a tapped option included.
     ///
     /// - Parameters:
     ///   - id: Its permanent id and retry key; a new random UUID unless a test chooses one.
-    ///   - answers: The ask it answers, named when you tap one of its options or answer a secret.
-    ///   - secret: A secret answer, such as a code: it goes from memory only, never saved on the
-    ///     device, and the conversation keeps nothing of it.
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = []
+        attachments: [AttachmentID] = []
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, answers: answers, attachments: attachments)
-        conversation.send(
-            id, text: text, answers: answers, secret: secret,
-            attachments: attachments.compactMap(attachment))
-        if secret {
-            secrets.insert(id)
-        } else {
-            try? outbox.add(message)
-        }
+        let message = SendMessage(id: id, text: text, attachments: attachments)
+        conversation.send(id, text: text, attachments: attachments.compactMap(attachment))
+        try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
@@ -263,14 +256,13 @@ public final class Session {
     /// it, so a failed attempt still goes next time Ari opens. Returns whether the server has it.
     @discardableResult
     public func sendFromNotification(
-        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil
+        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased())
     ) async -> Bool {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             text.count <= Self.maximumLength
         else { return false }
-        let message = SendMessage(id: id, text: text, answers: answers)
-        conversation.send(id, text: text, answers: answers)
+        let message = SendMessage(id: id, text: text)
+        conversation.send(id, text: text)
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         do {
@@ -281,12 +273,6 @@ public final class Session {
         } catch {
             return false
         }
-    }
-
-    /// Ticks or unticks an item in a reply's plan: `true` once the server has it. Every device, this
-    /// one included, hears it as `plan.ticked`, which updates the conversation.
-    public func tick(_ message: MessageID, part: Int, item: String, done: Bool) async -> Bool {
-        (try? await client.tick(message, part: part, item: item, done: done)) != nil
     }
 
     /// Notifications are allowed: register this device, with its push token and notification key,
@@ -339,14 +325,6 @@ public final class Session {
         return CallStream(connect: { client.callStream(call) })
     }
 
-    /// You undid a correction or fixed a word: the server learns what was heard and what you
-    /// meant. Returns whether it did.
-    @discardableResult
-    public func teach(_ pairs: [VocabularyCorrections.Pair]) async -> Bool {
-        guard !pairs.isEmpty else { return true }
-        return (try? await client.teach(VocabularyCorrections(corrections: pairs))) != nil
-    }
-
     /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
     public func cancel(_ ask: AskID) {
         guard conversation[ask: ask]?.outcome == nil, !cancels.contains(ask) else { return }
@@ -355,21 +333,16 @@ public final class Session {
         wake(.cancel)
     }
 
-    /// You tapped Stop. What's on screen holds there at once; the request goes on its own lane, even
-    /// before the stream is back. Tapped before the turn is announced, it goes as soon as it is.
-    ///
-    /// The screen paces text, so it can still be showing a reply whose turn has already ended on
-    /// the server. The Stop still goes, for the turn the cut message belongs to; the server answers
-    /// that the turn had ended, and the rest of the reply shows.
-    ///
-    /// - Parameter cut: How much of the message being written was on screen.
-    public func stop(cut: Cut?) {
-        if let turn = cut.flatMap({ conversation[$0.message]?.turn }) ?? conversation.turn?.id {
+    /// You tapped Stop. The request goes on its own lane, even before the stream is back, and the
+    /// reply keeps what Ari had written. Tapped before the turn is announced, it goes as soon as it
+    /// is.
+    public func stop() {
+        if let turn = conversation.turn?.id {
             guard stopRequest?.turn != turn else { return }
-            conversation.stop(turn: turn, cut: cut)
-            stopRequest = (turn, cut)
+            conversation.stop(turn: turn)
+            stopRequest = StopRequest(turn: turn)
         } else if conversation.entries.last?.role == .user {
-            stopRequest = (nil, cut)
+            stopRequest = StopRequest(turn: nil)
         } else {
             return
         }
@@ -482,8 +455,8 @@ public final class Session {
             wantsSnapshot = false
         case .turnStarted(let started):
             if let request = stopRequest, request.turn == nil {
-                conversation.stop(turn: started.turn, cut: request.cut)
-                stopRequest = (started.turn, request.cut)
+                conversation.stop(turn: started.turn)
+                stopRequest = StopRequest(turn: started.turn)
                 wake(.stop)
             }
         default:
@@ -566,7 +539,7 @@ public final class Session {
     /// The message went, or can't: it, and the bytes of its attachments, leave the outbox.
     private func finish(_ message: SendMessage) {
         queue.removeAll { $0.id == message.id }
-        if secrets.remove(message.id) == nil { try? outbox.remove(message.id) }
+        try? outbox.remove(message.id)
         for attachment in message.attachments ?? [] { outbox.removeAttachment(attachment) }
         wake(.outbox)
     }
@@ -583,7 +556,7 @@ public final class Session {
                 continue
             }
             do {
-                let result = try await client.stop(turn, cut: request.cut)
+                let result = try await client.stop(turn)
                 conversation.confirm(result)
                 if stopRequest?.turn == turn { stopRequest = nil }
                 failures = 0

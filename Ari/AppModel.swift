@@ -201,9 +201,9 @@ final class AppModel {
     }
 
     /// An answer given from a notification: it goes at once, even with Ari in the background.
-    func answer(fromNotification text: String, ask: AskID?) async {
+    func answer(fromNotification text: String) async {
         guard let session else { return }
-        await session.sendFromNotification(text, answers: ask)
+        await session.sendFromNotification(text)
     }
 
     private func registerDevice() {

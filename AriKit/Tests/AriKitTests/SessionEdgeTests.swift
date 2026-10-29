@@ -48,16 +48,11 @@ struct SessionEdgeTests {
         #expect(bench.session.link == .reconnecting)
 
         // The reconnect hangs unanswered; Stop doesn't wait for it.
-        let cut = Cut(message: "m_0100", offset: 6)
-        bench.session.stop(cut: cut)
+        bench.session.stop()
         let stop = try await bench.nextRequest()
         #expect(stop.path == "/v0/turns/t_0100/stop")
-        #expect(
-            try stop.body.map { try JSONValue(data: $0) } == JSONValue(encoding: StopTurn(cut: cut))
-        )
-        #expect(
-            bench.session.conversation.visibleText(
-                of: try #require(bench.session.conversation["m_0100"])) == "Here's")
+        #expect(stop.body == nil, "a Stop has no body")
+        #expect(bench.session.conversation.pendingStop == "t_0100")
     }
 
     @Test("Stop tapped before the turn is announced goes as soon as it is")
@@ -70,7 +65,7 @@ struct SessionEdgeTests {
         try await bench.server.push(json: acceptedEvent(id))
         await bench.settle()
 
-        bench.session.stop(cut: nil)
+        bench.session.stop()
         await bench.settle()
         #expect(await bench.server.takeRequest() == nil)
 
@@ -127,7 +122,7 @@ struct SessionEdgeTests {
         defer { bench.close() }
         bench.session.start()
         _ = try await bench.nextRequest()
-        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.14"])
+        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.15"])
         await bench.settle()
 
         guard case .protocolMismatch(let mismatch) = bench.session.problem else {

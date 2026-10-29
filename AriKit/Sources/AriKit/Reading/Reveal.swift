@@ -6,8 +6,8 @@ import Foundation
 /// it is fully shown. One that was already finished, long enough ago, when Ari first saw it
 /// (history, a snapshot, one finished while Ari was away) shows at once.
 ///
-/// It counts UTF-16 units of the message's source, the unit of Stop's cut, and is a plain value the
-/// screen moves on with each frame.
+/// It counts UTF-16 units of the message's source, and is a plain value the screen moves on with
+/// each frame.
 public struct Reveal: Sendable, Equatable {
     /// The steady reading pace, in units a second.
     public static let pace = 60.0
@@ -57,7 +57,7 @@ public struct Reveal: Sendable, Equatable {
         _ next: (Conversation.Entry, _ available: Double) -> Bool
     ) {
         for entry in conversation.entries.reversed() where paces(entry) {
-            let available = Double(conversation.visibleText(of: entry).utf16.count)
+            let available = Double(entry.text.utf16.count)
             guard next(entry, available) else { return }
         }
     }
@@ -85,27 +85,6 @@ public struct Reveal: Sendable, Equatable {
             if budget <= 0 { break }
         }
         return backlog > speed * elapsed
-    }
-
-    /// You tapped Stop. Returns the cut: the message the server is still writing, at how much of
-    /// it is on screen (nothing yet, if it's still waiting its turn behind another), or `nil` if
-    /// nothing is being written. Everything else in the turn shows in full at once, since an ended
-    /// message is final. If the turn has already ended, the rest of it simply shows.
-    public mutating func stop(in conversation: Conversation) -> Cut? {
-        guard let turn = conversation.turn else {
-            showAll(conversation)
-            return nil
-        }
-        let messages = conversation.entries.filter { $0.turn == turn.id && $0.role == .agent }
-        let open = messages.last { $0.outcome == nil }
-        for entry in messages where entry.id != open?.id { shown[entry.id] = .infinity }
-        guard let open else { return nil }
-        let text = conversation.visibleText(of: open)
-        let seen =
-            Self.paces(open)
-            ? Int(min(shown[open.id] ?? 0, Double(text.utf16.count)).rounded(.down))
-            : text.utf16.count
-        return Cut(message: open.id, revealed: text.prefix(utf16: seen))
     }
 
     /// Shows every reply in full at once.

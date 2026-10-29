@@ -47,8 +47,8 @@ public struct Conversation: Sendable, Equatable {
     public private(set) var lastEndedTurn: EndedTurn? {
         didSet { changes.count &+= 1 }
     }
-    /// Your Stop, from the tap until its turn ends.
-    public private(set) var pendingStop: StopRequest? {
+    /// The turn you stopped, from the tap until it ends.
+    public private(set) var pendingStop: TurnID? {
         didSet { changes.count &+= 1 }
     }
     /// Failed turns already tried again, so Try again shows only once.
@@ -105,15 +105,10 @@ extension Conversation {
         public internal(set) var mark: Mark?
         /// Your messages: the ask this one answered.
         public internal(set) var answers: AskID?
-        /// Your messages: a secret answer. Its text is empty: the agent has it, the conversation
-        /// keeps nothing of it.
-        public internal(set) var isSecret = false
         /// Your messages: the photos and files attached, in order.
         public internal(set) var attachments: [Attachment] = []
         /// Your messages: how one you spoke on a call came to be.
         public internal(set) var spoken: Spoken?
-        /// Replies: the items ticked or unticked in its plans, each at its latest.
-        public internal(set) var ticks: [Tick] = []
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -147,23 +142,19 @@ extension Conversation {
             error = message.error
             delivery = message.role == .user ? .delivered : nil
             answers = message.answers
-            isSecret = message.secret ?? false
             attachments = message.attachments ?? []
             spoken = message.spoken
-            ticks = message.ticks ?? []
         }
 
         init(
-            sending id: MessageID, text: String, answers: AskID?, secret: Bool,
-            attachments: [Attachment]
+            sending id: MessageID, text: String, answers: AskID?, attachments: [Attachment]
         ) {
             self.id = id
             role = .user
-            self.text = secret ? "" : text
-            length = self.text.utf16.count
+            self.text = text
+            length = text.utf16.count
             delivery = .sending
             self.answers = answers
-            isSecret = secret
             self.attachments = attachments
         }
     }
@@ -193,11 +184,6 @@ extension Conversation {
         case cancelling
     }
 
-    /// Your Stop. Until its turn ends, the message it cut holds at the cut.
-    public struct StopRequest: Sendable, Equatable {
-        public let turn: TurnID
-        public let cut: Cut?
-    }
 }
 
 // MARK: - The server's events
@@ -250,12 +236,6 @@ extension Conversation {
             forgetAudio(of: event.call.id)
         case .topicStarted(let started):
             record(started.topic)
-        case .planTicked(let ticked):
-            if let index = positions[ticked.message] {
-                let tick = Tick(part: ticked.part, item: ticked.item, done: ticked.done)
-                entries[index].ticks.removeAll { $0.part == tick.part && $0.item == tick.item }
-                entries[index].ticks.append(tick)
-            }
         // In motion follows these, not the conversation.
         case .motionStarted, .motionChanged, .motionFinished, .motionState, .motionRemoved:
             break
@@ -295,7 +275,7 @@ extension Conversation {
         for id in snapshot.next { mark(id, .next) }
         if let retried = snapshot.turn?.retryOf { retriedTurns.insert(retried) }
         lastEndedTurn = nil
-        if pendingStop?.turn != turn?.id { pendingStop = nil }
+        if pendingStop != turn?.id { pendingStop = nil }
         needsSnapshot = false
         cursor = id
     }
@@ -360,7 +340,7 @@ extension Conversation {
     private mutating func start(_ started: TurnStarted) {
         turn = Turn(id: started.turn, inputs: started.inputs, retryOf: started.retryOf, status: nil)
         lastEndedTurn = nil
-        if pendingStop?.turn != started.turn { pendingStop = nil }
+        if pendingStop != started.turn { pendingStop = nil }
         // The turn answers its inputs now, so none of them waits as Next any more.
         for input in started.inputs {
             if let index = positions[input] { entries[index].mark = nil }
@@ -369,7 +349,7 @@ extension Conversation {
     }
 
     private mutating func finish(_ ended: TurnEnded) {
-        if pendingStop?.turn == ended.turn { pendingStop = nil }
+        if pendingStop == ended.turn { pendingStop = nil }
         guard turn?.id == ended.turn else { return }
         turn = nil
         lastEndedTurn = EndedTurn(id: ended.turn, outcome: ended.outcome, error: ended.error)
@@ -454,18 +434,13 @@ extension Conversation {
     /// You tapped Send: your message shows at once, below everything the server has, until the server
     /// accepts it. `id` is its permanent id and its retry key; sending the same id again does nothing.
     ///
-    /// While an ask waits, your message answers it, whether or not it names it, so the ask settles at
-    /// once. A secret keeps no text here at all.
-    public mutating func send(
-        _ id: MessageID, text: String, answers: AskID? = nil, secret: Bool = false,
-        attachments: [Attachment] = []
-    ) {
+    /// While an ask waits, your message answers it, so the ask settles at once.
+    public mutating func send(_ id: MessageID, text: String, attachments: [Attachment] = []) {
         guard positions[id] == nil else { return }
-        if let waiting = waitingAsk { settling[waiting.id] = .answering(id) }
+        let waiting = waitingAsk
+        if let waiting { settling[waiting.id] = .answering(id) }
         entries.append(
-            Entry(
-                sending: id, text: text, answers: answers, secret: secret, attachments: attachments)
-        )
+            Entry(sending: id, text: text, answers: waiting?.id, attachments: attachments))
         positions[id] = entries.count - 1
     }
 
@@ -496,20 +471,18 @@ extension Conversation {
         entries[index].at = result.message.at
     }
 
-    /// You tapped Stop on `turn`. `cut` says how much of the message being written was on screen: it
-    /// holds there (see ``visibleText(of:)``) until the turn ends. A Stop for a turn that has already
-    /// ended changes nothing; the rest of its reply simply shows.
-    public mutating func stop(turn id: TurnID, cut: Cut?) {
+    /// You tapped Stop on `turn`: it's stopping until the turn ends. A Stop for a turn that has
+    /// already ended changes nothing.
+    public mutating func stop(turn id: TurnID) {
         guard turn?.id == id, pendingStop == nil else { return }
-        pendingStop = StopRequest(turn: id, cut: cut)
+        pendingStop = id
     }
 
     /// The server answered a Stop. If the turn had already ended some other way (the reply finished
-    /// first, say), nothing stays frozen: the reply shows in full, without a Stopped tag. If it ended
-    /// stopped, by this Stop or another device's, the freeze holds until the stream brings the stopped
-    /// message's length and the turn's end.
+    /// first, say), it isn't stopping any more. If it ended stopped, by this Stop or another device's,
+    /// it's stopping until the stream brings the turn's end.
     public mutating func confirm(_ result: StopResult) {
-        guard pendingStop?.turn == result.turn, result.state == .ended, result.outcome != .stopped
+        guard pendingStop == result.turn, result.state == .ended, result.outcome != .stopped
         else { return }
         pendingStop = nil
     }
@@ -562,13 +535,6 @@ extension Conversation {
 // MARK: - Reading it
 
 extension Conversation {
-    /// The most of `entry`'s text that may be on screen: everything received, except that while your
-    /// Stop is pending, the message it cut holds at the cut.
-    public func visibleText(of entry: Entry) -> String {
-        guard let cut = pendingStop?.cut, cut.message == entry.id else { return entry.text }
-        return entry.text.prefix(utf16: cut.offset)
-    }
-
     /// The note the agent is writing right now, if any: its text is the live status's detail.
     public var noteInProgress: Entry? {
         guard let turn else { return nil }

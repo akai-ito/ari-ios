@@ -84,7 +84,7 @@ struct TrailView: View {
     private func content(for row: Row) -> some View {
         switch row {
         case .note(let entry):
-            let text = conversation.visibleText(of: entry)
+            let text = entry.text
             let document = ReplyDocument(markdown: text)
             Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
                 ReplyView(document: document, position: position, tone: .note)
@@ -590,7 +590,6 @@ private struct AskView: View {
     }
 
     private var hint: String? {
-        if ask.secret { return "Type it below. It stays out of your history in Ari." }
         if ask.options.isEmpty { return "Type your answer below." }
         return ask.allowsText ? "Or type your own answer." : nil
     }

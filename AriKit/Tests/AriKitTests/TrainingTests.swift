@@ -27,6 +27,38 @@ struct TrainingTests {
         #expect(training.results.last?.note == "Windy")
     }
 
+    @Test("Scenario 64: your tick goes to the box, and Ari keeps the week's line up at once")
+    func scenario() async throws {
+        let transcript = try Fixtures.transcript("64-a-training-block")
+        let server = TranscriptServer(
+            transcript,
+            only: { route in
+                switch route {
+                case .motion, .motionState: true
+                default: false
+                }
+            })
+        let state = try await server.client.tick(
+            "sub-20-5k", list: TrainingReading.sessionsList, item: "w6-wed", done: true)
+        #expect(state[TrainingReading.sessionsList]?["w6-wed"]?.done == true)
+        let detail = try await server.client.motion("sub-20-5k")
+        guard case .training(let training) = detail.content else {
+            Issue.record("not training")
+            return
+        }
+        #expect(training.weeks.count == 10)
+        let line = TrainingReading.line(
+            training, state: detail.state, now: wednesday, calendar: london)
+        #expect(line.when == "Week 6 of 10" && line.today == "Intervals done")
+        #expect(
+            TrainingReading.currentWeek(of: training, now: wednesday, calendar: london)?.week.note
+                == "Intervals done. Keep tomorrow easy; Friday's tempo is next.")
+        #expect(detail.changes.first?.note == "Week 6: intervals done")
+        let mismatches = await server.mismatches
+        #expect(mismatches.isEmpty, "\(mismatches)")
+        #expect(await server.unanswered == 0)
+    }
+
     @Test("the line says the week you're in and today's session, done once you tick it")
     func line() throws {
         let training = try Self.training()

@@ -13,9 +13,6 @@ struct Replay {
     private var position = 0
     private var request: Transcript.Request?
     private var endedTurns: Set<TurnID> = []
-    /// The Stop the app sent while its turn ran, followed here apart from the store: until the turn
-    /// ends, no more of the cut message may show than was on screen at the tap.
-    private var tapped: (turn: TurnID, cut: Cut)?
     /// What the server said of each upload, for your message to show before it's accepted.
     private var uploaded: [AttachmentID: AriKit.Attachment] = [:]
 
@@ -59,7 +56,6 @@ struct Replay {
             record(logged)
             if case .turnEnded(let ended) = logged.event.payload {
                 endedTurns.insert(ended.turn)
-                if tapped?.turn == ended.turn { tapped = nil }
             }
         case .app(let request):
             try act(on: request)
@@ -74,19 +70,16 @@ struct Replay {
     }
 
     /// Turns a request into what the person did: Send for a new message id (a repeat is the outbox
-    /// retrying, which changes nothing), Stop with its cut, or Try again.
+    /// retrying, which changes nothing), Stop, or Try again.
     private mutating func act(on request: Transcript.Request) throws {
         switch request.route {
         case .send:
             let message = try #require(request.body).decode(SendMessage.self)
-            let secret = message.answers.flatMap { conversation[ask: $0]?.secret } ?? false
             conversation.send(
-                message.id, text: message.text, answers: message.answers, secret: secret,
+                message.id, text: message.text,
                 attachments: (message.attachments ?? []).compactMap { uploaded[$0] })
         case .stop(let turn):
-            let cut = try request.body?.decode(StopTurn.self).cut
-            if let cut, conversation.turn?.id == turn { tapped = (turn, cut) }
-            conversation.stop(turn: turn, cut: cut)
+            conversation.stop(turn: turn)
         case .retry(let turn):
             conversation.retry(turn: turn)
         case .cancelAsk(let ask):
@@ -104,12 +97,7 @@ struct Replay {
         case .send:
             conversation.confirm(try body.decode(MessageResult.self))
         case .stop:
-            let result = try body.decode(StopResult.self)
-            // A reply that had already finished shows in full, at once.
-            if result.state == .ended, result.outcome == .completed, tapped?.turn == result.turn {
-                tapped = nil
-            }
-            conversation.confirm(result)
+            conversation.confirm(try body.decode(StopResult.self))
         case .retry:
             conversation.confirm(try body.decode(RetryResult.self))
         case .cancelAsk:
@@ -164,11 +152,6 @@ struct Replay {
                 !endedTurns.contains(turn.id),
                 "\(place): turn \(turn.id) is still live after it ended")
         }
-        if let tapped, let entry = conversation[tapped.cut.message] {
-            #expect(
-                conversation.visibleText(of: entry).utf16.count <= tapped.cut.offset,
-                "\(place): \(entry.id) shows words after the tap on Stop")
-        }
 
         guard case .event(let logged) = step else {
             expectTextOnlyGrows(from: before, at: place, ending: nil)
@@ -191,7 +174,7 @@ struct Replay {
         case .turnEnded(let ended):
             #expect(conversation.turn == nil, "\(place): the turn is still live")
             #expect(
-                conversation.pendingStop?.turn != ended.turn, "\(place): Stop outlived its turn")
+                conversation.pendingStop != ended.turn, "\(place): Stop outlived its turn")
             expectTextOnlyGrows(from: before, at: place, ending: nil)
         default:
             expectTextOnlyGrows(from: before, at: place, ending: nil)

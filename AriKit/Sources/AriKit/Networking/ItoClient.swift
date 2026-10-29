@@ -31,11 +31,9 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/messages", body: try Self.json(message)))
     }
 
-    /// `POST /v0/turns/{turn}/stop`.
-    public func stop(_ turn: TurnID, cut: Cut?) async throws(RequestError) -> StopResult {
-        let body = try Self.json(StopTurn(cut: cut))
-        return try await call(
-            HTTPRequest(.post, "/v0/turns/\(Self.segment(turn.rawValue))/stop", body: body))
+    /// `POST /v0/turns/{turn}/stop`: the reply keeps what Ari had written.
+    public func stop(_ turn: TurnID) async throws(RequestError) -> StopResult {
+        try await call(HTTPRequest(.post, "/v0/turns/\(Self.segment(turn.rawValue))/stop"))
     }
 
     /// `POST /v0/turns/{turn}/retry`: the failed turn's id is the retry key.
@@ -231,16 +229,6 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/voices"))
     }
 
-    /// `PUT /v0/messages/{message}/parts/{part}/items/{item}`: ticks or unticks an item in a reply's
-    /// plan. Every device hears it as `plan.ticked`; the answer is the reply's ticks.
-    public func tick(_ message: MessageID, part: Int, item: String, done: Bool)
-        async throws(RequestError) -> TickList
-    {
-        let path =
-            "/v0/messages/\(Self.segment(message.rawValue))/parts/\(part)/items/\(Self.segment(item))"
-        return try await call(HTTPRequest(.put, path, body: try Self.json(TickItem(done: done))))
-    }
-
     /// `DELETE /v0/voice/voiceprint`: forgets your voice, so the server learns it again from your
     /// next calls. The answer is the voice list, now `learning`.
     public func forgetVoiceprint() async throws(RequestError) -> VoiceList {
@@ -255,15 +243,6 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     /// `POST /v0/speech`: a line in Ari's voice, as a WAV (24 kHz, mono, 16-bit PCM).
     public func speak(_ request: SpeechRequest) async throws(RequestError) -> Data {
         try await raw(HTTPRequest(.post, "/v0/speech", body: try Self.json(request)))
-    }
-
-    /// `POST /v0/vocabulary/corrections`: what the recogniser heard and what you meant. The answer
-    /// says which page each mishearing joined.
-    public func teach(_ corrections: VocabularyCorrections) async throws(RequestError)
-        -> VocabularyCorrections
-    {
-        try await call(
-            HTTPRequest(.post, "/v0/vocabulary/corrections", body: try Self.json(corrections)))
     }
 
     /// `GET /v0/messages?before=…&limit=…`: older messages, oldest first.

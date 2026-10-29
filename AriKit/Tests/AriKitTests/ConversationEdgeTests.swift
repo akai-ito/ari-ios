@@ -77,38 +77,34 @@ struct ConversationEdgeTests {
         #expect(conversation["again"]?.delivery == .delivered)
     }
 
-    @Test("Stop holds the cut until the turn ends, however the server answers")
+    @Test("Stop is pending until the turn ends, however the server answers")
     func stopAnswers() throws {
         var conversation = try streaming(["Hello, ", "world, ", "and more."])
-        try conversation.apply(
-            .accepted("e_q", message: "question", text: "A question longer than the cut"))
-        conversation.stop(turn: "t_1", cut: Cut(message: "m_1", revealed: "Hello, "))
-        #expect(try visible("m_1", in: conversation) == "Hello, ")
-        #expect(try visible("question", in: conversation) == "A question longer than the cut")
+        conversation.stop(turn: "t_1")
+        #expect(conversation.pendingStop == "t_1")
 
         conversation.confirm(try StopResult.fixture(state: "stopping"))
-        #expect(try visible("m_1", in: conversation) == "Hello, ")
-        // A Stop sent again after the signal dropped finds the turn already stopped: still frozen
-        // until the stream says where the message ended.
+        #expect(conversation.pendingStop == "t_1")
+        // A Stop sent again after the signal dropped finds the turn already stopped: still
+        // stopping until the stream says the turn ended.
         conversation.confirm(try StopResult.fixture(state: "ended", outcome: "stopped"))
-        #expect(try visible("m_1", in: conversation) == "Hello, ")
-        try conversation.apply(.ended("e_8", message: "m_1", outcome: "stopped", length: 7))
+        #expect(conversation.pendingStop == "t_1")
+        try conversation.apply(.ended("e_8", message: "m_1", outcome: "stopped", length: 20))
         try conversation.apply(.turnEnded("e_9", turn: "t_1", outcome: "stopped"))
         #expect(conversation.pendingStop == nil)
-        #expect(try visible("m_1", in: conversation) == "Hello, ")
+        #expect(conversation["m_1"]?.text == "Hello, world, and mo")
 
-        // The reply had finished before the server got the Stop, so it shows in full at once.
+        // The reply had finished before the server got the Stop.
         var finished = try streaming(["Hello, ", "world."])
-        finished.stop(turn: "t_1", cut: Cut(message: "m_1", revealed: "Hello, "))
+        finished.stop(turn: "t_1")
         finished.confirm(try StopResult.fixture(state: "ended", outcome: "completed"))
         #expect(finished.pendingStop == nil)
-        #expect(try visible("m_1", in: finished) == "Hello, world.")
 
         // A snapshot without the stopped turn drops the Stop; one with it keeps it.
         var kept = try streaming(["Half a rep"])
-        kept.stop(turn: "t_1", cut: Cut(message: "m_1", revealed: "Half"))
+        kept.stop(turn: "t_1")
         try kept.apply(Fixture.event(Fixture.midTurnSnapshot))
-        #expect(kept.pendingStop?.turn == "t_1")
+        #expect(kept.pendingStop == "t_1")
         try kept.apply(Fixture.event(Fixture.snapshotIncluding("u_9")))
         #expect(kept.pendingStop == nil)
     }
@@ -179,9 +175,6 @@ struct ConversationEdgeTests {
         var counted = try streaming([pieces[0]])
         try counted.apply(.delta("e_6", message: "m_1", offset: pieces[0].count, text: pieces[1]))
         #expect(counted.needsSnapshot)
-
-        // A cut made from the text on screen can't split a pair.
-        #expect(Cut(message: "m_1", revealed: "Thumbs 👍🏽").offset == 11)
     }
 
     @Test("a snapshot taken mid-turn restores the turn, Read, Next and the reply so far")
@@ -306,10 +299,6 @@ struct ConversationEdgeTests {
             offset += piece.utf16.count
         }
         return conversation
-    }
-
-    private func visible(_ id: MessageID, in conversation: Conversation) throws -> String {
-        conversation.visibleText(of: try #require(conversation[id]))
     }
 }
 

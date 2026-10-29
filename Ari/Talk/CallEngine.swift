@@ -258,8 +258,8 @@ final class CallEngine {
         let voicePlayer = AVAudioPlayerNode()
         let soundPlayer = AVAudioPlayerNode()
         let playback = CallPlayback(player: voicePlayer)
-        playback.played = { [weak self] id, cut in
-            self?.stream?.send(.played(id: id, cut: cut))
+        playback.played = { [weak self] id in
+            self?.stream?.send(.played(id: id))
             self?.captionPlayed(id)
         }
         self.playback = playback

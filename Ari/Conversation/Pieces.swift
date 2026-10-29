@@ -175,11 +175,9 @@ struct TopicsSheet: View {
 struct YourMessage<Attachments: View, Footer: View>: View {
     let text: String
     let tag: String?
-    /// Words the phone corrected in something you said, underlined.
-    var corrections: [Correction] = []
     /// Its photos and files, above the words.
     @ViewBuilder var attachments: Attachments
-    /// Below the words: playing back what you said, and what was corrected.
+    /// Below the words: playing back what you said.
     @ViewBuilder var footer: Footer
 
     /// The tag on screen. "Sending" waits half a second first, so a message that goes at once
@@ -191,7 +189,7 @@ struct YourMessage<Attachments: View, Footer: View>: View {
             attachments
             // A message may be only photos.
             if !text.isEmpty {
-                Text(SpokenFooter.marked(Self.linked(text), corrections, in: text))
+                Text(Self.linked(text))
                     .foregroundStyle(.ariText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -369,14 +367,11 @@ private struct SelectableText: UIViewRepresentable {
 enum SheetItem: Identifiable {
     case details(ServerError)
     case selecting(String)
-    /// Teaching Ari a word it misheard in something you said.
-    case fixingWord(String)
 
     var id: String {
         switch self {
         case .details(let error): "details \(error.code.rawValue) \(error.message)"
         case .selecting(let text): "selecting \(text)"
-        case .fixingWord(let text): "fixing \(text)"
         }
     }
 }

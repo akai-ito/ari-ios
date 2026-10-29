@@ -7,7 +7,9 @@ struct FixturesTests {
     @Test("holds all thirty-seven transcripts, each named for its scenario")
     func allTranscripts() throws {
         let transcripts = try Fixtures.transcripts()
-        #expect(transcripts.map(\.header.scenario) == Array(1...63))
+        #expect(
+            transcripts.map(\.header.scenario)
+                == Array(1...64).filter { ![25, 39, 52].contains($0) })
         for transcript in transcripts {
             #expect(transcript.header.transcript == transcript.name)
             #expect(transcript.name.hasPrefix(String(format: "%02d-", transcript.header.scenario)))

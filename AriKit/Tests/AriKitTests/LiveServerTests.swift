@@ -5,8 +5,8 @@ import Testing
 /// Level 3: the client against a running server, `ito serve --engine demo` from an ito-core
 /// clone. Skipped unless `ITO_SERVER` (such as `http://127.0.0.1:8787`) and `ITO_TOKEN` are set,
 /// so CI runs only the deterministic levels. The demo engine answers any message; one containing
-/// "long" gives a long reply to stop, one containing "fail" fails, and "ask", "approve" and
-/// "secret" make it ask. They share the server's one conversation, so they run one at a time.
+/// "long" gives a long reply to stop, one containing "fail" fails, and "ask" and "approve" make it
+/// ask. They share the server's one conversation, so they run one at a time.
 /// `ITO_PAIRING_CODE`, a fresh code from `ito pair`, adds the pairing test.
 @MainActor
 @Suite("Against a running server", .enabled(if: LiveServer.isConfigured), .serialized)
@@ -24,7 +24,7 @@ struct LiveServerTests {
         #expect(!reply.text.isEmpty)
     }
 
-    @Test("Stop cuts a long reply where it was on screen")
+    @Test("Stop ends a long reply, which keeps what Ari had written")
     func stop() async throws {
         let live = try await LiveServer()
         defer { live.close() }
@@ -32,12 +32,12 @@ struct LiveServerTests {
         let writing = try await live.until("a long reply is under way") { conversation in
             LiveServer.reply(to: id, in: conversation).flatMap { $0.length >= 40 ? $0 : nil }
         }
-        live.session.stop(cut: Cut(message: writing.id, offset: 40))
+        live.session.stop()
         let stopped = try await live.until("the reply stops") { conversation in
             conversation[writing.id].flatMap { $0.outcome == nil ? nil : $0 }
         }
         #expect(stopped.outcome == .stopped)
-        #expect(stopped.length == 40)
+        #expect(stopped.length >= 40)
     }
 
     @Test("Ari asks and waits; a tapped option answers it, and Stop cancels the next one")
@@ -49,7 +49,7 @@ struct LiveServerTests {
             conversation.turn == nil ? conversation.waitingAsk : nil
         }
         let option = try #require(ask.options.first)
-        let answer = try #require(live.session.send(option.label, answers: ask.id))
+        let answer = try #require(live.session.send(option.label))
         let answered = try await live.until("the ask is answered") { conversation in
             conversation[ask: ask.id].flatMap { $0.outcome == nil ? nil : $0 }
         }
@@ -71,23 +71,6 @@ struct LiveServerTests {
             conversation[ask: next.id].flatMap { $0.outcome == nil ? nil : $0 }
         }
         #expect(cancelled.outcome == .cancelled)
-    }
-
-    @Test("a secret answer reaches the server and keeps no text")
-    func secret() async throws {
-        let live = try await LiveServer()
-        defer { live.close() }
-        live.session.send("I'll need a secret code")
-        let ask = try await live.until("Ari asks for a secret") { conversation in
-            conversation.turn == nil
-                ? conversation.waitingAsk.flatMap { $0.secret ? $0 : nil } : nil
-        }
-        let id = try #require(live.session.send("481516", answers: ask.id, secret: true))
-        _ = try await live.until("the ask is answered") { conversation in
-            conversation[ask: ask.id].flatMap { $0.outcome == .answered ? $0 : nil }
-        }
-        let entry = try #require(live.session.conversation[id])
-        #expect(entry.isSecret && entry.text.isEmpty && entry.delivery == .delivered)
     }
 
     @Test("a photo and a file upload first, go with the message, and come back unchanged")

@@ -2,13 +2,13 @@ import AVFoundation
 
 /// Ari's voice on a call, as the server streams it: each sentence's audio plays as it arrives,
 /// through the call's own audio engine, so echo cancellation keeps Ari from hearing itself.
-/// The server hears when each sentence has finished, or was cut because you talked over it.
+/// The server hears when each sentence has finished, or stopped because you talked over it.
 final class CallPlayback {
     /// The server's voice: 16-bit PCM, mono, 24 kHz. The player is connected at it, as floats.
     static let format = AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1)!
 
-    /// A sentence finished playing, or was cut.
-    var played: (_ id: String, _ cut: Bool) -> Void = { _, _ in }
+    /// A sentence finished playing, or stopped.
+    var played: (_ id: String) -> Void = { _ in }
     /// Whether any of Ari's voice is still to play.
     var isPlaying: Bool { !scheduled.isEmpty }
 
@@ -55,23 +55,23 @@ final class CallPlayback {
                 guard mine == self.generation, let index = self.scheduled.firstIndex(of: id)
                 else { return }
                 self.scheduled.remove(at: index)
-                self.played(id, false)
+                self.played(id)
             }
         }
     }
 
-    /// You talked over Ari: everything queued goes at once, and the server hears which
-    /// sentences were cut.
+    /// You talked over Ari: everything queued goes at once, and the server hears each sentence is
+    /// done.
     func stop() {
         generation += 1
         arriving = nil
-        let cut = scheduled
+        let stopped = scheduled
         scheduled = []
         if player.engine != nil {
             player.stop()
             player.play()
         }
-        for id in cut { played(id, true) }
+        for id in stopped { played(id) }
     }
 
     /// 16-bit PCM, little-endian, as floats the player takes.

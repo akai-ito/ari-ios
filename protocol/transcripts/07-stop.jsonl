@@ -1,4 +1,4 @@
-{"transcript":"07-stop","start":"2026-10-12T08:41:00.000Z","scenario":7,"title":"Stop","summary":"Stop names the turn and the cut point on screen; the stopped message keeps exactly that, a message sent while stopping starts the next turn, and a Stop that arrives after a reply finished changes nothing. When the screen lags, Stop cuts the message still being written and a reply that already finished keeps all its text. A Stop while a step runs ends the step as stopped, keeping its present-tense title.","guarantees":["G3","G7","G9","G14"],"app":{"cursor":"e_0009_84674"}}
+{"transcript":"07-stop","start":"2026-10-12T08:41:00.000Z","scenario":7,"title":"Stop","summary":"Stop names the turn; the stopped message keeps everything it had streamed, a message sent while stopping starts the next turn, and a Stop that arrives after a reply finished changes nothing. A Stop just after a message began keeps what little it had. A Stop while a step runs ends the step as stopped, keeping its present-tense title.","guarantees":["G3","G7","G9","G14"],"app":{"cursor":"e_0009_84674"}}
 {"given":{"id":"e_0001_72832","type":"message.accepted","at":"2026-10-11T21:14:00.000Z","message":{"id":"40fad84f-9c72-47ac-b2ce-b6152b68b0c0","role":"user","text":"Is it worth fixing the old bike or buying a new one?","at":"2026-10-11T21:14:00.000Z","position":1}}}
 {"given":{"id":"e_0002_57610","type":"turn.started","at":"2026-10-11T21:14:00.001Z","turn":"t_0001_97463","inputs":["40fad84f-9c72-47ac-b2ce-b6152b68b0c0"]}}
 {"given":{"id":"e_0003_30735","type":"step.started","at":"2026-10-11T21:14:00.301Z","step":{"id":"s_0001_94183","turn":"t_0001_97463","kind":"thinking","title":"Thinking it through","at":"2026-10-11T21:14:00.301Z","position":3}}}
@@ -29,14 +29,14 @@
 {"at":4470,"event":{"id":"e_0024_88127","type":"message.delta","at":"2026-10-12T08:41:04.470Z","message":"m_0002_81610","offset":183,"text":"home; keep it light before "}}
 {"at":4580,"event":{"id":"e_0025_41509","type":"message.delta","at":"2026-10-12T08:41:04.580Z","message":"m_0002_81610","offset":210,"text":"the afternoon.\n- **15:00** A "}}
 {"at":4690,"event":{"id":"e_0026_74053","type":"message.delta","at":"2026-10-12T08:41:04.690Z","message":"m_0002_81610","offset":239,"text":"walk in the botanic garden,"}}
-{"at":4750,"app":{"method":"POST","path":"/v0/turns/t_0002_40331/stop","body":{"cut":{"message":"m_0002_81610","offset":209}}}}
+{"at":4750,"app":{"method":"POST","path":"/v0/turns/t_0002_40331/stop"}}
 {"at":4750,"server":{"status":202,"body":{"turn":"t_0002_40331","state":"stopping"}}}
 {"at":4750,"event":{"id":"e_0027_65057","type":"turn.status","at":"2026-10-12T08:41:04.750Z","turn":"t_0002_40331","kind":"stopping","label":"Stopping"}}
 {"at":4900,"app":{"method":"POST","path":"/v0/messages","body":{"id":"21d803b8-d67b-47dc-91c6-b540fb9b4972","text":"Actually, just plan the morning."}}}
 {"at":4900,"event":{"id":"e_0028_68770","type":"message.accepted","at":"2026-10-12T08:41:04.900Z","message":{"id":"21d803b8-d67b-47dc-91c6-b540fb9b4972","role":"user","text":"Actually, just plan the morning.","at":"2026-10-12T08:41:04.900Z","position":28}}}
 {"at":4900,"server":{"status":201,"body":{"message":{"id":"21d803b8-d67b-47dc-91c6-b540fb9b4972","role":"user","text":"Actually, just plan the morning.","at":"2026-10-12T08:41:04.900Z","position":28}}}}
 {"at":4900,"event":{"id":"e_0029_21466","type":"message.queued","at":"2026-10-12T08:41:04.900Z","message":"21d803b8-d67b-47dc-91c6-b540fb9b4972","turn":"t_0002_40331"}}
-{"at":5150,"event":{"id":"e_0030_45737","type":"message.ended","at":"2026-10-12T08:41:05.150Z","message":"m_0002_81610","outcome":"stopped","length":209}}
+{"at":5150,"event":{"id":"e_0030_45737","type":"message.ended","at":"2026-10-12T08:41:05.150Z","message":"m_0002_81610","outcome":"stopped","length":266}}
 {"at":5150,"event":{"id":"e_0031_84439","type":"turn.ended","at":"2026-10-12T08:41:05.150Z","turn":"t_0002_40331","outcome":"stopped"}}
 {"at":5150,"event":{"id":"e_0032_69133","type":"turn.started","at":"2026-10-12T08:41:05.150Z","turn":"t_0003_88688","inputs":["21d803b8-d67b-47dc-91c6-b540fb9b4972"]}}
 {"at":5450,"event":{"id":"e_0033_67921","type":"step.started","at":"2026-10-12T08:41:05.450Z","step":{"id":"s_0003_26172","turn":"t_0003_88688","kind":"thinking","title":"Thinking it through","at":"2026-10-12T08:41:05.450Z","position":33}}}
@@ -63,7 +63,7 @@
 {"at":28290,"event":{"id":"e_0052_68292","type":"message.delta","at":"2026-10-12T08:41:28.290Z","message":"m_0004_08797","offset":59,"text":"for it."}}
 {"at":28290,"event":{"id":"e_0053_96521","type":"message.ended","at":"2026-10-12T08:41:28.290Z","message":"m_0004_08797","outcome":"completed","length":66}}
 {"at":28290,"event":{"id":"e_0054_00574","type":"turn.ended","at":"2026-10-12T08:41:28.290Z","turn":"t_0004_50773","outcome":"completed"}}
-{"at":28440,"app":{"method":"POST","path":"/v0/turns/t_0004_50773/stop","body":{"cut":{"message":"m_0004_08797","offset":52}}}}
+{"at":28440,"app":{"method":"POST","path":"/v0/turns/t_0004_50773/stop"}}
 {"at":28440,"server":{"status":200,"body":{"turn":"t_0004_50773","state":"ended","outcome":"completed"}}}
 {"at":48440,"app":{"method":"POST","path":"/v0/messages","body":{"id":"e8d134af-23b2-4510-9360-ccd762695be8","text":"And Saturday evening?"}}}
 {"at":48440,"event":{"id":"e_0055_26246","type":"message.accepted","at":"2026-10-12T08:41:48.440Z","message":{"id":"e8d134af-23b2-4510-9360-ccd762695be8","role":"user","text":"And Saturday evening?","at":"2026-10-12T08:41:48.440Z","position":55}}}
@@ -80,10 +80,10 @@
 {"at":49700,"event":{"id":"e_0065_47267","type":"message.started","at":"2026-10-12T08:41:49.700Z","message":{"id":"m_0006_90669","role":"agent","kind":"reply","turn":"t_0005_27837","text":"","at":"2026-10-12T08:41:49.700Z","position":65}}}
 {"at":49700,"event":{"id":"e_0066_83306","type":"message.delta","at":"2026-10-12T08:41:49.700Z","message":"m_0006_90669","offset":0,"text":"If it rains, swap "}}
 {"at":49820,"event":{"id":"e_0067_16351","type":"message.delta","at":"2026-10-12T08:41:49.820Z","message":"m_0006_90669","offset":18,"text":"the walk for the "}}
-{"at":49880,"app":{"method":"POST","path":"/v0/turns/t_0005_27837/stop","body":{"cut":{"message":"m_0006_90669","offset":0}}}}
+{"at":49880,"app":{"method":"POST","path":"/v0/turns/t_0005_27837/stop"}}
 {"at":49880,"server":{"status":202,"body":{"turn":"t_0005_27837","state":"stopping"}}}
 {"at":49880,"event":{"id":"e_0068_95493","type":"turn.status","at":"2026-10-12T08:41:49.880Z","turn":"t_0005_27837","kind":"stopping","label":"Stopping"}}
-{"at":50030,"event":{"id":"e_0069_55734","type":"message.ended","at":"2026-10-12T08:41:50.030Z","message":"m_0006_90669","outcome":"stopped","length":0}}
+{"at":50030,"event":{"id":"e_0069_55734","type":"message.ended","at":"2026-10-12T08:41:50.030Z","message":"m_0006_90669","outcome":"stopped","length":35}}
 {"at":50030,"event":{"id":"e_0070_67956","type":"turn.ended","at":"2026-10-12T08:41:50.030Z","turn":"t_0005_27837","outcome":"stopped"}}
 {"at":70030,"app":{"method":"POST","path":"/v0/messages","body":{"id":"cdf4fa57-3822-4b94-b26f-b65fe93afdef","text":"Find a café for after the run."}}}
 {"at":70030,"event":{"id":"e_0071_43042","type":"message.accepted","at":"2026-10-12T08:42:10.030Z","message":{"id":"cdf4fa57-3822-4b94-b26f-b65fe93afdef","role":"user","text":"Find a café for after the run.","at":"2026-10-12T08:42:10.030Z","position":71}}}
@@ -91,7 +91,7 @@
 {"at":70030,"event":{"id":"e_0072_91587","type":"turn.started","at":"2026-10-12T08:42:10.030Z","turn":"t_0006_31337","inputs":["cdf4fa57-3822-4b94-b26f-b65fe93afdef"]}}
 {"at":70330,"event":{"id":"e_0073_82890","type":"step.started","at":"2026-10-12T08:42:10.330Z","step":{"id":"s_0004_54646","turn":"t_0006_31337","kind":"web_search","title":"Searching the web for cafés near Battersea Park open at 9","at":"2026-10-12T08:42:10.330Z","position":73,"query":"cafés near Battersea Park open at 9"}}}
 {"at":70330,"event":{"id":"e_0074_32668","type":"turn.status","at":"2026-10-12T08:42:10.330Z","turn":"t_0006_31337","kind":"working","label":"Searching the web for cafés near Battersea Park open at 9"}}
-{"at":71530,"app":{"method":"POST","path":"/v0/turns/t_0006_31337/stop","body":{}}}
+{"at":71530,"app":{"method":"POST","path":"/v0/turns/t_0006_31337/stop"}}
 {"at":71530,"server":{"status":202,"body":{"turn":"t_0006_31337","state":"stopping"}}}
 {"at":71530,"event":{"id":"e_0075_94195","type":"turn.status","at":"2026-10-12T08:42:11.530Z","turn":"t_0006_31337","kind":"stopping","label":"Stopping"}}
 {"at":71680,"event":{"id":"e_0076_41571","type":"step.ended","at":"2026-10-12T08:42:11.680Z","step":{"id":"s_0004_54646","turn":"t_0006_31337","kind":"web_search","title":"Searching the web for cafés near Battersea Park open at 9","at":"2026-10-12T08:42:10.330Z","position":73,"query":"cafés near Battersea Park open at 9","ended_at":"2026-10-12T08:42:11.680Z","outcome":"stopped","duration_ms":1350}}}

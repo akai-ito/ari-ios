@@ -25,25 +25,17 @@ struct ComposerArea: View, Equatable {
     /// What you're writing. Saved a moment after you stop typing, and when Ari leaves the screen,
     /// so it survives Ari closing; saved on every keystroke, the field kept waiting on it.
     @State private var draft = UserDefaults.standard.string(forKey: "draft") ?? ""
-    /// A secret answer, such as a code: apart from your draft, so your draft never goes as the
-    /// secret and the secret is never saved. It's gone once sent, or once Ari stops asking.
-    @State private var secretAnswer = ""
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        let secret = asking?.secret ?? false
         Composer(
-            draft: secret ? $secretAnswer : $draft, role: role,
+            draft: $draft, role: role,
             prompt: asking.map(Self.takesTypedAnswer) == true ? "Answer Ari" : "Message Ari",
-            secret: secret, send: submit, stop: stop, talk: secret ? nil : talk,
-            talkReady: talkReady
+            send: submit, stop: stop, talk: talk, talkReady: talkReady
         ) {
-            // A secret answer is only ever typed.
-            if !secret {
-                AttachButton(
-                    room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
-                    problem: { attachProblem = $0 })
-            }
+            AttachButton(
+                room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
+                problem: { attachProblem = $0 })
         } above: {
             if !attached.isEmpty {
                 AttachedStrip(attached: attached, uploads: session.uploads, remove: detach)
@@ -66,9 +58,6 @@ struct ComposerArea: View, Equatable {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { saveDraft() }
         }
-        .onChange(of: asking?.secret ?? false) { _, secret in
-            if !secret { secretAnswer = "" }
-        }
         #if DEBUG
             .task {
                 if let draft = DebugScript.draft { self.draft = draft }
@@ -77,8 +66,7 @@ struct ComposerArea: View, Equatable {
     }
 
     private var role: ComposerRole {
-        let text = asking?.secret == true ? secretAnswer : draft
-        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty {
+        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty {
             return ConversationView.anyRefused(attached, in: session) ? .idle : .send
         }
         if working, !stopping { return .stop }
@@ -87,11 +75,6 @@ struct ComposerArea: View, Equatable {
     }
 
     private func submit() {
-        if asking?.secret == true {
-            guard send(secretAnswer) else { return }
-            secretAnswer = ""
-            return
-        }
         guard send(draft) else { return }
         draft = ""
         saveDraft()
@@ -110,6 +93,6 @@ struct ComposerArea: View, Equatable {
     /// Whether an ask takes a typed answer. Any message still answers it, but the composer only
     /// invites one when the ask does.
     private static func takesTypedAnswer(_ ask: Ask) -> Bool {
-        ask.allowsText || ask.options.isEmpty || ask.secret
+        ask.allowsText || ask.options.isEmpty
     }
 }

@@ -86,9 +86,7 @@ struct CallView: View {
             }
             if let ask = session.conversation.waitingAsk {
                 CallAsk(ask: ask, showsQuestion: call.saying.isEmpty) { option in
-                    session.send(option.label, answers: ask.id)
-                } openChat: {
-                    talk.showsCall = false
+                    session.send(option.label)
                 }
                 .transition(.opacity)
             } else if let choices = latestChoices {
@@ -154,7 +152,7 @@ struct CallView: View {
             reply.endedAt != nil
         else { return nil }
         for shape in ReplyDocument(markdown: reply.text).shapes.values {
-            if case .choices(let choices) = shape.shape { return choices.options }
+            if case .choices(let choices)? = shape { return choices.options }
         }
         return nil
     }
@@ -182,14 +180,12 @@ struct CallView: View {
 }
 
 /// What Ari asked, while it waits on a call. Ari says the question and its choices, and saying
-/// one answers it; the choices are here too, large, for when tapping is easier than talking. A
-/// secret, such as a code, is never said out loud: it's typed in the chat.
+/// one answers it; the choices are here too, large, for when tapping is easier than talking.
 struct CallAsk: View {
     let ask: Ask
     /// Hidden while Ari is saying it, so it isn't on screen twice.
     var showsQuestion = true
     let answer: (Ask.Option) -> Void
-    let openChat: () -> Void
 
     var body: some View {
         VStack(spacing: 14) {
@@ -208,23 +204,16 @@ struct CallAsk: View {
                     .padding(12)
                     .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
             }
-            if ask.secret {
-                CallChoiceButton(label: "Type it in the chat", filled: true, action: openChat)
-                Text("It stays out of your history in Ari.")
-                    .font(.caption)
-                    .foregroundStyle(.ariTertiary)
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(ask.options, id: \.label) { option in
-                        CallChoiceButton(
-                            label: option.label, detail: option.description, filled: option.acts
-                        ) { answer(option) }
-                    }
+            VStack(spacing: 10) {
+                ForEach(ask.options, id: \.label) { option in
+                    CallChoiceButton(
+                        label: option.label, detail: option.description, filled: option.acts
+                    ) { answer(option) }
                 }
-                Text(ask.options.isEmpty ? "Say your answer." : "Tap one, or just say it.")
-                    .font(.caption)
-                    .foregroundStyle(.ariTertiary)
             }
+            Text(ask.options.isEmpty ? "Say your answer." : "Tap one, or just say it.")
+                .font(.caption)
+                .foregroundStyle(.ariTertiary)
         }
     }
 

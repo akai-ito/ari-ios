@@ -56,69 +56,28 @@ struct CallBlock: View {
     }
 }
 
-/// Under a message you spoke: play it back, what Ari corrected, and teaching it a word.
+/// Under a message you spoke: play it back, while the recording is kept.
 struct SpokenFooter: View {
     let spoken: Spoken
-    let text: String
     let bytes: (AttachmentID) async -> Data?
-    let fixWord: () -> Void
 
     @State private var replay = AudioReplay()
 
     var body: some View {
-        HStack(spacing: 10) {
-            if let audio = spoken.audio {
-                Button {
-                    Task { await replay.toggle(audio.id, bytes: bytes) }
-                } label: {
-                    Image(systemName: replay.playing == audio.id ? "stop.fill" : "speaker.wave.2")
-                        .font(.system(size: 12))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(replay.playing == audio.id ? "Stop" : "Hear yourself")
-            }
-            Menu {
-                ForEach(Array((spoken.corrections ?? []).enumerated()), id: \.offset) {
-                    _, correction in
-                    Text("Heard “\(correction.heard)” as \(Self.meant(correction, in: text))")
-                }
-                Button("Fix a word…", systemImage: "character.cursor.ibeam", action: fixWord)
+        if let audio = spoken.audio {
+            Button {
+                Task { await replay.toggle(audio.id, bytes: bytes) }
             } label: {
-                Image(systemName: "waveform")
+                Image(systemName: replay.playing == audio.id ? "stop.fill" : "speaker.wave.2")
                     .font(.system(size: 12))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.button)
             .buttonStyle(.plain)
-            .accessibilityLabel("Spoken")
+            .foregroundStyle(.ariTertiary)
+            .padding(.trailing, 4)
+            .accessibilityLabel(replay.playing == audio.id ? "Stop" : "Hear yourself")
         }
-        .foregroundStyle(.ariTertiary)
-        .padding(.trailing, 4)
-    }
-
-    /// The words a correction put in the text.
-    static func meant(_ correction: Correction, in text: String) -> String {
-        let utf16 = text.utf16
-        guard correction.offset + correction.length <= utf16.count else { return "" }
-        let start = utf16.index(utf16.startIndex, offsetBy: correction.offset)
-        let end = utf16.index(start, offsetBy: correction.length)
-        return String(text[start..<end])
-    }
-
-    /// Your words with the corrected ones underlined, dotted.
-    static func marked(_ text: AttributedString, _ corrections: [Correction], in plain: String)
-        -> AttributedString
-    {
-        var text = text
-        for correction in corrections {
-            let meant = meant(correction, in: plain)
-            guard !meant.isEmpty, let range = text.range(of: meant) else { continue }
-            text[range].underlineStyle = Text.LineStyle(pattern: .dot, color: nil)
-        }
-        return text
     }
 }
 
@@ -155,60 +114,5 @@ final class AudioReplay: NSObject, AVAudioPlayerDelegate {
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in self.stop() }
-    }
-}
-
-/// Teaching Ari a word it misheard: what the recogniser wrote, and what you meant. Next time the
-/// phone corrects it, and the recogniser leans towards what you meant.
-struct FixWordSheet: View {
-    let text: String
-    let teach: (String, String) async -> Bool
-
-    @State private var heard = ""
-    @State private var meant = ""
-    @State private var saving = false
-    @State private var failed = false
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text(text).foregroundStyle(.ariSecondary)
-                }
-                Section {
-                    TextField("Ari heard", text: $heard)
-                    TextField("You meant", text: $meant)
-                } footer: {
-                    Text(
-                        failed
-                            ? "Ari couldn't reach your server. Try again in a moment."
-                            : "Such as “Bara” for Bora. Ari keeps it with the person or place it names."
-                    )
-                }
-            }
-            .navigationTitle("Fix a word")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Teach") {
-                        saving = true
-                        Task {
-                            let taught = await teach(
-                                heard.trimmingCharacters(in: .whitespaces),
-                                meant.trimmingCharacters(in: .whitespaces))
-                            saving = false
-                            if taught { dismiss() } else { failed = true }
-                        }
-                    }
-                    .disabled(
-                        saving || heard.trimmingCharacters(in: .whitespaces).isEmpty
-                            || meant.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
     }
 }

@@ -63,12 +63,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let answer = AskActions.answer(
             action: response.actionIdentifier, typed: typed,
             options: info["options"] as? [String] ?? [])
-        let ask = (info["ask"] as? String).map(AskID.init(rawValue:))
         let message = (info["message"] as? String).map(MessageID.init(rawValue:))
         let done = Handler(completionHandler)
         Task { @MainActor in
             if let answer {
-                await model.answer(fromNotification: answer, ask: ask)
+                await model.answer(fromNotification: answer)
             } else {
                 model.opening = message
             }

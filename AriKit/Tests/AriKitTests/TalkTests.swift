@@ -65,22 +65,6 @@ struct TalkTests {
         #expect(conversation.callOn?.id == "c40b7f14-bcb1-451e-8d2a-797ec1b00d4c")
     }
 
-    /// Teaching Ari two words from the chat, through the real client: the mishearing of a name
-    /// joins that person's page, and a word no page names becomes a term of its own.
-    @Test("plays transcript 39's teaching")
-    func teach() async throws {
-        let transcript = try Fixtures.transcript("39-ari-learns-a-name")
-        let server = TranscriptServer(transcript, only: { $0 == .teachVocabulary })
-        for case .app(let request) in transcript.steps where request.route == .teachVocabulary {
-            let taught = try await server.client.teach(
-                try #require(request.body).decode(VocabularyCorrections.self))
-            #expect(taught.corrections.map(\.address) == ["memory:people/bora", nil])
-        }
-        let mismatches = await server.mismatches
-        #expect(mismatches.isEmpty, "\(mismatches)")
-        #expect(await server.unanswered == 0)
-    }
-
     @Test(
         "Scenario 53: an app's approval waits inside the running turn, which carries on after Allow"
     )
