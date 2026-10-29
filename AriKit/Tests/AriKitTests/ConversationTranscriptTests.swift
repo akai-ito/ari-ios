@@ -103,7 +103,7 @@ struct ConversationTranscriptTests {
     }
 
     @Test(
-        "Scenario 7: Stop ends the turn and the reply keeps what Ari wrote; a late Stop changes nothing"
+        "Scenario 7: Stop ends the turn, the reply keeps what Ari wrote, and a step ends stopped"
     )
     func stop() throws {
         var replay = Replay(try Fixtures.transcript("07-stop"))
@@ -130,21 +130,15 @@ struct ConversationTranscriptTests {
         #expect(replay.conversation[next]?.mark == nil)
         #expect(replay.conversation.lastEndedTurn == nil)
 
-        // "And Sunday?" is answered in full; then you tap Stop, too late.
-        try replay.play(throughLine: 65, expecting: "turn.ended e_0054_00574")
-        try replay.play(throughLine: 66, expecting: "POST /v0/turns/t_0004_50773/stop")
-        #expect(replay.conversation.pendingStop == nil)
-        try replay.play(throughLine: 67, expecting: "200")
+        // Stop just after the second reply began: the first is final, the second keeps what
+        // little it had.
+        try replay.play(throughLine: 73, expecting: "turn.ended e_0060_44071")
         #expect(replay.conversation["m_0004_08797"]?.outcome == .completed)
-
-        // Stop while the second reply is being written: the first is final, the second keeps what
-        // it had.
-        try replay.play(throughLine: 87, expecting: "turn.ended e_0070_67956")
-        #expect(replay.conversation["m_0005_12106"]?.outcome == .completed)
-        #expect(replay.conversation["m_0006_90669"]?.length == 35)
+        #expect(replay.conversation["m_0005_12106"]?.outcome == .stopped)
+        #expect(replay.conversation["m_0005_12106"]?.length == 35)
 
         // Stop while a search runs: the step ends stopped, keeping its present-tense title.
-        try replay.play(throughLine: 98, expecting: "turn.ended e_0077_17737")
+        try replay.play(throughLine: 84, expecting: "turn.ended e_0067_16351")
         let search = try #require(replay.conversation[step: "s_0004_54646"])
         #expect(search.outcome == .stopped)
         #expect(search.title == "Searching the web for cafés near Battersea Park open at 9")

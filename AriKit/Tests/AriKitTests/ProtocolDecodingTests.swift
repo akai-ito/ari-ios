@@ -81,6 +81,8 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(PageChange.self).change == change, "\(place)")
                 case .models:
                     #expect(try !body.decode(ModelList.self).models.isEmpty, "\(place)")
+                case .connectCapability:
+                    #expect(try !body.decode(CapabilityConnection.self).code.isEmpty, "\(place)")
                 case .chooseModel:
                     let sent = try #require(request.body).decode(ModelChoice.self)
                     #expect(try body.decode(ModelChoice.self) == sent, "\(place)")

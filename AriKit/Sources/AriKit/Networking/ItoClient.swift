@@ -131,6 +131,12 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.post, "/v0/capabilities/\(Self.segment(id.rawValue))/check", body: body))
     }
 
+    /// `POST /v0/capabilities/{id}/connect`: a code to approve at the provider. Once you do, the
+    /// server saves what the provider gives it, as setup would.
+    public func connect(_ id: CapabilityID) async throws(RequestError) -> CapabilityConnection {
+        try await call(HTTPRequest(.post, "/v0/capabilities/\(Self.segment(id.rawValue))/connect"))
+    }
+
     // MARK: - The agent's model
 
     /// `GET /v0/models`: the models the engine offers, and the current choice.

@@ -76,7 +76,6 @@ type WriteOptions = { readonly pieces?: number; readonly everyMs?: number };
 
 type EndOptions = { readonly length?: number; readonly error?: ErrorBody };
 
-
 type Exchange = { readonly user: string; readonly agent: string; readonly turn: string };
 
 type StepOptions = {

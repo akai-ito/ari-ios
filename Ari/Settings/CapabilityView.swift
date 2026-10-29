@@ -59,7 +59,7 @@ struct CapabilityView: View {
                 ForEach(capability.fields) { field in
                     LabeledContent(field.label, value: Self.describe(field))
                 }
-                Button(capability.isSetUp ? "Change setup…" : "Set up…") { settingUp = true }
+                Button(Self.setupTitle(capability)) { settingUp = true }
             } header: {
                 Text("Setup")
             }
@@ -103,8 +103,20 @@ struct CapabilityView: View {
     }
 
     /// A field's saved value as a row shows it. Passwords show only whether one is saved.
+    /// What opens setup: Reconnect when a connection lapsed, the provider's own words before it's
+    /// connected, otherwise setting it up or changing it.
+    static func setupTitle(_ capability: Capability) -> String {
+        let connect = capability.fields.first { $0.connect?.kind == .oauthDevice }?.connect
+        if let connect {
+            if capability.state == .needsYou { return "Reconnect…" }
+            if !capability.isSetUp { return connect.title + "…" }
+        }
+        return capability.isSetUp ? "Change setup…" : "Set up…"
+    }
+
     static func describe(_ field: SetupField) -> String {
-        switch (field.kind, field.value) {
+        if field.connect?.kind == .oauthDevice { return field.set ? "Connected" : "Not connected" }
+        return switch (field.kind, field.value) {
         case (.secret, _): field.set ? "Saved" : "Not set"
         case (_, .toggle(let on)?): on ? "On" : "Off"
         case (.choice, .text(let value)?):

@@ -126,7 +126,8 @@ const reportsTokenField = {
   name: "token",
   kind: "secret",
   title: "GitHub token",
-  description: "A fine-grained token for akai-ito/ito-core, with Issues set to read and write.",
+  description: "Connect GitHub, so Reports files issues on akai-ito/ito-core as you.",
+  connect: { kind: "oauth_device", title: "Connect GitHub" },
 };
 
 const reports = (state: string, isTokenSet: boolean, detail?: string): Readonly<Record<string, unknown>> => ({
@@ -139,7 +140,7 @@ const reports = (state: string, isTokenSet: boolean, detail?: string): Readonly<
   state,
   ...(detail !== undefined && { detail }),
   fields: [{ ...reportsTokenField, set: isTokenSet }],
-  uses: { hosts: ["api.github.com"], folders: [] },
+  uses: { hosts: ["api.github.com", "github.com"], folders: [] },
 });
 
 const capabilityCall = (
@@ -320,24 +321,6 @@ const findFlorenceCover = (transcript: Transcript): string => {
   const cover = transcript.keptImage("riverside.jpg", "florence-duomo-dusk.jpg");
   agentCalls(transcript, "keep_image", { url }, { attachment: cover });
   return cover;
-};
-
-const boraPage = {
-  address: "memory:people/bora",
-  title: "Bora",
-  gist: "Chairs the QRT panel; your Saturday running partner",
-  aliases: ["Bora K"],
-  links: ["memory:projects/qrt-panel"],
-  markdown: "Bora chairs the QRT panel at work, and you run with her on Saturdays (as of 20 Oct).\n",
-};
-
-const qrtPage = {
-  address: "memory:projects/qrt-panel",
-  title: "QRT panel",
-  gist: "Reviews your design in November",
-  aliases: [],
-  links: ["memory:people/bora"],
-  markdown: "The QRT panel reviews your design in November; Bora wants one more round first (as of 22 Oct).\n",
 };
 
 const spokenWav = { "Content-Type": "audio/wav", "Content-Length": "12044" };
@@ -563,10 +546,9 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 7,
       title: "Stop",
       summary:
-        "Stop names the turn; the stopped message keeps everything it had streamed, a message sent " +
-        "while stopping starts the next turn, and a Stop that arrives after a reply finished changes " +
-        "nothing. A Stop just after a message began keeps what little it had. A Stop while a step " +
-        "runs ends the step as stopped, keeping its present-tense title.",
+        "Stop names the turn; the stopped message keeps everything it had streamed, and a message sent " +
+        "while stopping starts the next turn. A Stop just after a message began keeps what little it " +
+        "had. A Stop while a step runs ends the step as stopped, keeping its present-tense title.",
       guarantees: ["G3", "G7", "G9", "G14"],
     });
     yesterday(transcript);
@@ -598,17 +580,6 @@ const scenarios: readonly (() => Transcript)[] = [
       "Morning only:\n\n- **07:30** Long run, 18 km along the river.\n- **09:15** Coffee at the café by the bridge; it opens at 9.",
     );
     transcript.endTurn("completed");
-
-    transcript.wait(20_000);
-    const sunday = sendAndStart(transcript, "And Sunday?");
-    transcript.wait(900);
-    transcript.status("writing", "Writing");
-    transcript.reply();
-    transcript.write("Sunday: a slow start, then lunch with friends if you're up for it.", { pieces: 3 });
-    transcript.endMessage("completed");
-    transcript.endTurn("completed");
-    transcript.wait(150);
-    transcript.stop(sunday.turn);
 
     transcript.wait(20_000);
     const evening = sendAndStart(transcript, "And Saturday evening?");
@@ -1180,7 +1151,7 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.wait(2000);
     sendAndStart(transcript, "Book a table at Juno for Saturday at 7:30, for two.");
     transcript.wait(300);
-    const juno = askWhichJuno(transcript);
+    askWhichJuno(transcript);
     transcript.endTurn("completed");
     transcript.wait(4000);
     const clapham = transcript.send("Clapham");
@@ -1228,7 +1199,7 @@ const scenarios: readonly (() => Transcript)[] = [
       }),
     );
     transcript.wait(1300);
-    const approval = transcript.ask({
+    transcript.ask({
       kind: "approval",
       question: "Shall I book this?",
       preview: "Juno, Clapham\nSaturday 18 October, 7:30pm\nTable for 2, under your name",
@@ -1392,7 +1363,7 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.presence(false);
     transcript.disconnect("app_closed");
     transcript.wait(300);
-    const juno = askWhichJuno(transcript);
+    askWhichJuno(transcript);
     transcript.endTurn("completed");
     transcript.remind();
     transcript.wait(5 * 60 * 60 * 1000);
@@ -1685,42 +1656,25 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 32,
       title: "Set up a capability",
       summary:
-        "Settings lists the capabilities installed with the server. You switch Reports on, its sheet asks for " +
-        "a GitHub token, Test connection catches a wrong one, and the right one turns it on. The token never " +
-        "comes back, only that one is set.",
+        "Settings lists the capabilities installed with the server. You switch Reports on and connect GitHub: " +
+        "the server gives a code, you approve it on GitHub, where you're already signed in, and GitHub hands " +
+        "the token to the server, which turns Reports on. The token never reaches the app, only that one is set.",
       guarantees: ["G21"],
     });
     transcript.begin(todayAt);
     capabilityCall(transcript, "GET", "/v0/capabilities", undefined, 200, { capabilities: [reports("off", false)] });
     transcript.wait(4000);
     capabilityCall(transcript, "PUT", "/v0/capabilities/reports", { on: true }, 200, reports("setup", false));
-    transcript.wait(12_000);
-    capabilityCall(
-      transcript,
-      "POST",
-      "/v0/capabilities/reports/check",
-      { values: { token: "github_pat_wrong" } },
-      200,
-      { problem: "GitHub rejected that token." },
-    );
-    transcript.wait(9000);
-    capabilityCall(
-      transcript,
-      "POST",
-      "/v0/capabilities/reports/check",
-      { values: { token: "github_pat_example" } },
-      200,
-      {},
-    );
-    transcript.wait(900);
-    capabilityCall(
-      transcript,
-      "PUT",
-      "/v0/capabilities/reports/setup",
-      { values: { token: "github_pat_example" } },
-      200,
-      reports("on", true),
-    );
+    transcript.wait(3000);
+    capabilityCall(transcript, "POST", "/v0/capabilities/reports/connect", undefined, 200, {
+      code: "WDJB-MJHT",
+      url: "https://github.com/login/device",
+      expires_at: "2026-10-12T08:56:07.120Z",
+    });
+    transcript.wait(3000);
+    transcript.world("you_approve", { code: "WDJB-MJHT" });
+    transcript.wait(7000);
+    capabilityCall(transcript, "GET", "/v0/capabilities", undefined, 200, { capabilities: [reports("on", true)] });
     transcript.wait(300);
     transcript.request("GET", "/v0/server");
     transcript.wait(40);
@@ -1738,7 +1692,6 @@ const scenarios: readonly (() => Transcript)[] = [
     );
     return transcript;
   },
-
   () => {
     const transcript = createTranscript({
       name: "33-a-capability-needs-you",
@@ -2567,7 +2520,7 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.wait(600);
     transcript.step("tool", addToCalendar({ title: "Call Mum", start: "2026-11-01T14:00:00Z" }));
     transcript.wait(400);
-    const asked = transcript.approval(calendarApproval);
+    transcript.approval(calendarApproval);
     transcript.wait(5000);
     const allowed = transcript.send("Allow");
     transcript.read(allowed);

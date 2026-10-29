@@ -134,8 +134,26 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
     public let value: SetupValue?
     /// For a password, whether one is saved.
     public let set: Bool
+    /// How to fill it without typing it in: through the provider, or from the page that makes one.
+    public let connect: Connect?
 
     public var id: String { name }
+
+    /// A way to fill a field without typing it: GitHub's device flow, say, or a link to the page
+    /// where the provider makes a key.
+    public struct Connect: Sendable, Equatable, Codable {
+        public let kind: ConnectKind
+        /// What the button says, such as "Connect GitHub".
+        public let title: String
+        /// `link` only: the page that makes one, filled in where the provider allows it.
+        public let url: URL?
+
+        public init(kind: ConnectKind, title: String, url: URL? = nil) {
+            self.kind = kind
+            self.title = title
+            self.url = url
+        }
+    }
 
     public struct Option: Sendable, Equatable, Codable {
         public let value: String
@@ -162,7 +180,8 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
 
     public init(
         name: String, label: String, kind: SetupFieldKind, help: String? = nil,
-        required: Bool = true, options: [Option] = [], value: SetupValue? = nil, set: Bool = false
+        required: Bool = true, options: [Option] = [], value: SetupValue? = nil, set: Bool = false,
+        connect: Connect? = nil
     ) {
         self.name = name
         self.label = label
@@ -172,6 +191,7 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
         self.options = options
         self.value = value
         self.set = set
+        self.connect = connect
     }
 
     public init(from decoder: any Decoder) throws {
@@ -184,6 +204,7 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
         options = try container.decodeIfPresent([Option].self, forKey: .options) ?? []
         value = try container.decodeIfPresent(SetupValue.self, forKey: .value)
         set = try container.decodeIfPresent(Bool.self, forKey: .set) ?? (value != nil)
+        connect = try container.decodeIfPresent(Connect.self, forKey: .connect)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -199,10 +220,11 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
         } else {
             try container.encodeIfPresent(value, forKey: .value)
         }
+        try container.encodeIfPresent(connect, forKey: .connect)
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, kind, optional, options, value, set
+        case name, kind, optional, options, value, set, connect
         case label = "title"
         case help = "description"
     }
@@ -215,6 +237,33 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
         case .toggle: return true
         case nil: return kind == .toggle
         }
+    }
+}
+
+/// How a field connects. Ari shows a kind it doesn't know as the field alone.
+public struct ConnectKind: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Through the provider: a code you approve on its page, where you're already signed in. The
+    /// value goes to the server, never through the phone.
+    public static let oauthDevice = ConnectKind(rawValue: "oauth_device")
+    /// The page where the provider makes one, to paste here.
+    public static let link = ConnectKind(rawValue: "link")
+    public static let known = [oauthDevice, link]
+}
+
+/// The answer to `POST /v0/capabilities/{id}/connect`: the code to approve, and where.
+public struct CapabilityConnection: Sendable, Equatable, Decodable {
+    /// Shown as it is, such as "WDJB-MJHT".
+    public let code: String
+    /// The provider's page to approve it on.
+    public let url: URL
+    public let expiresAt: Timestamp
+
+    enum CodingKeys: String, CodingKey {
+        case code, url
+        case expiresAt = "expires_at"
     }
 }
 
