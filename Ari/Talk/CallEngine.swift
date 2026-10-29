@@ -54,6 +54,8 @@
         @ObservationIgnored private var playback: CallPlayback?
         @ObservationIgnored private var soundPlayer: AVAudioPlayerNode?
         @ObservationIgnored private var microphoneStream: MicrophoneStream?
+        /// Ari's lines still to be heard, in order: the first is the caption.
+        @ObservationIgnored private var captions: [(id: String, text: String)] = []
         /// How loud the call is, for Ari's dots to breathe with.
         @ObservationIgnored let level = CallLevel()
         @ObservationIgnored private var chime: AVAudioPCMBuffer?
@@ -215,18 +217,30 @@
                 }
             case .saying(let id, let text):
                 playback?.begin(id)
-                saying = text
+                // Each line shows as it's heard: after the one before has played.
+                captions.append((id, text))
+                if captions.count == 1 { saying = text }
                 lastSound = .now
             case .audio(let pcm):
                 playback?.append(pcm)
                 lastSound = .now
             case .stopPlayback:
                 playback?.stop()
+                captions = []
                 saying = ""
             case .problem, .unknown:
                 break
             }
-            if phase == .listening { saying = "" }
+            if phase == .listening {
+                captions = []
+                saying = ""
+            }
+        }
+
+        /// A line finished playing: the next one's caption shows.
+        private func captionPlayed(_ id: String) {
+            captions.removeAll { $0.id == id }
+            if let next = captions.first { saying = next.text }
         }
 
         // MARK: - The engine
@@ -247,6 +261,7 @@
             let playback = CallPlayback(player: voicePlayer)
             playback.played = { [weak self] id, cut in
                 self?.stream?.send(.played(id: id, cut: cut))
+                self?.captionPlayed(id)
             }
             self.playback = playback
             self.soundPlayer = soundPlayer

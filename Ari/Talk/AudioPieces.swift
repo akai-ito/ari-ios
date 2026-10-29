@@ -47,6 +47,9 @@
         /// What the presence last drew: read and eased on the main thread only.
         private var shown = 0.0
 
+        /// How loud Ari's voice is as it plays, from 0.
+        var ari: Float { levels.withLock { $0.ari } }
+
         func report(_ side: Side, rms: Float) {
             levels.withLock { levels in
                 if side == .you { levels.you = rms } else { levels.ari = rms }
@@ -81,6 +84,35 @@
         }
     }
 
+    /// While Ari is speaking, your voice goes up only when it's clearly louder than Ari's own sound
+    /// coming back, and stays open a moment after, so words aren't clipped. What it holds back goes
+    /// as silence: the server's timing carries on, but it never hears Ari as you.
+    nonisolated struct EchoGate {
+        /// Ari counts as speaking above this level.
+        static let ariSpeaking: Float = 0.003
+        /// You must be louder than about -30 dBFS…
+        static let floor: Float = 0.03
+        /// …and than half of Ari's own level.
+        static let overAri: Float = 0.5
+        /// How long the gate stays open after you were last loud enough, in seconds.
+        static let hold = 0.35
+
+        private var open = 0.0
+
+        mutating func passes(you: Float, ari: Float, seconds: Double) -> Bool {
+            guard ari > Self.ariSpeaking else {
+                open = 0
+                return true
+            }
+            if you > max(Self.floor, ari * Self.overAri) {
+                open = Self.hold
+            } else {
+                open -= seconds
+            }
+            return open > 0
+        }
+    }
+
     /// What the microphone's tap does on the audio thread: turns your voice into the stream's
     /// format (16-bit PCM, mono, 16 kHz) and sends it in 40 ms frames, silence included, since the
     /// server times your pauses. While muted, nothing goes.
@@ -105,6 +137,8 @@
         private let pending = Mutex(Data())
         private let resampler: Resampler
         private let level: CallLevel
+        /// Touched only on the audio thread.
+        private var gate = EchoGate()
         private let send: @Sendable (Data) -> Void
         /// The microphone's sample rate in one channel: some iPhones report several channels.
         let mono: AVAudioFormat
@@ -139,15 +173,19 @@
                 counted.withLock { $0.failed += 1 }
                 return
             }
+            let rms = CallLevel.rms(mono)
             // Muted, Ari doesn't breathe with you either.
-            level.report(.you, rms: isMuted ? 0 : CallLevel.rms(mono))
+            level.report(.you, rms: isMuted ? 0 : rms)
             guard !isMuted else { return }
             guard let converted = resampler.convert(mono), let samples = converted.int16ChannelData
             else {
                 counted.withLock { $0.failed += 1 }
                 return
             }
-            let bytes = Data(bytes: samples[0], count: Int(converted.frameLength) * 2)
+            let seconds = Double(mono.frameLength) / mono.format.sampleRate
+            let passes = gate.passes(you: rms, ari: level.ari, seconds: seconds)
+            let count = Int(converted.frameLength) * 2
+            let bytes = passes ? Data(bytes: samples[0], count: count) : Data(count: count)
             let frames = pending.withLock { pending -> [Data] in
                 pending.append(bytes)
                 var frames: [Data] = []

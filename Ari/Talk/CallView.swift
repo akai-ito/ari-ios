@@ -74,8 +74,9 @@
             }
         }
 
-        /// Ari's words on top, larger; yours below, live while you talk. Once Ari has said what it
-        /// asked, the question stays in its place until you answer.
+        /// Ari's words on top, larger; yours below, live while you talk. What Ari asked, or the
+        /// choices its last reply offers, show as buttons as soon as they exist, even while Ari is
+        /// still saying them.
         private var captions: some View {
             VStack(spacing: 18) {
                 if !call.saying.isEmpty {
@@ -83,13 +84,17 @@
                         .font(.ariBody)
                         .foregroundStyle(.ariText)
                         .transition(.opacity)
-                } else if let ask = session.conversation.waitingAsk {
-                    CallAsk(ask: ask) { option in
+                }
+                if let ask = session.conversation.waitingAsk {
+                    CallAsk(ask: ask, showsQuestion: call.saying.isEmpty) { option in
                         session.send(option.label, answers: ask.id)
                     } openChat: {
                         talk.showsCall = false
                     }
                     .transition(.opacity)
+                } else if let choices = latestChoices {
+                    CallChoices(options: choices) { session.send($0) }
+                        .transition(.opacity)
                 }
                 let yours = call.hearing.isEmpty ? call.lastSaid : call.hearing
                 if !yours.isEmpty {
@@ -142,6 +147,19 @@
             .sensoryFeedback(.impact(weight: .light), trigger: call.muted)
         }
 
+        /// The choices in Ari's latest reply, while it's the last thing said and Ari is idle.
+        private var latestChoices: [String]? {
+            let conversation = session.conversation
+            guard conversation.turn == nil,
+                let reply = conversation.entries.last(where: \.isShown), reply.role == .agent,
+                reply.endedAt != nil
+            else { return nil }
+            for shape in ReplyDocument(markdown: reply.text).shapes.values {
+                if case .choices(let choices) = shape.shape { return choices.options }
+            }
+            return nil
+        }
+
         private var stateLine: String {
             switch call.phase {
             case .connecting: "Getting ready"
@@ -169,14 +187,18 @@
     /// secret, such as a code, is never said out loud: it's typed in the chat.
     struct CallAsk: View {
         let ask: Ask
+        /// Hidden while Ari is saying it, so it isn't on screen twice.
+        var showsQuestion = true
         let answer: (Ask.Option) -> Void
         let openChat: () -> Void
 
         var body: some View {
             VStack(spacing: 14) {
-                Text(ask.question)
-                    .font(.ariBody)
-                    .foregroundStyle(.ariText)
+                if showsQuestion {
+                    Text(ask.question)
+                        .font(.ariBody)
+                        .foregroundStyle(.ariText)
+                }
                 if let preview = ask.preview {
                     Text(preview)
                         .font(.footnote)
@@ -188,16 +210,16 @@
                         .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
                 }
                 if ask.secret {
-                    choice("Type it in the chat", filled: true, action: openChat)
+                    CallChoiceButton(label: "Type it in the chat", filled: true, action: openChat)
                     Text("It stays out of your history in Ari.")
                         .font(.caption)
                         .foregroundStyle(.ariTertiary)
                 } else {
                     VStack(spacing: 10) {
                         ForEach(ask.options, id: \.label) { option in
-                            choice(option.label, detail: option.description, filled: option.acts) {
-                                answer(option)
-                            }
+                            CallChoiceButton(
+                                label: option.label, detail: option.description, filled: option.acts
+                            ) { answer(option) }
                         }
                     }
                     Text(ask.options.isEmpty ? "Say your answer." : "Tap one, or just say it.")
@@ -207,10 +229,16 @@
             }
         }
 
-        /// A choice as wide as the screen, filled when it goes ahead, like Send.
-        private func choice(
-            _ label: String, detail: String? = nil, filled: Bool, action: @escaping () -> Void
-        ) -> some View {
+    }
+
+    /// A choice on the call screen, as wide as it is, filled when it goes ahead, like Send.
+    struct CallChoiceButton: View {
+        let label: String
+        var detail: String?
+        var filled = false
+        let action: () -> Void
+
+        var body: some View {
             Button(action: action) {
                 VStack(spacing: 2) {
                     Text(label)
@@ -234,6 +262,23 @@
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// The short answers Ari's last reply offers, on the call screen: tap one, or just say it.
+    struct CallChoices: View {
+        let options: [String]
+        let choose: (String) -> Void
+
+        var body: some View {
+            VStack(spacing: 10) {
+                ForEach(options, id: \.self) { option in
+                    CallChoiceButton(label: option) { choose(option) }
+                }
+                Text("Tap one, or just say it.")
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+            }
         }
     }
 
