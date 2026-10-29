@@ -22,7 +22,9 @@ struct PinnedArea: View {
         let live = motions?.pinned.map {
             Pinned(motion: $0.motion, detail: motions?.details[$0.motion.id], more: $0.more)
         }
-        let shown = holding ? held : live
+        // Until the hold has caught the line, it's the live one: a frame without it would let the
+        // conversation settle as if it had gone, then cover the reply's end when it came back.
+        let shown = holding ? held ?? live : live
         VStack(spacing: 0) {
             if let motions, let pinned = shown {
                 let source = "pinned \(pinned.motion.id)"
@@ -47,7 +49,7 @@ struct PinnedArea: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.68), value: shown?.motion.id)
         .onChange(of: holding, initial: true) { _, holding in
-            if holding { held = live }
+            held = holding ? live : nil
         }
     }
 }
@@ -69,21 +71,14 @@ struct PinnedLine: View {
         Button(action: open) {
             HStack(spacing: 10) {
                 SymbolDisc(symbol: MotionSymbol.name(for: motion.kind))
-                HStack(spacing: 5) {
-                    Text(line.name).fontWeight(.semibold).foregroundStyle(.ariText)
-                    Dot()
-                    Text(line.detail).foregroundStyle(.ariSecondary)
-                    if let left = line.left {
-                        Dot()
-                        LeftCount(left: left).foregroundStyle(.ariSecondary)
-                    }
-                    if more > 0 {
-                        Dot()
-                        Text("+\(more)").foregroundStyle(.ariSecondary)
-                    }
+                // Whole where it fits; otherwise the dates go first, then what's left, never the name.
+                ViewThatFits(in: .horizontal) {
+                    parts(line, when: true, now: true)
+                    parts(line, when: false, now: true)
+                    parts(line, when: true, now: false)
+                    parts(line, when: false, now: false)
                 }
                 .font(.subheadline)
-                .lineLimit(1)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.up")
                     .font(.caption.weight(.semibold))
@@ -116,6 +111,30 @@ struct PinnedLine: View {
         .accessibilityValue(motion.summary)
         .accessibilityHint("Opens it")
         .accessibilityAction(named: "Put away") { dismiss() }
+    }
+}
+
+extension PinnedLine {
+    /// The line's words: the name always, then the dates (`when`) and what's left (`now`) where
+    /// there's room, and how many more are pinned.
+    fileprivate func parts(_ line: MotionLineText, when: Bool, now: Bool) -> some View {
+        HStack(spacing: 5) {
+            Text(line.name).fontWeight(.semibold).foregroundStyle(.ariText)
+            if when {
+                Dot()
+                Text(line.detail).foregroundStyle(.ariSecondary)
+            }
+            if now, let left = line.left {
+                Dot()
+                LeftCount(left: left).foregroundStyle(.ariSecondary)
+            }
+            if more > 0 {
+                Dot()
+                Text("+\(more)").foregroundStyle(.ariSecondary)
+            }
+        }
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 

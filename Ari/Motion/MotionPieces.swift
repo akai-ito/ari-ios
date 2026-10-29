@@ -3,9 +3,16 @@ import SwiftUI
 
 /// Opens a thing in motion full screen, growing it from what you tapped: the pinned line, a compact
 /// line under a reply, a row of In motion. The screen that presents the thing sets it.
-struct MotionOpener {
+struct MotionOpener: Equatable {
     var namespace: Namespace.ID?
     var open: ((MotionID, _ source: String) -> Void)?
+
+    /// The same opener as long as it presents in the same place. The conversation makes a new one
+    /// with every frame of a reply; were each one new, everything reading it would redraw too, and
+    /// the pinned line, redrawn under the conversation every frame, kept it from following the reply.
+    static func == (a: MotionOpener, b: MotionOpener) -> Bool {
+        a.namespace == b.namespace && (a.open == nil) == (b.open == nil)
+    }
 }
 
 /// A thing to open, and what it grows from.
