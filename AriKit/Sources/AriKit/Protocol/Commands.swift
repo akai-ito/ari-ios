@@ -84,18 +84,12 @@ public struct SendMessage: Sendable, Equatable, Codable {
     /// The random UUID Ari made when you tapped Send: the message's id and its retry key.
     public let id: MessageID
     public let text: String
-    /// The ask it answers, named when you tap one of its options or answer a secret. Any message
-    /// sent while an ask waits answers it anyway.
-    public let answers: AskID?
     /// Photos and files already uploaded, in order. The text may then be empty.
     public let attachments: [AttachmentID]?
 
-    public init(
-        id: MessageID, text: String, answers: AskID? = nil, attachments: [AttachmentID] = []
-    ) {
+    public init(id: MessageID, text: String, attachments: [AttachmentID] = []) {
         self.id = id
         self.text = text
-        self.answers = answers
         self.attachments = attachments.isEmpty ? nil : attachments
     }
 }
@@ -122,36 +116,6 @@ public struct MessagePage: Sendable, Equatable, Decodable {
     enum CodingKeys: String, CodingKey {
         case messages, steps, asks, calls, topics
         case hasMore = "has_more"
-    }
-}
-
-/// The body of `POST /v0/turns/{turn}/stop`.
-public struct StopTurn: Sendable, Equatable, Codable {
-    /// Where the message being written was on your screen. Without it, the server keeps everything
-    /// written so far.
-    public let cut: Cut?
-
-    public init(cut: Cut?) {
-        self.cut = cut
-    }
-}
-
-/// How much of a message you saw when you tapped Stop.
-public struct Cut: Hashable, Sendable, Codable {
-    public let message: MessageID
-    /// In UTF-16 code units. It should never fall inside a surrogate pair: the server keeps the text
-    /// up to it, and JSON with half a pair can't be decoded.
-    public let offset: Int
-
-    public init(message: MessageID, offset: Int) {
-        self.message = message
-        self.offset = offset
-    }
-
-    /// A cut after `revealed`, the start of the message that was on screen. A `String` can't end
-    /// inside a surrogate pair, so neither can this cut.
-    public init(message: MessageID, revealed: String) {
-        self.init(message: message, offset: revealed.utf16.count)
     }
 }
 

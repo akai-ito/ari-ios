@@ -2,7 +2,9 @@ import AriKit
 import SwiftUI
 
 /// Setting up a capability: a sheet drawn from the fields it declares, with *Test connection*. A
-/// password goes to your server once and never comes back; left empty, the saved one stays.
+/// password goes to your server once and never comes back; left empty, the saved one stays. A field
+/// the provider can fill is connected instead: you approve a code on its page, where you're
+/// already signed in, and the value goes to your server without passing through the phone.
 struct SetupSheet: View {
     let capabilities: Capabilities
     let capability: Capability
@@ -13,12 +15,18 @@ struct SetupSheet: View {
     @State private var check: CheckResult?
     @State private var saving = false
     @State private var problem: String?
+    /// The code to approve, while connecting through the provider.
+    @State private var connection: CapabilityConnection?
+    @Environment(\.openURL) private var openURL
+
+    /// The capability as the server last said, so a connected field shows as set.
+    private var current: Capability { capabilities.capability(capability.id) ?? capability }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach(capability.fields) { field in
+                    ForEach(current.fields) { field in
                         input(field)
                     }
                 } footer: {
@@ -60,9 +68,7 @@ struct SetupSheet: View {
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
             .navigationTitle(capability.title)
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -81,6 +87,88 @@ struct SetupSheet: View {
 
     @ViewBuilder
     private func input(_ field: SetupField) -> some View {
+        if let connect = field.connect, connect.kind == .oauthDevice {
+            connectRow(field, connect)
+        } else {
+            if let connect = field.connect, connect.kind == .link, let url = connect.url {
+                Link(destination: url) {
+                    Label(connect.title, systemImage: "arrow.up.forward.app")
+                }
+            }
+            typed(field)
+        }
+    }
+
+    /// Connecting through the provider: the code, copied, and its page, opened; then it waits for
+    /// your server to have the value.
+    @ViewBuilder
+    private func connectRow(_ field: SetupField, _ connect: SetupField.Connect) -> some View {
+        if field.set, connection == nil {
+            HStack {
+                Label("Connected", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.ariText)
+                Spacer()
+                Button("Reconnect") { Task { await startConnecting() } }
+                    .foregroundStyle(.ariSecondary)
+            }
+        } else if let connection {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Enter this code on the page that opened:")
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                Text(connection.code)
+                    .font(.title2.monospaced().weight(.semibold))
+                    .foregroundStyle(.ariText)
+                    .textSelection(.enabled)
+                HStack(spacing: 12) {
+                    Button("Open the page again") { openURL(connection.url) }
+                    Spacer()
+                    ProgressView()
+                }
+                .font(.footnote)
+            }
+            .padding(.vertical, 4)
+            .task(id: connection.code) { await waitForConnection(field.name, until: connection) }
+        } else {
+            Button {
+                Task { await startConnecting() }
+            } label: {
+                Label(connect.title, systemImage: "link")
+                    .font(.body.weight(.semibold))
+            }
+        }
+    }
+
+    private func startConnecting() async {
+        problem = nil
+        do {
+            let started = try await capabilities.connect(capability.id)
+            UIPasteboard.general.string = started.code
+            connection = started
+            openURL(started.url)
+        } catch {
+            problem = "Couldn't start connecting: \(error.plainWords)"
+        }
+    }
+
+    /// Asks your server every couple of seconds until the field is set, or the code expires.
+    private func waitForConnection(_ name: String, until started: CapabilityConnection) async {
+        while !Task.isCancelled, Date.now < started.expiresAt.date {
+            try? await Task.sleep(for: .seconds(2))
+            await capabilities.refresh()
+            if current.fields.first(where: { $0.name == name })?.set == true {
+                connection = nil
+                return
+            }
+        }
+        if !Task.isCancelled {
+            connection = nil
+            problem = "The code expired before it was approved. Connect again to get a new one."
+        }
+    }
+
+    @ViewBuilder
+    private func typed(_ field: SetupField) -> some View {
         switch field.kind {
         case .secret:
             SecureField(
@@ -97,27 +185,35 @@ struct SetupSheet: View {
         default:
             TextField(field.label, text: text(field.name))
                 .textContentType(nil)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
         }
     }
 
     private var footer: String {
         let help = capability.fields.compactMap(\.help)
-        let secret = capability.fields.contains { $0.kind == .secret }
+        let connects = capability.fields.contains { $0.connect?.kind == .oauthDevice }
+        let typed = capability.fields.contains {
+            $0.kind == .secret && $0.connect?.kind != .oauthDevice
+        }
         return
             (help
-            + (secret
+            + (connects
+                ? [
+                    "Connecting gives the key straight to your server; it never passes through here."
+                ]
+                : [])
+            + (typed
                 ? ["Passwords go to your server once and never come back to this device."] : []))
             .joined(separator: " ")
     }
 
-    /// Every required field has something: typed now, or saved before for a password.
+    /// Every required field has something: typed now, or saved before for a password, or
+    /// connected.
     private var isComplete: Bool {
-        capability.fields.allSatisfy { field in
+        current.fields.allSatisfy { field in
             guard field.required else { return true }
+            if field.connect?.kind == .oauthDevice { return field.set }
             switch values[field.name] {
             case .text(let text): return !text.isEmpty || (field.kind == .secret && field.set)
             case .toggle: return true

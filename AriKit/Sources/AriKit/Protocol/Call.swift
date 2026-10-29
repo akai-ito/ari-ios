@@ -63,46 +63,9 @@ public struct Spoken: Hashable, Sendable, Codable {
     public var call: CallID
     /// Your recording, while it's kept.
     public var audio: Attachment?
-    /// The words the phone corrected in the message's text.
-    public var corrections: [Correction]?
 
-    public init(call: CallID, audio: Attachment? = nil, corrections: [Correction]? = nil) {
+    public init(call: CallID, audio: Attachment? = nil) {
         self.call = call
         self.audio = audio
-        self.corrections = corrections
-    }
-}
-
-/// A word the phone corrected in a spoken message: the text from `offset` for `length` (UTF-16 code
-/// units, as message deltas count) is what it meant; `heard` is what the recogniser heard.
-public struct Correction: Hashable, Sendable, Codable {
-    public var offset: Int
-    public var length: Int
-    public var heard: String
-
-    public init(offset: Int, length: Int, heard: String) {
-        self.offset = offset
-        self.length = length
-        self.heard = heard
-    }
-}
-
-/// `POST /v0/vocabulary/corrections`, and its answer: what the recogniser heard and what you meant.
-public struct VocabularyCorrections: Sendable, Equatable, Codable {
-    public let corrections: [Pair]
-
-    public init(corrections: [Pair]) { self.corrections = corrections }
-
-    public struct Pair: Sendable, Equatable, Codable {
-        public let heard: String
-        public let meant: String
-        /// In an answer, the page the mishearing joined, if any.
-        public let address: PageAddress?
-
-        public init(heard: String, meant: String, address: PageAddress? = nil) {
-            self.heard = heard
-            self.meant = meant
-            self.address = address
-        }
     }
 }

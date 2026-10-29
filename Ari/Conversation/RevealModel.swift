@@ -42,11 +42,10 @@ final class RevealModel {
         sync(conversation)
     }
 
-    /// You tapped Stop: returns the cut (see ``Reveal/stop(in:)``).
-    func stop(in conversation: Conversation) -> Cut? {
-        let cut = reveal.stop(in: conversation)
+    /// You tapped Stop: everything Ari wrote shows at once, as the server keeps it.
+    func stop(in conversation: Conversation) {
+        reveal.showAll(conversation)
         sync(conversation)
-        return cut
     }
 
     /// Brings every position and the coarse state up to date, changing only what changed, so only
@@ -57,7 +56,7 @@ final class RevealModel {
             let position = reveal.position(of: entry)
             if position != shown.position { shown.position = position }
             if entry.outcome != nil,
-                position >= Double(conversation.visibleText(of: entry).utf16.count)
+                position >= Double(entry.text.utf16.count)
             {
                 settled.insert(id)
             }

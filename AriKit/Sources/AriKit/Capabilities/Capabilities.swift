@@ -66,6 +66,12 @@ public final class Capabilities {
         try await client.check(id, values: values)
     }
 
+    /// Starts connecting through the provider: a code to approve on its page. Refresh to see the
+    /// field set once you have.
+    public func connect(_ id: CapabilityID) async throws(RequestError) -> CapabilityConnection {
+        try await client.connect(id)
+    }
+
     private func replace(_ capability: Capability) {
         if let index = all.firstIndex(where: { $0.id == capability.id }) {
             all[index] = capability

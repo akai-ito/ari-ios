@@ -12,7 +12,6 @@ import Observation
 /// - **Stop** has its own lane: never behind the outbox or a reconnect.
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
-///   A secret answer goes from memory only, never through the outbox on disk.
 /// - **Calls** start and end on their own lane, in order; a call's stream carries the rest.
 @MainActor
 @Observable
@@ -45,6 +44,11 @@ public final class Session {
         case paused
     }
 
+    private struct StopRequest {
+        /// `nil` until the turn it stops is announced.
+        var turn: TurnID?
+    }
+
     public enum Problem: Equatable, Sendable {
         /// The server stopped accepting the token.
         case tokenRejected(ServerError?)
@@ -60,7 +64,8 @@ public final class Session {
     @ObservationIgnored private let network: any NetworkPath
     @ObservationIgnored private let ticker: Ticker
     @ObservationIgnored private var queue: [SendMessage] = []
-    @ObservationIgnored private var stopRequest: (turn: TurnID?, cut: Cut?)?
+    /// Your Stop, until the server has it: for its turn, or for the next one to start.
+    @ObservationIgnored private var stopRequest: StopRequest?
     @ObservationIgnored private var retries: [TurnID] = []
     @ObservationIgnored private var cancels: [AskID] = []
     @ObservationIgnored private var callRequests: [CallRequest] = []
@@ -81,8 +86,6 @@ public final class Session {
         /// The server refused it, such as for being too large; its message says why.
         case refused(RequestError)
     }
-    /// Secret answers waiting to go: kept in memory only, never in the outbox on disk.
-    @ObservationIgnored private var secrets: Set<MessageID> = []
     @ObservationIgnored private var isOnline = true
     @ObservationIgnored private var wantsSnapshot = false
     @ObservationIgnored private var lastHeard: Duration = .zero
@@ -187,33 +190,23 @@ public final class Session {
     /// You tapped Send. Your message shows at once, is saved on the device, and goes as soon as it
     /// can. Returns its id, or `nil` if there's nothing to send or it's longer than the server takes.
     ///
-    /// - Parameter id: Its permanent id and retry key; a new random UUID unless a test chooses one.
-    /// While an ask waits, any message answers it.
+    /// While an ask waits, any message answers it, a tapped option included.
     ///
     /// - Parameters:
     ///   - id: Its permanent id and retry key; a new random UUID unless a test chooses one.
-    ///   - answers: The ask it answers, named when you tap one of its options or answer a secret.
-    ///   - secret: A secret answer, such as a code: it goes from memory only, never saved on the
-    ///     device, and the conversation keeps nothing of it.
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil, secret: Bool = false, attachments: [AttachmentID] = []
+        attachments: [AttachmentID] = []
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, answers: answers, attachments: attachments)
-        conversation.send(
-            id, text: text, answers: answers, secret: secret,
-            attachments: attachments.compactMap(attachment))
-        if secret {
-            secrets.insert(id)
-        } else {
-            try? outbox.add(message)
-        }
+        let message = SendMessage(id: id, text: text, attachments: attachments)
+        conversation.send(id, text: text, attachments: attachments.compactMap(attachment))
+        try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
@@ -263,14 +256,13 @@ public final class Session {
     /// it, so a failed attempt still goes next time Ari opens. Returns whether the server has it.
     @discardableResult
     public func sendFromNotification(
-        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        answers: AskID? = nil
+        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased())
     ) async -> Bool {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             text.count <= Self.maximumLength
         else { return false }
-        let message = SendMessage(id: id, text: text, answers: answers)
-        conversation.send(id, text: text, answers: answers)
+        let message = SendMessage(id: id, text: text)
+        conversation.send(id, text: text)
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         do {
@@ -281,12 +273,6 @@ public final class Session {
         } catch {
             return false
         }
-    }
-
-    /// Ticks or unticks an item in a reply's plan: `true` once the server has it. Every device, this
-    /// one included, hears it as `plan.ticked`, which updates the conversation.
-    public func tick(_ message: MessageID, part: Int, item: String, done: Bool) async -> Bool {
-        (try? await client.tick(message, part: part, item: item, done: done)) != nil
     }
 
     /// Notifications are allowed: register this device, with its push token and notification key,
@@ -339,14 +325,6 @@ public final class Session {
         return CallStream(connect: { client.callStream(call) })
     }
 
-    /// You undid a correction or fixed a word: the server learns what was heard and what you
-    /// meant. Returns whether it did.
-    @discardableResult
-    public func teach(_ pairs: [VocabularyCorrections.Pair]) async -> Bool {
-        guard !pairs.isEmpty else { return true }
-        return (try? await client.teach(VocabularyCorrections(corrections: pairs))) != nil
-    }
-
     /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
     public func cancel(_ ask: AskID) {
         guard conversation[ask: ask]?.outcome == nil, !cancels.contains(ask) else { return }
@@ -355,21 +333,16 @@ public final class Session {
         wake(.cancel)
     }
 
-    /// You tapped Stop. What's on screen holds there at once; the request goes on its own lane, even
-    /// before the stream is back. Tapped before the turn is announced, it goes as soon as it is.
-    ///
-    /// The screen paces text, so it can still be showing a reply whose turn has already ended on
-    /// the server. The Stop still goes, for the turn the cut message belongs to; the server answers
-    /// that the turn had ended, and the rest of the reply shows.
-    ///
-    /// - Parameter cut: How much of the message being written was on screen.
-    public func stop(cut: Cut?) {
-        if let turn = cut.flatMap({ conversation[$0.message]?.turn }) ?? conversation.turn?.id {
+    /// You tapped Stop. The request goes on its own lane, even before the stream is back, and the
+    /// reply keeps what Ari had written. Tapped before the turn is announced, it goes as soon as it
+    /// is.
+    public func stop() {
+        if let turn = conversation.turn?.id {
             guard stopRequest?.turn != turn else { return }
-            conversation.stop(turn: turn, cut: cut)
-            stopRequest = (turn, cut)
+            conversation.stop(turn: turn)
+            stopRequest = StopRequest(turn: turn)
         } else if conversation.entries.last?.role == .user {
-            stopRequest = (nil, cut)
+            stopRequest = StopRequest(turn: nil)
         } else {
             return
         }
@@ -482,8 +455,8 @@ public final class Session {
             wantsSnapshot = false
         case .turnStarted(let started):
             if let request = stopRequest, request.turn == nil {
-                conversation.stop(turn: started.turn, cut: request.cut)
-                stopRequest = (started.turn, request.cut)
+                conversation.stop(turn: started.turn)
+                stopRequest = StopRequest(turn: started.turn)
                 wake(.stop)
             }
         default:
@@ -566,63 +539,9 @@ public final class Session {
     /// The message went, or can't: it, and the bytes of its attachments, leave the outbox.
     private func finish(_ message: SendMessage) {
         queue.removeAll { $0.id == message.id }
-        if secrets.remove(message.id) == nil { try? outbox.remove(message.id) }
+        try? outbox.remove(message.id)
         for attachment in message.attachments ?? [] { outbox.removeAttachment(attachment) }
         wake(.outbox)
-    }
-
-    private func runStops() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let request = stopRequest, let turn = request.turn else {
-                await nap(until: .stop)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .stop])
-                continue
-            }
-            do {
-                let result = try await client.stop(turn, cut: request.cut)
-                conversation.confirm(result)
-                if stopRequest?.turn == turn { stopRequest = nil }
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    if stopRequest?.turn == turn { stopRequest = nil }
-                }
-            }
-        }
-    }
-
-    private func runRetries() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let turn = retries.first else {
-                await nap(until: .retry)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .retry])
-                continue
-            }
-            do {
-                let result = try await client.retry(turn)
-                conversation.confirm(result)
-                retries.removeFirst()
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    retries.removeFirst()
-                }
-            }
-        }
     }
 
     private func refusal(of attachment: AttachmentID) -> RequestError? {
@@ -670,127 +589,109 @@ public final class Session {
         wake(.upload)
     }
 
+    private func runStops() async {
+        await runLane(.stop) {
+            stopRequest?.turn
+        } send: { turn throws(RequestError) in
+            conversation.confirm(try await client.stop(turn))
+        } done: { turn in
+            if stopRequest?.turn == turn { stopRequest = nil }
+        }
+    }
+
+    private func runRetries() async {
+        await runLane(.retry) {
+            retries.first
+        } send: { turn throws(RequestError) in
+            conversation.confirm(try await client.retry(turn))
+        } done: { turn in
+            if retries.first == turn { retries.removeFirst() }
+        }
+    }
+
     private func runCancels() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let ask = cancels.first else {
-                await nap(until: .cancel)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .cancel])
-                continue
-            }
-            do {
-                let result = try await client.cancelAsk(ask)
-                conversation.confirm(result)
-                cancels.removeFirst()
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    cancels.removeFirst()
-                }
-            }
+        await runLane(.cancel) {
+            cancels.first
+        } send: { ask throws(RequestError) in
+            conversation.confirm(try await client.cancelAsk(ask))
+        } done: { ask in
+            if cancels.first == ask { cancels.removeFirst() }
         }
     }
 
+    /// Calls start and end in the order you asked.
     private func runCalls() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let request = callRequests.first else {
-                await nap(until: .call)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .call])
-                continue
-            }
-            do {
-                let result =
-                    switch request {
-                    case .start(let call): try await client.startCall(call)
-                    case .end(let call): try await client.endCall(call)
-                    case .deleteAudio(let call): try await client.deleteAudio(of: call)
-                    }
-                conversation.confirm(result)
-                callRequests.removeFirst()
-                failures = 0
-                wake(.call)
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    callRequests.removeFirst()
-                    wake(.call)
+        await runLane(.call) {
+            callRequests.first
+        } send: { request throws(RequestError) in
+            let result =
+                switch request {
+                case .start(let call): try await client.startCall(call)
+                case .end(let call): try await client.endCall(call)
+                case .deleteAudio(let call): try await client.deleteAudio(of: call)
                 }
-            }
+            conversation.confirm(result)
+        } done: { request in
+            if callRequests.first == request { callRequests.removeFirst() }
         }
     }
 
+    /// Only the latest registration goes: one that came while an earlier one went is still to send.
     private func runDevice() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let request = deviceRequest else {
-                await nap(until: .device)
-                continue
+        await runLane(.device) {
+            deviceRequest
+        } send: { request throws(RequestError) in
+            if let registration = request.registration {
+                _ = try await client.registerDevice(request.id, registration)
+            } else {
+                try await client.removeDevice(request.id)
             }
-            guard isOnline else {
-                await nap(until: [.network, .device])
-                continue
-            }
-            do {
-                if let registration = request.registration {
-                    _ = try await client.registerDevice(request.id, registration)
-                } else {
-                    try await client.removeDevice(request.id)
-                }
-                // A newer request that came while this one went is still to send.
-                if deviceRequest?.id == request.id,
-                    deviceRequest?.registration == request.registration
-                {
-                    deviceRequest = nil
-                }
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(
-                        Self.commandDelay(after: failures, error), until: [.network, .device])
-                } else {
-                    deviceRequest = nil
-                }
+        } done: { request in
+            if deviceRequest?.id == request.id, deviceRequest?.registration == request.registration
+            {
+                deviceRequest = nil
             }
         }
     }
 
     private func runPresence() async {
+        await runLane(.presence) {
+            presenceRequest
+        } send: { request throws(RequestError) in
+            try await client.setPresence(request.device, looking: request.looking)
+        } done: { request in
+            if presenceRequest?.looking == request.looking { presenceRequest = nil }
+        }
+    }
+
+    /// Sends a lane's requests one at a time: each goes when there's a network, again after a short
+    /// wait if it failed for a passing reason, and leaves once the server has it or refuses it.
+    private func runLane<Request>(
+        _ wake: Wake, next: () -> Request?, send: (Request) async throws(RequestError) -> Void,
+        done: (Request) -> Void
+    ) async {
         var failures = 0
         while !Task.isCancelled {
-            guard let request = presenceRequest else {
-                await nap(until: .presence)
+            guard let request = next() else {
+                await nap(until: wake)
                 continue
             }
             guard isOnline else {
-                await nap(until: [.network, .presence])
+                await nap(until: [.network, wake])
                 continue
             }
-            do {
-                try await client.setPresence(request.device, looking: request.looking)
-                if presenceRequest?.looking == request.looking { presenceRequest = nil }
+            do throws(RequestError) {
+                try await send(request)
                 failures = 0
             } catch {
                 if error.isTemporary {
                     failures += 1
                     await nap(
-                        Self.commandDelay(after: failures, error), until: [.network, .presence])
-                } else {
-                    presenceRequest = nil
+                        Self.commandDelay(after: failures, error), until: [.network, .live, wake])
+                    continue
                 }
             }
+            done(request)
         }
     }
 

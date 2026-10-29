@@ -20,10 +20,8 @@ struct SettingsView: View {
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
     @State private var models: Models?
-    #if os(iOS)
-        /// Ari's voice on the server, from the main view.
-        @Environment(Voices.self) private var voices: Voices?
-    #endif
+    /// Ari's voice on the server, from the main view.
+    @Environment(Voices.self) private var voices: Voices?
     @State private var path = Self.startingPath
 
     var body: some View {
@@ -33,13 +31,11 @@ struct SettingsView: View {
                 capabilitiesSection
                 memoryBackup
                 notifications
-                #if os(iOS)
-                    TalkSettings()
-                    Section("App icon") {
-                        AppIconChooser()
-                    }
-                    .listRowBackground(Color.ariSurface)
-                #endif
+                TalkSettings()
+                Section("App icon") {
+                    AppIconChooser()
+                }
+                .listRowBackground(Color.ariSurface)
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
@@ -61,21 +57,14 @@ struct SettingsView: View {
                 case .model:
                     if let models { ModelPickerView(models: models, chosen: model.refreshServer) }
                 case .voice:
-                    #if os(iOS)
-                        if let voices { VoicePickerView(voices: voices) }
-                    #endif
+                    if let voices { VoicePickerView(voices: voices) }
                 }
             }
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                #if os(iOS)
-                    // The Mac's Settings window closes like any other.
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                #endif
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
             }
             .confirmationDialog(
                 "Connect to another server?", isPresented: $confirmingSwitch,
@@ -200,50 +189,46 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var notifications: some View {
-        #if os(iOS)
-            Section {
-                Toggle(
-                    "When I'm away",
-                    isOn: Binding(
-                        get: { model.notificationsOn },
-                        set: { on in
-                            if on {
-                                Task {
-                                    // Turned off in iOS Settings before: only iOS can turn it back on.
-                                    if !(await model.turnOnNotifications()) { openSystemSettings() }
-                                }
-                            } else {
-                                model.turnOffNotifications()
+        Section {
+            Toggle(
+                "When I'm away",
+                isOn: Binding(
+                    get: { model.notificationsOn },
+                    set: { on in
+                        if on {
+                            Task {
+                                // Turned off in iOS Settings before: only iOS can turn it back on.
+                                if !(await model.turnOnNotifications()) { openSystemSettings() }
                             }
-                        }))
-                Button("Focus and sounds…", action: openSystemSettings)
-            } header: {
-                Text("Notifications")
-            } footer: {
-                if model.notificationsOn, let problem = model.notificationProblem {
-                    Text("Notifications couldn't start on this iPhone: \(problem)")
-                } else if model.server?.setup?.notifications == false {
-                    Text(
-                        "Your server can't send notifications yet. Run ito push setup on it, and "
-                            + "they start.")
-                } else {
-                    Text(
-                        "Ari tells you when it's done or needs you, and only while you're not "
-                            + "looking. Questions are time-sensitive, so they can reach you during "
-                            + "Focus; choose in iOS Settings.")
-                }
-            }
-            .listRowBackground(Color.ariSurface)
-        #endif
-    }
-
-    #if os(iOS)
-        private func openSystemSettings() {
-            if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
-                UIApplication.shared.open(url)
+                        } else {
+                            model.turnOffNotifications()
+                        }
+                    }))
+            Button("Focus and sounds…", action: openSystemSettings)
+        } header: {
+            Text("Notifications")
+        } footer: {
+            if model.notificationsOn, let problem = model.notificationProblem {
+                Text("Notifications couldn't start on this iPhone: \(problem)")
+            } else if model.server?.setup?.notifications == false {
+                Text(
+                    "Your server can't send notifications yet. Run ito push setup on it, and "
+                        + "they start.")
+            } else {
+                Text(
+                    "Ari tells you when it's done or needs you, and only while you're not "
+                        + "looking. Questions are time-sensitive, so they can reach you during "
+                        + "Focus; choose in iOS Settings.")
             }
         }
-    #endif
+        .listRowBackground(Color.ariSurface)
+    }
+
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
 
     /// How the agent is signed in, in a few words: "ChatGPT Plus · example.com".
     private static func describe(_ account: ServerInfo.Agent.Account) -> String {
@@ -268,61 +253,59 @@ struct SettingsView: View {
     }
 }
 
-#if os(iOS)
-    /// How calls with Ari go: Ari's voice, from the server, and whether it knows yours.
-    private struct TalkSettings: View {
-        @Environment(Voices.self) private var voices: Voices?
-        @State private var confirmsRelearning = false
-        @State private var problem: String?
+/// How calls with Ari go: Ari's voice, from the server, and whether it knows yours.
+private struct TalkSettings: View {
+    @Environment(Voices.self) private var voices: Voices?
+    @State private var confirmsRelearning = false
+    @State private var problem: String?
 
-        var body: some View {
-            Section {
-                NavigationLink(value: SettingsRoute.voice) {
-                    LabeledContent("Voice", value: voices?.chosen?.name ?? "")
-                }
-                .disabled(voices == nil)
-                if let voices, let voiceprint = voices.voiceprint {
-                    LabeledContent(
-                        "Your voice", value: voiceprint == .learnt ? "Ari knows it" : "Learning")
-                    Button("Relearn my voice") { confirmsRelearning = true }
-                        .disabled(voices.relearning)
-                        .confirmationDialog(
-                            "Relearn your voice?", isPresented: $confirmsRelearning,
-                            titleVisibility: .visible
-                        ) {
-                            Button("Relearn") { relearn(voices) }
-                        } message: {
-                            Text(
-                                "Ari forgets how you sound and learns again from the next couple of "
-                                    + "minutes you talk on a call. Until then, any voice can hold "
-                                    + "a turn open.")
-                        }
-                }
-            } header: {
-                Text("Talk")
-            } footer: {
-                if let problem {
-                    Text(problem)
-                } else if let voices, !voices.canTalk, let reason = voices.reason {
-                    Text(reason)
-                } else if voices?.voiceprint == .learning {
-                    Text(
-                        "Ari learns your voice from your first couple of minutes on calls, so "
-                            + "only you hold a turn open.")
-                }
+    var body: some View {
+        Section {
+            NavigationLink(value: SettingsRoute.voice) {
+                LabeledContent("Voice", value: voices?.chosen?.name ?? "")
             }
-            .listRowBackground(Color.ariSurface)
+            .disabled(voices == nil)
+            if let voices, let voiceprint = voices.voiceprint {
+                LabeledContent(
+                    "Your voice", value: voiceprint == .learnt ? "Ari knows it" : "Learning")
+                Button("Relearn my voice") { confirmsRelearning = true }
+                    .disabled(voices.relearning)
+                    .confirmationDialog(
+                        "Relearn your voice?", isPresented: $confirmsRelearning,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Relearn") { relearn(voices) }
+                    } message: {
+                        Text(
+                            "Ari forgets how you sound and learns again from the next couple of "
+                                + "minutes you talk on a call. Until then, any voice can hold "
+                                + "a turn open.")
+                    }
+            }
+        } header: {
+            Text("Talk")
+        } footer: {
+            if let problem {
+                Text(problem)
+            } else if let voices, !voices.canTalk, let reason = voices.reason {
+                Text(reason)
+            } else if voices?.voiceprint == .learning {
+                Text(
+                    "Ari learns your voice from your first couple of minutes on calls, so "
+                        + "only you hold a turn open.")
+            }
         }
+        .listRowBackground(Color.ariSurface)
+    }
 
-        private func relearn(_ voices: Voices) {
-            problem = nil
-            Task {
-                do throws(RequestError) {
-                    try await voices.relearn()
-                } catch {
-                    problem = "Couldn't relearn your voice: \(error.plainWords)"
-                }
+    private func relearn(_ voices: Voices) {
+        problem = nil
+        Task {
+            do throws(RequestError) {
+                try await voices.relearn()
+            } catch {
+                problem = "Couldn't relearn your voice: \(error.plainWords)"
             }
         }
     }
-#endif
+}

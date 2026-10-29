@@ -68,8 +68,8 @@ public enum CallStreamCommand: Sendable, Equatable {
     case mute
     case unmute
     case end
-    /// A sentence's audio finished playing, or was cut by `stopPlayback`.
-    case played(id: String, cut: Bool)
+    /// A sentence's audio finished playing, or stopped because you talked over it.
+    case played(id: String)
 
     public var json: Data {
         let frame: [String: Any] =
@@ -77,8 +77,7 @@ public enum CallStreamCommand: Sendable, Equatable {
             case .mute: ["type": "mute"]
             case .unmute: ["type": "unmute"]
             case .end: ["type": "end"]
-            case .played(let id, let cut):
-                cut ? ["type": "played", "id": id, "cut": true] : ["type": "played", "id": id]
+            case .played(let id): ["type": "played", "id": id]
             }
         return (try? JSONSerialization.data(withJSONObject: frame, options: [.sortedKeys]))
             ?? Data()

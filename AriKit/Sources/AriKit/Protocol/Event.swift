@@ -29,7 +29,6 @@ public struct Event: Sendable, Equatable, Decodable {
         case callAudioDeleted(CallEvent)
         case voiceStatus(VoiceStatus)
         case topicStarted(TopicStarted)
-        case planTicked(PlanTicked)
         case messageAmended(MessageAmended)
         case motionStarted(MotionEvent)
         case motionChanged(MotionEvent)
@@ -45,7 +44,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "turn.ended", "call.started",
-        "call.ended", "call.audio_deleted", "voice.status", "topic.started", "plan.ticked",
+        "call.ended", "call.audio_deleted", "voice.status", "topic.started",
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
         "motion.removed",
     ]
@@ -80,7 +79,6 @@ public struct Event: Sendable, Equatable, Decodable {
             case "call.audio_deleted": .callAudioDeleted(try CallEvent(from: decoder))
             case "voice.status": .voiceStatus(try VoiceStatus(from: decoder))
             case "topic.started": .topicStarted(try TopicStarted(from: decoder))
-            case "plan.ticked": .planTicked(try PlanTicked(from: decoder))
             case "message.amended": .messageAmended(try MessageAmended(from: decoder))
             case "motion.started": .motionStarted(try MotionEvent(from: decoder))
             case "motion.changed": .motionChanged(try MotionEvent(from: decoder))

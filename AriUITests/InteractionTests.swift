@@ -3,7 +3,7 @@ import XCTest
 /// The conversation's basic interactions, driven as you would on the phone, against ito-core's
 /// demo engine. Opt in: start `ito serve --engine demo`, connect Ari to it in the Simulator once,
 /// then run the AriUITests scheme. Each test sends a message the demo engine answers in a known way
-/// ("ask", "secret", "fail", "long", "busy").
+/// ("ask", "fail", "long", "busy").
 @MainActor
 final class InteractionTests: XCTestCase {
     private var app: XCUIApplication!
@@ -83,41 +83,6 @@ final class InteractionTests: XCTestCase {
         XCTAssertTrue(waitUntil(5) { !self.app.buttons["Clapham"].exists }, "the options stayed")
         XCTAssertTrue(
             app.staticTexts["Clapham"].waitForExistence(timeout: 5), "your answer didn't show")
-    }
-
-    func testASecretAnswerShowsAsDotsAndStaysOutOfTheDraft() {
-        say("I'll need a secret code")
-        let secure = app.secureTextFields.firstMatch
-        XCTAssertTrue(secure.waitForExistence(timeout: 20), "the composer didn't turn secret")
-        XCTAssertEqual(
-            secure.value as? String ?? "", "Answer Ari", "a draft leaked into the secret field")
-        secure.tap()
-        secure.typeText("4821")
-        sendButton.tap()
-        XCTAssertTrue(app.staticTexts["••••••"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Hidden from your history"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.staticTexts["4821"].exists, "the secret showed in the conversation")
-    }
-
-    func testASecretAskNeverTakesYourDraft() {
-        say("I'll need a secret code")
-        // Start writing something else before Ari asks.
-        composer.tap()
-        composer.typeText("half a thought")
-        let secure = app.secureTextFields.firstMatch
-        XCTAssertTrue(secure.waitForExistence(timeout: 20), "the composer didn't turn secret")
-        XCTAssertEqual(
-            secure.value as? String ?? "", "Answer Ari", "your draft went into the secret field")
-        secure.tap()
-        secure.typeText("4821")
-        sendButton.tap()
-        XCTAssertTrue(app.staticTexts["Hidden from your history"].waitForExistence(timeout: 10))
-        XCTAssertTrue(
-            waitUntil(10) { (self.composer.value as? String) == "half a thought" },
-            "your draft didn't come back after the secret")
-        // Leave the composer empty for the next test.
-        composer.tap()
-        composer.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20))
     }
 
     func testALinkInYourMessageOpensInPlace() {

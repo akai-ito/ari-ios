@@ -41,9 +41,9 @@ struct ProtocolDecodingTests {
                 case .send:
                     let sent = try #require(request.body).decode(SendMessage.self)
                     let result = try body.decode(MessageResult.self)
-                    // A secret answer comes back with no text at all.
-                    let text = result.message.secret == true ? "" : sent.text
-                    #expect(result.message.id == sent.id && result.message.text == text, "\(place)")
+                    #expect(
+                        result.message.id == sent.id && result.message.text == sent.text,
+                        "\(place)")
                 case .earlierMessages:
                     #expect(try !body.decode(MessagePage.self).messages.isEmpty, "\(place)")
                 case .stop(let turn):
@@ -81,21 +81,15 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(PageChange.self).change == change, "\(place)")
                 case .models:
                     #expect(try !body.decode(ModelList.self).models.isEmpty, "\(place)")
+                case .connectCapability:
+                    #expect(try !body.decode(CapabilityConnection.self).code.isEmpty, "\(place)")
                 case .chooseModel:
                     let sent = try #require(request.body).decode(ModelChoice.self)
                     #expect(try body.decode(ModelChoice.self) == sent, "\(place)")
                 case .startCall(let call), .endCall(let call), .deleteCallAudio(let call):
                     #expect(try body.decode(CallResult.self).call.id == call, "\(place)")
-                case .teachVocabulary:
-                    let sent = try #require(request.body).decode(VocabularyCorrections.self)
-                    let taught = try body.decode(VocabularyCorrections.self)
-                    #expect(
-                        taught.corrections.map(\.meant) == sent.corrections.map(\.meant), "\(place)"
-                    )
                 case .voices:
                     #expect(try !body.decode(VoiceList.self).voices.isEmpty, "\(place)")
-                case .tickItem:
-                    _ = try body.decode(TickList.self)
                 case .forgetVoiceprint:
                     #expect(try body.decode(VoiceList.self).voiceprint == .learning, "\(place)")
                 case .chooseVoice:
@@ -132,12 +126,10 @@ struct ProtocolDecodingTests {
             case .send:
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
-                    id: message.id, text: message.text, answers: message.answers,
-                    attachments: message.attachments ?? [])
+                    id: message.id, text: message.text, attachments: message.attachments ?? [])
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .stop:
-                let stop = try body.decode(StopTurn.self)
-                #expect(try JSONValue(encoding: StopTurn(cut: stop.cut)) == body, "\(place)")
+                Issue.record("\(place): a Stop has no body")
             case .device:
                 let registration = try body.decode(RegisterDevice.self)
                 #expect(try JSONValue(encoding: registration) == body, "\(place)")
@@ -162,9 +154,6 @@ struct ProtocolDecodingTests {
                 let values = try body.decode(CapabilitySetup.self).values
                 #expect(
                     try JSONValue(encoding: CapabilitySetup(values: values)) == body, "\(place)")
-            case .tickItem:
-                let done = try body.decode(TickItem.self).done
-                #expect(try JSONValue(encoding: TickItem(done: done)) == body, "\(place)")
             case .chooseVoice:
                 let voice = try body.decode(VoiceChoice.self).voice
                 #expect(try JSONValue(encoding: VoiceChoice(voice: voice)) == body, "\(place)")
@@ -176,13 +165,6 @@ struct ProtocolDecodingTests {
             case .motionState:
                 let state = try body.decode(MotionState.self)
                 #expect(try JSONValue(encoding: state) == body, "\(place)")
-            case .teachVocabulary:
-                let pairs = try body.decode(VocabularyCorrections.self).corrections.map {
-                    VocabularyCorrections.Pair(heard: $0.heard, meant: $0.meant)
-                }
-                #expect(
-                    try JSONValue(encoding: VocabularyCorrections(corrections: pairs)) == body,
-                    "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -203,7 +185,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 14) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 15) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
@@ -241,7 +223,6 @@ extension Event.Payload {
         case .callAudioDeleted: "call.audio_deleted"
         case .voiceStatus: "voice.status"
         case .topicStarted: "topic.started"
-        case .planTicked: "plan.ticked"
         case .messageAmended: "message.amended"
         case .motionStarted: "motion.started"
         case .motionChanged: "motion.changed"

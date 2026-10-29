@@ -229,6 +229,9 @@ struct CapabilityTranscriptTests {
             _ = try? await capabilities.save(try #require(id), values: values)
         case ("POST", "check"):
             _ = try await capabilities.check(try #require(id), values: values)
+        case ("POST", "connect"):
+            let connection = try await capabilities.connect(try #require(id))
+            #expect(!connection.code.isEmpty && connection.url.host() != nil)
         case ("PUT", _):
             let on = try #require(request.body?["on"]).decode(Bool.self)
             try? await capabilities.setOn(try #require(id), on)

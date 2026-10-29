@@ -1,31 +1,22 @@
 import UserNotifications
 
 /// An ask's options as a notification's actions, so you can answer from the lock screen: each
-/// option as a button, a typed answer when the ask takes one, and for a secret only "Open Ari",
-/// since a secret can't be typed into a notification safely.
+/// option as a button, and a typed answer when the ask takes one.
 public enum AskActions {
     public static let type = "type"
-    public static let open = "open"
 
     public static func option(_ index: Int) -> String { "option.\(index)" }
 
     /// A category of its own for this ask, since every ask's options differ.
     public static func category(for ask: PushNotification.AskSummary) -> UNNotificationCategory {
-        var actions: [UNNotificationAction] = []
-        if ask.secret {
-            actions = [
-                UNNotificationAction(identifier: open, title: "Open Ari", options: [.foreground])
-            ]
-        } else {
-            actions = ask.options.enumerated().map { index, label in
-                UNNotificationAction(identifier: option(index), title: label, options: [])
-            }
-            if ask.allowsText || ask.options.isEmpty {
-                actions.append(
-                    UNTextInputNotificationAction(
-                        identifier: type, title: "Type an answer…", options: [],
-                        textInputButtonTitle: "Send", textInputPlaceholder: "Answer Ari"))
-            }
+        var actions: [UNNotificationAction] = ask.options.enumerated().map { index, label in
+            UNNotificationAction(identifier: option(index), title: label, options: [])
+        }
+        if ask.allowsText || ask.options.isEmpty {
+            actions.append(
+                UNTextInputNotificationAction(
+                    identifier: type, title: "Type an answer…", options: [],
+                    textInputButtonTitle: "Send", textInputPlaceholder: "Answer Ari"))
         }
         return UNNotificationCategory(
             identifier: "ask." + ask.id.rawValue, actions: actions, intentIdentifiers: [],
@@ -55,9 +46,9 @@ public enum AskActions {
     }
 
     /// The text an ask's notification shows: the question, then its options, so they can be read
-    /// before the notification is opened for its buttons. A secret's options aren't shown.
+    /// before the notification is opened for its buttons.
     public static func body(for text: String, ask: PushNotification.AskSummary) -> String {
-        guard !ask.secret, !ask.options.isEmpty else { return text }
+        guard !ask.options.isEmpty else { return text }
         return text + "\n" + ask.options.joined(separator: " · ")
     }
 

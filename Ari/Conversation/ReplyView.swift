@@ -112,8 +112,8 @@ private struct BlockView: View {
     let block: ReplyDocument.Block
     let position: Double
     let tone: ReplyView.Tone
-    /// An `ari:` block's part, and its shape if it reads.
-    var shape: (part: Int, shape: ReplyShape?)?
+    /// An `ari:` block's shape: `.some(nil)` if it doesn't read.
+    var shape: ReplyShape??
 
     var body: some View {
         content
@@ -137,8 +137,8 @@ private struct BlockView: View {
         case .code where shape != nil:
             // Drawn once it's all here; a quiet card while Ari writes it; its text if it never
             // reads.
-            if let drawn = shape?.shape, position == .infinity {
-                ShapeView(shape: drawn, part: shape?.part ?? 0)
+            if let drawn = shape ?? nil, position == .infinity {
+                ShapeView(shape: drawn)
             } else if position != .infinity {
                 ShapePlaceholder()
             } else {

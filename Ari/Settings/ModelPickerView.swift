@@ -35,9 +35,7 @@ struct ModelPickerView: View {
         .scrollContentBackground(.hidden)
         .background(.ariBackground)
         .navigationTitle("Model")
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .navigationBarTitleDisplayMode(.inline)
         .task { await models.refresh() }
         .disabled(models.choosing != nil)
     }

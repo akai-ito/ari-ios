@@ -22,9 +22,7 @@ struct ConversationTranscriptTests {
                     Array(entry.text.utf16) == streamed, "\(entry.id) isn't the text that streamed")
             }
         }
-        let expected = try #require(
-            Self.endStates[transcript.name], "no end state for \(transcript.name)")
-        expect(conversation, holds: expected)
+        expect(conversation, holds: Self.end(of: transcript))
     }
 
     @Test("Scenario 3: your message shows at once, and Sending goes when the server has it")
@@ -105,34 +103,26 @@ struct ConversationTranscriptTests {
     }
 
     @Test(
-        "Scenario 7: Stop holds the cut until the turn ends, a late Stop doesn't, and Stop mid-step ends the step"
+        "Scenario 7: Stop ends the turn, the reply keeps what Ari wrote, and a step ends stopped"
     )
     func stop() throws {
         var replay = Replay(try Fixtures.transcript("07-stop"))
         let reply: MessageID = "m_0002_81610"
-        // You tap Stop with 209 units on screen, when 266 have arrived.
         try replay.play(throughLine: 32, expecting: "POST /v0/turns/t_0002_40331/stop")
-        #expect(replay.conversation.pendingStop?.turn == "t_0002_40331")
-        #expect(replay.conversation.pendingStop?.cut == Cut(message: reply, offset: 209))
-        #expect(replay.conversation[reply]?.length == 266)
-        #expect(try visible(reply, in: replay).hasSuffix("keep it light before"))
-        #expect(try visible(reply, in: replay).utf16.count == 209)
+        #expect(replay.conversation.pendingStop == "t_0002_40331")
 
-        // The 202 says the turn is stopping; the reply still holds at the cut.
-        try replay.play(throughLine: 33, expecting: "202")
-        #expect(try visible(reply, in: replay).utf16.count == 209)
+        // The 202 says the turn is stopping.
         try replay.play(throughLine: 34, expecting: "turn.status e_0027_65057")
         #expect(replay.conversation.turn?.status?.kind == .stopping)
         // Sent while stopping, so it waits as Next.
         let next: MessageID = "21d803b8-d67b-47dc-91c6-b540fb9b4972"
         try replay.play(throughLine: 38, expecting: "message.queued e_0029_21466")
         #expect(replay.conversation[next]?.mark == .next)
-        #expect(try visible(reply, in: replay).utf16.count == 209)
 
-        // The reply ends stopped at the cut; then the turn ends.
+        // The reply ends stopped with everything Ari had written; then the turn ends.
         try replay.play(throughLine: 40, expecting: "turn.ended e_0031_84439")
         #expect(replay.conversation[reply]?.outcome == .stopped)
-        #expect(replay.conversation[reply]?.length == 209)
+        #expect(replay.conversation[reply]?.length == 266)
         #expect(replay.conversation.pendingStop == nil)
         #expect(replay.conversation.lastEndedTurn?.outcome == .stopped)
         // Next starts the following turn, and Stopped is gone.
@@ -140,26 +130,15 @@ struct ConversationTranscriptTests {
         #expect(replay.conversation[next]?.mark == nil)
         #expect(replay.conversation.lastEndedTurn == nil)
 
-        // "And Sunday?" is answered in full; then you tap Stop, too late.
-        try replay.play(throughLine: 65, expecting: "turn.ended e_0054_00574")
-        try replay.play(throughLine: 66, expecting: "POST /v0/turns/t_0004_50773/stop")
-        #expect(replay.conversation.pendingStop == nil)
-        #expect(try visible("m_0004_08797", in: replay).utf16.count == 66)
-        try replay.play(throughLine: 67, expecting: "200")
+        // Stop just after the second reply began: the first is final, the second keeps what
+        // little it had.
+        try replay.play(throughLine: 73, expecting: "turn.ended e_0060_44071")
         #expect(replay.conversation["m_0004_08797"]?.outcome == .completed)
-
-        // Stop while the second reply waits behind the first: the first is final, the second cut
-        // at nothing.
-        try replay.play(throughLine: 83, expecting: "POST /v0/turns/t_0005_27837/stop")
-        #expect(replay.conversation.pendingStop?.cut == Cut(message: "m_0006_90669", offset: 0))
-        try replay.play(throughLine: 87, expecting: "turn.ended e_0070_67956")
-        #expect(replay.conversation["m_0005_12106"]?.outcome == .completed)
-        #expect(replay.conversation["m_0006_90669"]?.length == 0)
+        #expect(replay.conversation["m_0005_12106"]?.outcome == .stopped)
+        #expect(replay.conversation["m_0005_12106"]?.length == 35)
 
         // Stop while a search runs: the step ends stopped, keeping its present-tense title.
-        try replay.play(throughLine: 94, expecting: "POST /v0/turns/t_0006_31337/stop")
-        #expect(replay.conversation.pendingStop?.cut == nil)
-        try replay.play(throughLine: 98, expecting: "turn.ended e_0077_17737")
+        try replay.play(throughLine: 84, expecting: "turn.ended e_0067_16351")
         let search = try #require(replay.conversation[step: "s_0004_54646"])
         #expect(search.outcome == .stopped)
         #expect(search.title == "Searching the web for cafés near Battersea Park open at 9")
@@ -386,25 +365,6 @@ struct ConversationTranscriptTests {
         #expect(replay.conversation[ask: "a_0002_64299"]?.outcome == .cancelled)
         #expect(replay.conversation.waitingAsk == nil)
     }
-
-    @Test("Scenario 25: a secret answer keeps no text, here or on the server")
-    func secret() throws {
-        var replay = Replay(try Fixtures.transcript("25-a-secret"))
-        let code: MessageID = "07fa34b1-a387-4687-bf4a-a9a7a40cc10f"
-        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_73484")
-        #expect(replay.conversation.waitingAsk?.secret == true)
-        try replay.play(throughLine: 22, expecting: "POST /v0/messages")
-        #expect(
-            replay.conversation[code]?.isSecret == true && replay.conversation[code]?.text == "")
-        try replay.play(throughLine: 23, expecting: "message.accepted e_0017_04913")
-        #expect(
-            replay.conversation[code]?.isSecret == true && replay.conversation[code]?.text == "")
-        #expect(replay.conversation[code]?.answers == "a_0001_49834")
-    }
-
-    private func visible(_ id: MessageID, in replay: Replay) throws -> String {
-        replay.conversation.visibleText(of: try #require(replay.conversation[id]))
-    }
 }
 
 extension Replay {
@@ -426,34 +386,11 @@ extension Replay {
 
 private struct Expected {
     let id: MessageID
-    var text: String?
-    var length: Int?
-    var ending: String?
-    var outcome: Outcome?
-    var shown = true
+    let text: String
+    let outcome: Outcome?
+    let shown: Bool
     /// The names of the photos and files it carries.
-    var attachments: [String] = []
-}
-
-private func you(_ id: MessageID, _ text: String, attaching attachments: [String] = []) -> Expected
-{
-    Expected(id: id, text: text, attachments: attachments)
-}
-
-private func reply(
-    _ id: MessageID, _ length: Int, _ ending: String, _ outcome: Outcome = .completed
-) -> Expected {
-    Expected(id: id, length: length, ending: ending, outcome: outcome)
-}
-
-private let bike = "Is it worth fixing the old bike or buying a new one?"
-private let saturday = "Plan my Saturday: long run in the morning, then something calm."
-
-private func bikeReply(_ id: MessageID) -> Expected {
-    reply(id, 162, "If the gears still slip after that, revisit.")
-}
-private func saturdayReply(_ id: MessageID) -> Expected {
-    reply(id, 318, "Early night: you're up at 7.")
+    let attachments: [String]
 }
 
 private func expect(
@@ -465,15 +402,7 @@ private func expect(
         sourceLocation: sourceLocation)
     for (entry, want) in zip(conversation.entries, expected) {
         let name = entry.id
-        if let text = want.text {
-            #expect(entry.text == text, "\(name)", sourceLocation: sourceLocation)
-        }
-        if let length = want.length {
-            #expect(entry.text.utf16.count == length, "\(name)", sourceLocation: sourceLocation)
-        }
-        if let ending = want.ending {
-            #expect(entry.text.hasSuffix(ending), "\(name)", sourceLocation: sourceLocation)
-        }
+        #expect(entry.text == want.text, "\(name)", sourceLocation: sourceLocation)
         #expect(entry.outcome == want.outcome, "\(name)", sourceLocation: sourceLocation)
         #expect(entry.isShown == want.shown, "\(name)", sourceLocation: sourceLocation)
         #expect(
@@ -487,398 +416,74 @@ private func expect(
 }
 
 extension ConversationTranscriptTests {
-    fileprivate static let endStates: [String: [Expected]] = [
-        "01-first-connection": [],
-        "02-open-ari": [
-            you("63d6297e-90ec-494f-9bfe-c55b7d5c6f60", bike), bikeReply("m_0001_00810"),
-            you("6549385e-4502-4bc3-9104-7c510ad2365a", "What time is sunrise on Saturday?"),
-            reply("m_0002_32503", 68, "start a run by about 06:50."),
-        ],
-        "03-send": [
-            you("32f17f68-5b4a-4c02-be38-bb55893a5c0d", bike), bikeReply("m_0001_76774"),
-            you("69a52e25-a392-4a73-89f9-21eb36005baf", saturday), saturdayReply("m_0002_52784"),
-        ],
-        "04-the-agent-stirs": [
-            you("d52e129f-e30a-4ce7-8622-4125b7edd868", bike), bikeReply("m_0001_21968"),
-            you("f63df431-879e-46f0-9e6d-154323b2c9f4", saturday),
+    /// What a transcript's conversation ends as, read from its raw JSON rather than through Ari:
+    /// every message the server announced (given, in a snapshot, an event or a page of history), in
+    /// position order, with the text it ended with, its outcome and its attachments. A snapshot
+    /// starts the conversation again.
+    fileprivate static func end(of transcript: Transcript) -> [Expected] {
+        struct Seen {
+            var position: Int
+            var role: String
+            var kind: String?
+            var text: [UInt16]
+            var outcome: String?
+            var attachments: [String]
+        }
+        var seen: [String: Seen] = [:]
+        func record(_ message: JSONValue) {
+            guard let id = message["id"]?.string else { return }
+            seen[id] = Seen(
+                position: message["position"]?.int ?? seen[id]?.position ?? .max,
+                role: message["role"]?.string ?? "agent", kind: message["kind"]?.string,
+                text: Array((message["text"]?.string ?? "").utf16),
+                outcome: message["outcome"]?.string,
+                attachments: message["attachments"]?.array?.compactMap { $0["name"]?.string } ?? [])
+        }
+        var asked: Transcript.Request?
+        // The app's cache when the scenario starts, then everything that happens.
+        for step in transcript.given.map(Transcript.Step.event) + transcript.steps {
+            switch step {
+            case .app(let request):
+                asked = request
+            case .server(let response):
+                if case .earlierMessages = asked?.route {
+                    for message in response.body?["messages"]?.array ?? []
+                    where seen[message["id"]?.string ?? ""] == nil {
+                        record(message)
+                    }
+                }
+            case .event(let logged):
+                let json = logged.json
+                switch json["type"]?.string {
+                case "snapshot":
+                    seen = [:]
+                    for message in json["messages"]?.array ?? [] { record(message) }
+                case "message.accepted", "message.amended", "message.started":
+                    if let message = json["message"] { record(message) }
+                case "message.delta":
+                    if let id = json["message"]?.string, let text = json["text"]?.string {
+                        seen[id]?.text += Array(text.utf16)
+                    }
+                case "message.ended":
+                    if let id = json["message"]?.string {
+                        seen[id]?.outcome = json["outcome"]?.string
+                        if let length = json["length"]?.int, let text = seen[id]?.text {
+                            seen[id]?.text = Array(text.prefix(length))
+                        }
+                    }
+                default:
+                    break
+                }
+            default:
+                break
+            }
+        }
+        return seen.sorted { $0.value.position < $1.value.position }.map { id, message in
             Expected(
-                id: "m_0002_90390", text: "I'll check which cafés by the river open early.",
-                outcome: .completed,
-                shown: false),
-            saturdayReply("m_0003_29104"),
-        ],
-        "05-the-reply-streams": [
-            you("d70174fb-30e1-44b3-bc42-ff74771f01e1", bike), bikeReply("m_0001_64933"),
-            you("ca8f484f-3900-44f6-8fbf-85e7a258b7be", saturday), saturdayReply("m_0002_24233"),
-        ],
-        "06-you-scroll-up-mid-reply": [
-            you("706d1565-244b-4a4b-b2ec-3f0815f1e742", bike), bikeReply("m_0001_89255"),
-            you("d9fb1b9d-a66f-416c-b69c-ca730c2af417", saturday), saturdayReply("m_0002_55548"),
-        ],
-        "07-stop": [
-            you("40fad84f-9c72-47ac-b2ce-b6152b68b0c0", bike), bikeReply("m_0001_79685"),
-            you("f7f3de34-9d23-457f-a7b4-28d1818238fa", saturday),
-            reply("m_0002_81610", 209, "Lunch at home; keep it light before", .stopped),
-            you("21d803b8-d67b-47dc-91c6-b540fb9b4972", "Actually, just plan the morning."),
-            reply("m_0003_68282", 120, "the café by the bridge; it opens at 9."),
-            you("d07a73b5-68d9-4d34-8dfc-984eaaa36911", "And Sunday?"),
-            reply("m_0004_08797", 66, "then lunch with friends if you're up for it."),
-            you("e8d134af-23b2-4510-9360-ccd762695be8", "And Saturday evening?"),
-            reply("m_0005_12106", 65, "then an early night before the long run."),
-            reply("m_0006_90669", 0, "", .stopped),
-            you("cdf4fa57-3822-4b94-b26f-b65fe93afdef", "Find a café for after the run."),
-        ],
-        "08-copy-and-share": [
-            you("7f25eedd-f9f0-491d-8453-68489f9735a3", bike), bikeReply("m_0001_09845"),
-            you(
-                "c20b0e66-9057-46a7-960d-3ed802c5fbce",
-                "How do I see what's using port 8080 on my Mac?"),
-            Expected(
-                id: "m_0002_38147",
-                text: "Run this in Terminal:\n\n```sh\nlsof -nP -iTCP:8080 -sTCP:LISTEN\n```\n\n"
-                    + "The second column is the process ID; `kill <PID>` stops it.",
-                outcome: .completed),
-        ],
-        "09-scrolling-back": [
-            you("0df2b4c3-c6d3-4b89-89b8-fe67f4bea5bc", "Any good running routes near Battersea?"),
-            reply("m_0001_09453", 133, "Add Battersea Park's outer path for 8 km."),
-            you("a32dbe01-f966-4894-820c-5b2262c77a43", "What's a good stretch after a long run?"),
-            reply("m_0002_34334", 141, "Skip deep static stretches straight after a race."),
-            you(
-                "eedd4099-47f7-44de-b0fd-9b8b66c82323",
-                "Somewhere quiet for dinner near Clapham, Thursday?"),
-            reply("m_0003_64520", 129, "Thursday has space at 19:45."),
-            you("b0474bdd-5955-432b-bb9f-7b7ce9ef2c5e", "Thanks, Juno was perfect."),
-            reply("m_0004_61453", 72, "next time you want somewhere quiet."),
-            you("8ac6f761-1cdc-45a8-bdc2-3c15e18d6d2f", bike), bikeReply("m_0005_84187"),
-        ],
-        "10-send-while-it-s-busy": [
-            you("52054ffc-b7ec-4fc5-880c-287a139ae1d7", bike), bikeReply("m_0001_37089"),
-            you("3a3e2f07-85f4-4f6c-95f1-200524c679a3", saturday), saturdayReply("m_0002_50552"),
-            you("1b82d2aa-dba7-4c69-916c-d9fb4a0b94ec", "Make the calm part outdoors"),
-            reply("m_0003_01349", 141, "Keep the botanic garden walk; it's outdoors already."),
-            you(
-                "eb14631a-a787-4821-87f4-a691adb5b11a",
-                "Also find somewhere for breakfast by the river."),
-            you("c64bf93c-0d54-4a21-8efa-f6ec351b62ef", "With outdoor seats, ideally."),
-            reply("m_0004_56107", 93, "ten minutes' walk from where your run ends."),
-            reply("m_0005_94194", 61, "terrace, first come, first served."),
-        ],
-        "11-signal-drops-mid-reply": [
-            you("9ed912ac-5a04-42ff-84fd-f40d457ee86b", bike), bikeReply("m_0001_18318"),
-            you("4be42a7e-e1a4-44ef-9f22-6388a62da6d2", saturday), saturdayReply("m_0002_62029"),
-        ],
-        "12-send-while-offline": [
-            you("b77a7cfe-2ae5-4ebe-a784-822ec390f61c", bike), bikeReply("m_0001_60432"),
-            you(
-                "76c3ac95-83e0-45e9-a821-a12c08d956e9",
-                "Also, can you check if Juno is open on Sunday?"),
-            you("0c1566bf-a262-4595-b7a6-dd608ba8c3b0", "And book for two at 8 if so"),
-            reply("m_0002_04718", 147, "their booking page is bistrojuno.example/book."),
-        ],
-        "13-ari-is-closed-mid-reply": [
-            you("c300beab-27c9-4810-8dac-8f7f08e2b211", bike), bikeReply("m_0001_61139"),
-            you("24ef3e8f-c321-4909-887d-3373262b777e", saturday), saturdayReply("m_0002_36640"),
-        ],
-        "14-the-server-restarts-or-is-restored": [
-            you("bafdbba2-d851-4593-bc68-fdb68d9ab705", bike), bikeReply("m_0001_43076"),
-        ],
-        "15-something-fails": [
-            you("49aa4561-aa73-4772-a218-9c9facc270ea", bike), bikeReply("m_0001_31347"),
-            you("d9627c57-0b51-47c0-9cc6-e91c6bf56658", saturday),
-            reply("m_0002_07750", 105, "flat, and the café opens at 9.", .failed),
-            saturdayReply("m_0003_11459"),
-            you("835616aa-d801-4a42-a976-cd02a6569b27", "And Sunday?"),
-            reply("m_0004_67083", 0, "", .failed),
-        ],
-        "18-a-reply-while-you-re-away": [
-            you("dfbbdf74-22ad-485a-8020-e54a243e67c9", bike), bikeReply("m_0001_81220"),
-            you("d147cf4e-fc32-4395-aab9-f7b64c29be07", saturday),
-            you(
-                "0052f675-d6e7-42ef-8a4f-6c744e9b9f17",
-                "Also, does the 37 bus run before 7 on Saturdays?"),
-            saturdayReply("m_0002_88780"),
-            reply("m_0003_13830", 0, "", .failed),
-        ],
-        "19-ari-asks-before-acting": [
-            you("602d18e0-95e6-459a-9af4-9642703308e5", bike), bikeReply("m_0001_38572"),
-            you(
-                "bb0c651c-6f43-4f10-acb9-8956565e139a",
-                "Book a table at Juno for Saturday at 7:30, for two."),
-            you("5ce13252-2fa3-4462-a97b-c341b244f5f5", "Clapham"),
-            reply("m_0002_19614", 73, "for two at 7:30 on Saturday. Shall I book it?"),
-        ],
-        "20-an-approval": [
-            you("3209efd3-339f-4a33-a8be-dd3739ad0cb8", bike), bikeReply("m_0001_44818"),
-            you(
-                "68af8cd8-fbb9-4bd0-9cdf-9be2e3296d11",
-                "Book Juno in Clapham for Saturday at 7:30, for two."),
-            you("24cc9b91-dd36-4eba-8f55-b143861efea9", "Book it"),
-            reply("m_0002_03242", 84, "30, a table for two. The reference is JC4821."),
-        ],
-        "21-an-ask-while-you-re-away": [
-            you("1bd73a2b-843b-434b-8684-07a7bdf3a934", bike), bikeReply("m_0001_14784"),
-            you(
-                "de757056-edc5-4f6e-b5f8-b925c606fb15",
-                "Book a table at Juno for Friday at 8, for two."),
-            you("c2432f00-720f-4baf-bdd8-2d81439ca44f", "Soho"),
-            reply("m_0002_06693", 51, ": Juno in Soho, Friday at 8, a table for two."),
-        ],
-        "22-waiting": [
-            you("67d73edd-9fdd-4e0f-9681-cd1b4fc585e5", bike), bikeReply("m_0001_68901"),
-            you("f23059bc-e46e-436e-99ec-e17a564b3587", "Book Juno for Saturday."),
-        ],
-        "23-your-own-way-then-stop": [
-            you("ee60f6f5-f932-4d5f-9bb2-e954e533f662", bike), bikeReply("m_0001_04514"),
-            you("e48048f8-e56f-4955-8ab8-7d976827fd7f", "Book Juno for Saturday."),
-            you(
-                "40364441-f13e-436f-9303-730eb0ad286a",
-                "Actually, find somewhere new in Brixton instead."),
-        ],
-        "24-the-reminder": [
-            you("a38ab63f-cd53-4185-8787-854cc00ddc02", bike), bikeReply("m_0001_16750"),
-            you("d46a7bdd-6b3f-4d81-94a4-2393b548433b", "Book Juno for Saturday at 7:30, for two."),
-            you("3c2171f0-3504-49fc-a75a-f7e7b7371229", "Clapham"),
-            reply("m_0002_20811", 73, "for two at 7:30 on Saturday. Shall I book it?"),
-        ],
-        "25-a-secret": [
-            you("3c745eaf-6fe9-43b0-8cd5-6d3e9027ecc8", bike), bikeReply("m_0001_44119"),
-            you(
-                "837231c9-ee97-474f-9657-13e0de8086cb",
-                "Book Juno in Clapham for Saturday at 7:30, for two."),
-            you("07fa34b1-a387-4687-bf4a-a9a7a40cc10f", ""),
-            reply("m_0002_69009", 59, "n Clapham, Saturday at 7:30, a table for two."),
-        ],
-        "26-turning-on-notifications": [
-            you("e650397d-2de5-4f6d-b54c-30865f70c9e6", bike), bikeReply("m_0001_63846"),
-            you(
-                "ec4d4743-f528-44cc-802c-c1c326b96ee5",
-                "Go through my notes and tidy up the packing lists for the weekend."),
-            reply("m_0002_07750", 95, "t and the bus card, and the old list is gone."),
-        ],
-        "17-reporting-a-gap": [
-            you("61fffc2c-5f33-47dc-b94a-55c3dc0b0969", bike), bikeReply("m_0001_85723"),
-            you(
-                "ccb15bb0-ea37-49ed-9d33-d215acfcf881",
-                "What time does the Battersea parkrun start?"),
-            reply("m_0002_17163", 140, "Check the page before you go."),
-        ],
-        "27-send-a-photo": [
-            you("b4f6841a-5ec9-401f-8bf7-1e043e7a49cb", bike), bikeReply("m_0001_24748"),
-            you(
-                "83d78220-f45e-449d-91b1-956a87478344",
-                "Is this the Thames Path, near Hampton Court?", attaching: ["riverside.jpg"]),
-            reply("m_0002_62579", 151, "you'll reach the bridge in about ten minutes."),
-        ],
-        "28-send-a-file": [
-            you("91756d49-f3dc-45be-a919-b4b39f3b7ee0", bike), bikeReply("m_0001_95876"),
-            you(
-                "841b74ac-4148-43bd-b493-322ef3b1b956", "How far did I run this month?",
-                attaching: ["running-log.csv"]),
-            reply("m_0002_32098", 71, "he longest was 18 km on the 11th, in 1:39:37."),
-        ],
-        "29-an-upload-that-fails": [
-            you("2a1ada6b-0c5c-4b94-ab31-9516bdaa2ec8", bike), bikeReply("m_0001_22838"),
-            // Only the photo; the video was refused before anything was sent.
-            you("772b92e3-c8ff-4820-8f79-9ff49401af20", "", attaching: ["riverside.jpg"]),
-            reply("m_0002_60075", 81, "r morning. Want me to plan a walk from there?"),
-            // Two days later the log's upload has expired: it goes again, then the message.
-            you(
-                "52be1db8-52e1-435f-82bd-a6b1849bca39", "Which of these runs had my fastest pace?",
-                attaching: ["running-log.csv"]),
-            reply("m_0003_46823", 49, "about 5:17 a kilometre."),
-        ],
-        "30-another-device-sees-an-attachment": [
-            you(
-                "bf204a91-5277-451f-96a9-c74349606d63",
-                "Is this the Thames Path, near Hampton Court?", attaching: ["riverside.jpg"]),
-            reply("m_0001_95267", 72, "the Surrey bank, just upstream of the palace."),
-        ],
-        "31-pair-with-a-qr-code": [],
-        // Settings, not the conversation: nothing changes in it.
-        "32-set-up-a-capability": [],
-        "33-a-capability-needs-you": [],
-        "34-ari-uses-what-it-remembers": [
-            you(
-                "36990cb5-389b-4685-97ce-623970b069ec",
-                "Should I book the hotel in Lisbon for both of us?"),
-            reply("m_0001_61036", 153, "places with two rooms for 14 to 18 November."),
-        ],
-        "35-ari-updates-what-it-knows": [
-            you(
-                "cc288c87-2f40-4b1b-a451-eaab6bed925d",
-                "Alex and I are seeing each other a lot now. It's going really well!"),
-            reply("m_0001_71650", 82, "page, so taking it slow is now history."),
-        ],
-        "36-forget-that": [
-            you(
-                "9a6c147d-b561-45d9-a502-a89bfd8e4f3e",
-                "Please forget the bit about our first date."),
-            reply("m_0001_71553", 33, "Done. It's gone from Alex's page."),
-        ],
-        // Settings, not the conversation: nothing changes in it.
-        "37-choose-the-model": [],
-        // Talk's readiness and Settings' voices, not the conversation: nothing changes in it.
-        // A call: the box posts what you said, and Ari speaks its replies on the stream.
-        "38-a-walk-with-ari": [
-            you("m_0001_72021", "What did Bora say about the QRT panel?"),
-            Expected(
-                id: "m_0002_05333", text: "Let me check what I have on Bora.", outcome: .completed,
-                shown: false),
-            reply("m_0003_60545", 165, "Tighten the intro\n- Add the latency numbers"),
-        ],
-        "39-ari-learns-a-name": [
-            you("m_0001_77281", "What did Bara say about the cutie panel?"),
-            reply("m_0002_58268", 58, "and the QRT panel? Tap a word to fix it."),
-            you("m_0003_74178", "When does Bora want the QRT notes?"),
-            reply("m_0004_20681", 26, "Bora wants them by Friday."),
-        ],
-        "40-delete-a-call-s-audio": [
-            you("m_0001_90849", "Today was a good day. The long run felt easy."),
-            reply("m_0002_64513", 64, "I've added it to today's journal."),
-        ],
-        "45-talking-over-ari": [
-            you("m_0001_43488", "When's the design review?"),
-            reply("m_0002_10070", 59, "t ten. Maya and Bora will both be there."),
-            you("m_0003_51829", "Actually, can we move it to Thursday?"),
-            reply("m_0004_30759", 27, "I'll ask Maya for Thursday."),
-        ],
-        "46-a-blip-in-the-signal": [
-            you("m_0001_42443", "Remind me what's for dinner."),
-            reply("m_0002_64292", 58, "tover pesto. You bought basil yesterday."),
-            you("m_0003_84636", "Say that again?"),
-            reply("m_0004_96616", 30, "Pasta with the leftover pesto."),
-        ],
-        "47-the-connection-drops": [
-            you("m_0001_82728", "Add oat milk to the shopping list."),
-            reply("m_0002_38491", 6, "Added."),
-        ],
-        "48-mute": [
-            you("m_0001_02141", "What time is it in Lisbon?"),
-            reply("m_0002_32832", 27, "It's just after nine there."),
-            you("m_0003_78316", "Thanks."),
-            reply("m_0004_13333", 9, "Any time."),
-        ],
-        "61-you-carry-on": [
-            you(
-                "m_0001_92355",
-                "I keep thinking about Florence. Should we take a day for Pisa, or stay put?"),
-            reply("m_0002_04269", 77, "Pisa's an easy morning if you want it."),
-        ],
-        "62-a-trip-in-motion": [
-            you(
-                "6263dd37-678a-48e1-9e92-66bca36d37fd",
-                "Can you plan Florence with Janki? 6 to 9 November. Good food, the Uffizi, maybe "
-                    + "Pisa for a day."),
-            reply(
-                "m_0001_45782", 212,
-                "```ari:motion\n{\"motion\":\"florence-with-janki\",\"change\":1}\n```"),
-        ],
-        "63-keeping-it-current": [
-            you(
-                "608ab84a-e392-44b5-b555-efd5bda55b69",
-                "Can you plan Florence with Janki? 6 to 9 November."),
-            reply(
-                "m_0001_25023", 98,
-                "```ari:motion\n{\"motion\":\"florence-with-janki\",\"change\":1}\n```"),
-            you("7b89b9c4-799e-4333-869b-47370519e4f5", "Booked the Uffizi for 8:15 Saturday."),
-            reply(
-                "m_0002_54669", 148,
-                "```ari:motion\n{\"motion\":\"florence-with-janki\",\"change\":2}\n```"),
-            you("24b63d4b-0f1b-4ee6-8fa9-09fd345ce3d8", "Thanks! What's left?"),
-            reply("m_0003_82783", 66, "The Pisa train's ticked off."),
-        ],
-        "49-the-voice-fails-mid-call": [
-            you("m_0001_83382", "What's on tomorrow?"),
-            reply("m_0002_93163", 42, "dentist at nine, then the design review."),
-        ],
-        "50-ari-says-what-it-s-doing": [
-            you("m_0001_54439", "Find me a quiet café near Brighton station."),
-            reply("m_0002_32214", 55, " on Queens Road. It's quiet before noon."),
-        ],
-        "51-asked-on-a-call": [
-            you("m_0001_27022", "Remind me to call Mum on Sunday at two."),
-            you("m_0002_31819", "Add it."),
-            reply("m_0003_68062", 33, "Added. I'll remind you on Sunday."),
-        ],
-        "52-a-code-on-a-call": [
-            you("m_0001_12051", "Confirm the Juno booking."),
-            you("m_0002_45817", "It's four eight one five one six."),
-            reply("m_0003_75492", 58, "I won't take a code by voice."),
-            you("8df648e2-9813-4dc2-939f-92cbe710bcdf", ""),
-            reply("m_0004_36257", 45, "Confirmed. You're booked at Juno on Saturday."),
-        ],
-        "53-an-app-asks-first": [
-            you(
-                "ecf0acb3-3ee8-433c-a4ea-4443d713da17", "Add a reminder to call Mum on Sunday at 2."
-            ),
-            you("ddcf47d4-2612-47c6-b92d-6a60db65d51d", "Allow"),
-            reply("m_0001_00549", 31, "Added: Call Mum, Sunday at 2pm."),
-        ],
-        "54-an-approval-answered-in-words": [
-            you(
-                "c6b16785-8519-4778-bedd-6619a109fd94", "Add a reminder to call Mum on Sunday at 2."
-            ),
-            you("b4f701a0-b37e-4f3d-aa02-a02a7a8fb86f", "Do it at 3 instead"),
-            reply("m_0001_90205", 52, "Shall I add it at 3pm instead?"),
-        ],
-        "55-stopped-while-an-app-waits": [
-            you(
-                "3aa665cb-530d-4b80-b428-b19a14aa3ebe", "Add a reminder to call Mum on Sunday at 2."
-            )
-        ],
-        "56-relearn-my-voice": [],
-        "59-a-plan-you-can-tick": [
-            you(
-                "1b659879-69a7-4624-b98c-81a1847cedce",
-                "Can you plan our three days in Florence? We land on Friday morning."),
-            reply("m_0001_87815", 667, "\"lat\":43.7678,\"lon\":11.2553}\n```"),
-            you(
-                "efff4d79-8fbf-46e3-b399-1a1d470745a0",
-                "Booked! How do we get from the station to the hotel?"),
-            reply("m_0002_12545", 59, "flat all the way, past San Lorenzo."),
-        ],
-        "60-pictures-ari-found": [
-            you(
-                "486c34a5-fffa-4b19-9774-2274b8460478", "What does the Lungarno look like at dusk?"),
-            reply("m_0001_68134", 304, "\"credit\":\"Photo by M. Rossi, CC BY-SA 4.0\"}]}\n```"),
-        ],
-        "58-topics": [
-            you(
-                "f65434eb-176c-4547-a4b5-f1abc606ee0b", "Can you help me plan Florence with Janki?"),
-            reply("m_0001_93508", 72, "fits the Uffizi, the Duomo and a morning in Siena."),
-            you(
-                "be0f8920-f03b-49fd-a28a-bcbd21c203c5",
-                "Different thing: what should I tell Bora about the QRT panel?"),
-            reply("m_0002_02978", 85, "and ask which part worries her most."),
-            you("cb9b4fdb-78c4-4977-9a19-a86f2ec1a221", "And when should I send it?"),
-            reply("m_0003_58468", 49, "Before Friday, so she has the weekend to read it."),
-            you(
-                "e1c3b313-f5b0-48a9-9124-09b4b6c49406",
-                "Back to Florence: which day should we do the Uffizi?"),
-            reply("m_0004_97406", 59, "morning, before it gets busy. Book the 8:15 slot."),
-        ],
-        "57-what-ari-learnt-lately": [
-            you(
-                "2b3878ca-83c1-4b5e-984e-6084e35ca1f3",
-                "Janki and I are off to Florence together, 6 to 9 November!"),
-            reply("m_0001_80782", 62, "I've started a page for the trip."),
-        ],
-        "42-choose-ari-s-voice": [],
-        "43-before-the-voice-is-ready": [],
-        "44-when-the-server-can-t-talk": [],
-        "41-another-device-sees-the-call": [
-            you("914f3838-aaa0-49a3-89cd-57b1b6391d24", "What did Bora say about the QRT panel?"),
-            reply(
-                "m_0001_83439", 74,
-                "She wants one more round on your design before the panel sits in November."),
-        ],
-        "16-working-through-a-task": [
-            you("3ae1bdea-ef38-4834-82d0-5dae53d77f8c", bike), bikeReply("m_0001_73241"),
-            you(
-                "3b8a8184-5ac3-49d5-8d27-2929c23d6dcd",
-                "Tidy up my packing list for Saturday, and check the weather."),
-            reply("m_0002_86936", 120, "a rain jacket and added an umbrella to your list."),
-        ],
-    ]
+                id: MessageID(id), text: String(decoding: message.text, as: UTF16.self),
+                outcome: message.outcome.map(Outcome.init(rawValue:)),
+                shown: message.role == "user" || message.kind == "reply",
+                attachments: message.attachments)
+        }
+    }
 }

@@ -1,11 +1,8 @@
 import AriKit
 import Foundation
 import Observation
-
-#if os(iOS)
-    import UIKit
-    import UserNotifications
-#endif
+import UIKit
+import UserNotifications
 
 /// The server Ari is connected to, if any, and its session. The address and who answered are kept
 /// in the defaults; the token only ever in the Keychain.
@@ -43,11 +40,7 @@ final class AppModel {
     @ObservationIgnored private let group = AppGroup.forThisApp()
 
     init(tokens: (any TokenStore)? = nil, defaults: UserDefaults = .standard) {
-        #if os(iOS)
-            self.tokens = tokens ?? group.tokens
-        #else
-            self.tokens = tokens ?? KeychainTokenStore()
-        #endif
+        self.tokens = tokens ?? group.tokens
         self.defaults = defaults
         guard let saved = Saved.load(from: defaults) else { return }
         group.address = saved.address
@@ -132,36 +125,30 @@ final class AppModel {
     /// At launch: if you turned notifications on and still allow them, register again, so a new
     /// push token or a 30-day-old key reaches the server.
     func restoreNotifications() {
-        #if os(iOS)
-            Task {
-                let settings = await UNUserNotificationCenter.current().notificationSettings()
-                let allowed = settings.authorizationStatus == .authorized
-                notificationsOn = allowed && defaults.bool(forKey: "notifications")
-                offersNotifications =
-                    settings.authorizationStatus == .notDetermined
-                    && !defaults.bool(forKey: "notificationsOffered")
-                if notificationsOn { UIApplication.shared.registerForRemoteNotifications() }
-            }
-        #endif
+        Task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            let allowed = settings.authorizationStatus == .authorized
+            notificationsOn = allowed && defaults.bool(forKey: "notifications")
+            offersNotifications =
+                settings.authorizationStatus == .notDetermined
+                && !defaults.bool(forKey: "notificationsOffered")
+            if notificationsOn { UIApplication.shared.registerForRemoteNotifications() }
+        }
     }
 
     /// You said yes to notifications: ask iOS, then register with the push service. Returns
     /// whether iOS allows them.
     @discardableResult
     func turnOnNotifications() async -> Bool {
-        #if os(iOS)
-            defaults.set(true, forKey: "notificationsOffered")
-            offersNotifications = false
-            let center = UNUserNotificationCenter.current()
-            let allowed =
-                (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-            defaults.set(allowed, forKey: "notifications")
-            notificationsOn = allowed
-            if allowed { UIApplication.shared.registerForRemoteNotifications() }
-            return allowed
-        #else
-            return false
-        #endif
+        defaults.set(true, forKey: "notificationsOffered")
+        offersNotifications = false
+        let center = UNUserNotificationCenter.current()
+        let allowed =
+            (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        defaults.set(allowed, forKey: "notifications")
+        notificationsOn = allowed
+        if allowed { UIApplication.shared.registerForRemoteNotifications() }
+        return allowed
     }
 
     /// Not now: Ari doesn't offer again; Settings can still turn them on.
@@ -176,9 +163,7 @@ final class AppModel {
         notificationsOn = false
         session?.unregister(device: notifications.deviceID)
         notifications.forgetKeys()
-        #if os(iOS)
-            UIApplication.shared.unregisterForRemoteNotifications()
-        #endif
+        UIApplication.shared.unregisterForRemoteNotifications()
     }
 
     /// You left the server at `address`: it forgets this device, so it stops sending notifications
@@ -216,9 +201,9 @@ final class AppModel {
     }
 
     /// An answer given from a notification: it goes at once, even with Ari in the background.
-    func answer(fromNotification text: String, ask: AskID?) async {
+    func answer(fromNotification text: String) async {
         guard let session else { return }
-        await session.sendFromNotification(text, answers: ask)
+        await session.sendFromNotification(text)
     }
 
     private func registerDevice() {

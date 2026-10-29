@@ -214,9 +214,7 @@ struct InMindSheet: View {
             }
             .background(.ariBackground)
             .navigationTitle("In mind")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .navigationBarTitleDisplayMode(.inline)
             .opensPageLinks { opened = $0 }
             .navigationDestination(item: $opened) { PageView(memory: memory, address: $0) }
         }

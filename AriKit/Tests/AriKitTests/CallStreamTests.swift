@@ -40,11 +40,7 @@ struct CallStreamTests {
         #expect(try object(.unmute) == JSONValue(json: #"{"type":"unmute"}"#))
         #expect(try object(.end) == JSONValue(json: #"{"type":"end"}"#))
         #expect(
-            try object(.played(id: "s1", cut: false))
-                == JSONValue(json: #"{"type":"played","id":"s1"}"#))
-        #expect(
-            try object(.played(id: "s1", cut: true))
-                == JSONValue(json: #"{"type":"played","id":"s1","cut":true}"#))
+            try object(.played(id: "s1")) == JSONValue(json: #"{"type":"played","id":"s1"}"#))
     }
 
     @Test("events arrive in order, your voice and commands go up, and a problem ends the call")
@@ -223,7 +219,7 @@ struct CallStreamTranscriptTests {
         case "unmute": .unmute
         case "end": .end
         case "played":
-            frame["id"]?.string.map { .played(id: $0, cut: frame["cut"] == .bool(true)) }
+            frame["id"]?.string.map { .played(id: $0) }
         default: nil
         }
     }
