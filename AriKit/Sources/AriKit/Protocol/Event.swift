@@ -30,6 +30,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case voiceStatus(VoiceStatus)
         case topicStarted(TopicStarted)
         case planTicked(PlanTicked)
+        case messageAmended(MessageAmended)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -40,6 +41,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "turn.ended", "call.started",
         "call.ended", "call.audio_deleted", "voice.status", "topic.started", "plan.ticked",
+        "message.amended",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -73,6 +75,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "voice.status": .voiceStatus(try VoiceStatus(from: decoder))
             case "topic.started": .topicStarted(try TopicStarted(from: decoder))
             case "plan.ticked": .planTicked(try PlanTicked(from: decoder))
+            case "message.amended": .messageAmended(try MessageAmended(from: decoder))
             default: .unknown
             }
     }
@@ -105,6 +108,14 @@ public struct Snapshot: Sendable, Equatable, Decodable {
         case at, reason, messages, steps, asks, calls, topics, turn, next
         case hasMore = "has_more"
     }
+}
+
+/// On a call you carried on speaking before Ari began to answer, so your words joined the message
+/// you'd just spoken: the whole message as it is now, with one recording of both parts in place of
+/// the earlier one, which is gone.
+public struct MessageAmended: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: Message
 }
 
 /// A message you sent is on the server's disk. Every connected app receives it, the sender included.

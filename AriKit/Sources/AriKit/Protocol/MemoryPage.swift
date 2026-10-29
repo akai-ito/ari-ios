@@ -69,21 +69,26 @@ public struct PageSummary: Sendable, Hashable, Identifiable, Codable {
     public let title: String
     /// What the page is now, in a line: a journal day's headline, who someone is to you.
     public let gist: String?
+    /// People pages only: who they are to you, in Ari's words, such as `family` or `work`, the
+    /// same words across people, so they group.
+    public let circle: String?
     public let changedAt: Timestamp?
 
     public var id: PageAddress { address }
 
     public init(
-        address: PageAddress, title: String, gist: String? = nil, changedAt: Timestamp? = nil
+        address: PageAddress, title: String, gist: String? = nil, circle: String? = nil,
+        changedAt: Timestamp? = nil
     ) {
         self.address = address
         self.title = title
         self.gist = gist
+        self.circle = circle
         self.changedAt = changedAt
     }
 
     enum CodingKeys: String, CodingKey {
-        case address, title, gist
+        case address, title, gist, circle
         case changedAt = "changed_at"
     }
 }

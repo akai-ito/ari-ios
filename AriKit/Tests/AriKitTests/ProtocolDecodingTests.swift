@@ -192,7 +192,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 12) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 13) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
@@ -231,6 +231,7 @@ extension Event.Payload {
         case .voiceStatus: "voice.status"
         case .topicStarted: "topic.started"
         case .planTicked: "plan.ticked"
+        case .messageAmended: "message.amended"
         case .unknown: nil
         }
     }
