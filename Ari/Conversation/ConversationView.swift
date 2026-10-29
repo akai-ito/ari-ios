@@ -29,8 +29,10 @@ struct ConversationView: View {
     @State private var distanceFromEnd = Distance.atEnd
     /// Whether your finger is on the conversation.
     @State private var scrolling = false
-    /// The scrubber shows while you scroll, and a moment after.
-    @State private var showsScrubber = false
+    /// The topics and days of the conversation, to jump between.
+    @State private var showsTopics = Self.opensTopics
+    /// Whether you've scrolled near the top of what's shown: more history comes in while you are.
+    @State private var nearTop = false
     /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
     /// latest.
     @State private var firstShown: String?
@@ -143,9 +145,6 @@ struct ConversationView: View {
                         .padding(.horizontal, 20)
                         .frame(maxWidth: .infinity)
                         .id(row.id)
-                        .onAppear {
-                            if row.id == shown.first?.id { showEarlier(rows) }
-                        }
                 }
                 // The end, exactly: what following and the pill scroll to.
                 Color.clear.frame(maxWidth: .infinity).frame(height: 1).id(Self.end)
@@ -194,26 +193,27 @@ struct ConversationView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            HeaderView(poses: header.poses, name: name, status: header.status)
-        }
-        .overlay(alignment: .trailing) {
-            let marks = TopicScrubber.marks(in: rows)
-            if marks.count > 1 {
-                TopicScrubber(marks: marks, visible: showsScrubber) { open(at: $0, in: rows) }
-                    .padding(.top, 70)
-                    .padding(.bottom, 150)
+            HeaderView(poses: header.poses, name: name, status: header.status) {
+                showsTopics = true
             }
         }
-        .onChange(of: scrolling) { _, scrolling in
-            if scrolling {
-                withAnimation(.easeOut(duration: 0.2)) { showsScrubber = true }
-            } else {
-                Task {
-                    try? await Task.sleep(for: .seconds(1.5))
-                    guard !self.scrolling else { return }
-                    withAnimation(.easeIn(duration: 0.4)) { showsScrubber = false }
-                }
+        // Near the top, older history comes in, page after page, for as long as you stay there.
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top < 400
+        } action: { _, near in
+            nearTop = near
+            if near { showEarlier(rows) }
+        }
+        .sheet(isPresented: $showsTopics) {
+            TopicsSheet(
+                marks: TopicsSheet.marks(in: rows),
+                hasEarlier: session.conversation.hasEarlierMessages,
+                loadEarlier: { await session.loadEarlier() }
+            ) { id in
+                showsTopics = false
+                jump(to: id)
             }
+            .presentationDetents([.medium, .large])
         }
         .overlay(alignment: .bottom) {
             if let pill = pillText(working: working) {
@@ -308,6 +308,14 @@ struct ConversationView: View {
     /// The marker after the last row.
     private static let end = "end"
     /// How many rows show at first, and how many more each time you reach the top.
+    private static var opensTopics: Bool {
+        #if DEBUG
+            DebugScript.opensTopics
+        #else
+            false
+        #endif
+    }
+
     private static let window = 60
     private static let more = 40
 
@@ -334,7 +342,7 @@ struct ConversationView: View {
         case .day(let date):
             DayLabel(date: date)
         case .topic(let topic):
-            TopicLabel(label: topic.label)
+            TopicLabel(label: topic.label) { showsTopics = true }
         case .yours(let entry):
             YourMessage(
                 text: entry.isSecret ? "••••••" : entry.text,
@@ -616,6 +624,29 @@ struct ConversationView: View {
             if let index = now.firstIndex(where: { $0.id == first }), index > 0 {
                 firstShown = now[max(0, index - Self.more)].id
             }
+        }
+    }
+
+    /// Goes to a topic or a day: older history comes in until it's there, then the conversation
+    /// opens at it, and settles there once the rows above have their heights.
+    private func jump(to id: String) {
+        following = false
+        Task {
+            var rows = self.rows(session.conversation)
+            while !rows.contains(where: { $0.id == id }), session.conversation.hasEarlierMessages {
+                let before = rows.count
+                await session.loadEarlier()
+                rows = self.rows(session.conversation)
+                if rows.count == before { break }
+            }
+            guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+            firstShown = rows[max(0, index - 2)].id
+            // The sheet goes, and the rows are laid out, before scrolling; and once more after,
+            // when the rows above have settled their heights.
+            try? await Task.sleep(for: .milliseconds(350))
+            withoutAnimation { position.scrollTo(id: id, anchor: .top) }
+            try? await Task.sleep(for: .milliseconds(200))
+            withoutAnimation { position.scrollTo(id: id, anchor: .top) }
         }
     }
 
