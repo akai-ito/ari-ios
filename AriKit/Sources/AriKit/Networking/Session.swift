@@ -544,60 +544,6 @@ public final class Session {
         wake(.outbox)
     }
 
-    private func runStops() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let request = stopRequest, let turn = request.turn else {
-                await nap(until: .stop)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .stop])
-                continue
-            }
-            do {
-                let result = try await client.stop(turn)
-                conversation.confirm(result)
-                if stopRequest?.turn == turn { stopRequest = nil }
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    if stopRequest?.turn == turn { stopRequest = nil }
-                }
-            }
-        }
-    }
-
-    private func runRetries() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let turn = retries.first else {
-                await nap(until: .retry)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .retry])
-                continue
-            }
-            do {
-                let result = try await client.retry(turn)
-                conversation.confirm(result)
-                retries.removeFirst()
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    retries.removeFirst()
-                }
-            }
-        }
-    }
-
     private func refusal(of attachment: AttachmentID) -> RequestError? {
         if case .refused(let error) = uploads[attachment] { return error }
         return nil
@@ -643,127 +589,109 @@ public final class Session {
         wake(.upload)
     }
 
+    private func runStops() async {
+        await runLane(.stop) {
+            stopRequest?.turn
+        } send: { turn throws(RequestError) in
+            conversation.confirm(try await client.stop(turn))
+        } done: { turn in
+            if stopRequest?.turn == turn { stopRequest = nil }
+        }
+    }
+
+    private func runRetries() async {
+        await runLane(.retry) {
+            retries.first
+        } send: { turn throws(RequestError) in
+            conversation.confirm(try await client.retry(turn))
+        } done: { turn in
+            if retries.first == turn { retries.removeFirst() }
+        }
+    }
+
     private func runCancels() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let ask = cancels.first else {
-                await nap(until: .cancel)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .cancel])
-                continue
-            }
-            do {
-                let result = try await client.cancelAsk(ask)
-                conversation.confirm(result)
-                cancels.removeFirst()
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    cancels.removeFirst()
-                }
-            }
+        await runLane(.cancel) {
+            cancels.first
+        } send: { ask throws(RequestError) in
+            conversation.confirm(try await client.cancelAsk(ask))
+        } done: { ask in
+            if cancels.first == ask { cancels.removeFirst() }
         }
     }
 
+    /// Calls start and end in the order you asked.
     private func runCalls() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let request = callRequests.first else {
-                await nap(until: .call)
-                continue
-            }
-            guard isOnline else {
-                await nap(until: [.network, .call])
-                continue
-            }
-            do {
-                let result =
-                    switch request {
-                    case .start(let call): try await client.startCall(call)
-                    case .end(let call): try await client.endCall(call)
-                    case .deleteAudio(let call): try await client.deleteAudio(of: call)
-                    }
-                conversation.confirm(result)
-                callRequests.removeFirst()
-                failures = 0
-                wake(.call)
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(Self.commandDelay(after: failures, error), until: [.network, .live])
-                } else {
-                    callRequests.removeFirst()
-                    wake(.call)
+        await runLane(.call) {
+            callRequests.first
+        } send: { request throws(RequestError) in
+            let result =
+                switch request {
+                case .start(let call): try await client.startCall(call)
+                case .end(let call): try await client.endCall(call)
+                case .deleteAudio(let call): try await client.deleteAudio(of: call)
                 }
-            }
+            conversation.confirm(result)
+        } done: { request in
+            if callRequests.first == request { callRequests.removeFirst() }
         }
     }
 
+    /// Only the latest registration goes: one that came while an earlier one went is still to send.
     private func runDevice() async {
-        var failures = 0
-        while !Task.isCancelled {
-            guard let request = deviceRequest else {
-                await nap(until: .device)
-                continue
+        await runLane(.device) {
+            deviceRequest
+        } send: { request throws(RequestError) in
+            if let registration = request.registration {
+                _ = try await client.registerDevice(request.id, registration)
+            } else {
+                try await client.removeDevice(request.id)
             }
-            guard isOnline else {
-                await nap(until: [.network, .device])
-                continue
-            }
-            do {
-                if let registration = request.registration {
-                    _ = try await client.registerDevice(request.id, registration)
-                } else {
-                    try await client.removeDevice(request.id)
-                }
-                // A newer request that came while this one went is still to send.
-                if deviceRequest?.id == request.id,
-                    deviceRequest?.registration == request.registration
-                {
-                    deviceRequest = nil
-                }
-                failures = 0
-            } catch {
-                if error.isTemporary {
-                    failures += 1
-                    await nap(
-                        Self.commandDelay(after: failures, error), until: [.network, .device])
-                } else {
-                    deviceRequest = nil
-                }
+        } done: { request in
+            if deviceRequest?.id == request.id, deviceRequest?.registration == request.registration
+            {
+                deviceRequest = nil
             }
         }
     }
 
     private func runPresence() async {
+        await runLane(.presence) {
+            presenceRequest
+        } send: { request throws(RequestError) in
+            try await client.setPresence(request.device, looking: request.looking)
+        } done: { request in
+            if presenceRequest?.looking == request.looking { presenceRequest = nil }
+        }
+    }
+
+    /// Sends a lane's requests one at a time: each goes when there's a network, again after a short
+    /// wait if it failed for a passing reason, and leaves once the server has it or refuses it.
+    private func runLane<Request>(
+        _ wake: Wake, next: () -> Request?, send: (Request) async throws(RequestError) -> Void,
+        done: (Request) -> Void
+    ) async {
         var failures = 0
         while !Task.isCancelled {
-            guard let request = presenceRequest else {
-                await nap(until: .presence)
+            guard let request = next() else {
+                await nap(until: wake)
                 continue
             }
             guard isOnline else {
-                await nap(until: [.network, .presence])
+                await nap(until: [.network, wake])
                 continue
             }
-            do {
-                try await client.setPresence(request.device, looking: request.looking)
-                if presenceRequest?.looking == request.looking { presenceRequest = nil }
+            do throws(RequestError) {
+                try await send(request)
                 failures = 0
             } catch {
                 if error.isTemporary {
                     failures += 1
                     await nap(
-                        Self.commandDelay(after: failures, error), until: [.network, .presence])
-                } else {
-                    presenceRequest = nil
+                        Self.commandDelay(after: failures, error), until: [.network, .live, wake])
+                    continue
                 }
             }
+            done(request)
         }
     }
 
