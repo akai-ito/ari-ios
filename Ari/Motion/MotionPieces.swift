@@ -45,16 +45,10 @@ extension View {
 
     /// Presents a thing in motion over the screen, grown from its source on the iPhone.
     func motionCover(_ opened: Binding<OpenedMotion?>, in namespace: Namespace.ID) -> some View {
-        #if os(iOS)
-            fullScreenCover(item: opened) { item in
-                MotionView(id: item.id)
-                    .navigationTransition(.zoom(sourceID: item.source, in: namespace))
-            }
-        #else
-            sheet(item: opened) { item in
-                MotionView(id: item.id).frame(minWidth: 520, minHeight: 640)
-            }
-        #endif
+        fullScreenCover(item: opened) { item in
+            MotionView(id: item.id)
+                .navigationTransition(.zoom(sourceID: item.source, in: namespace))
+        }
     }
 }
 

@@ -52,9 +52,7 @@ struct CapabilitiesView: View {
         .scrollContentBackground(.hidden)
         .background(.ariBackground)
         .navigationTitle("Capabilities")
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .navigationBarTitleDisplayMode(.inline)
         .task { await capabilities.refresh() }
         .refreshable { await capabilities.refresh() }
     }

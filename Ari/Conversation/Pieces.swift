@@ -1,21 +1,11 @@
 import AriKit
 import SwiftUI
-
-#if os(iOS)
-    import UIKit
-#else
-    import AppKit
-#endif
+import UIKit
 
 /// The system pasteboard, on either platform.
 enum Pasteboard {
     static func copy(_ text: String) {
-        #if os(iOS)
-            UIPasteboard.general.string = text
-        #else
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-        #endif
+        UIPasteboard.general.string = text
     }
 }
 
@@ -176,9 +166,7 @@ struct TopicsSheet: View {
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
             .navigationTitle("Topics")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -338,58 +326,44 @@ struct SelectTextSheet: View {
     var body: some View {
         let plain = ReplyDocument(markdown: text).plainText
         Group {
-            #if os(iOS)
-                // SwiftUI's text on iPhone can only be copied whole; a text view lets you pick words.
-                SelectableText(text: plain)
-            #else
-                ScrollView {
-                    Text(plain)
-                        .font(.ariBody)
-                        .lineSpacing(Rhythm.ariLineSpacing)
-                        .foregroundStyle(.ariText)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(22)
-                }
-            #endif
+            // SwiftUI's text on iPhone can only be copied whole; a text view lets you pick words.
+            SelectableText(text: plain)
         }
         .presentationDetents([.medium, .large])
         .presentationBackground(.ariSurface)
     }
 }
 
-#if os(iOS)
-    /// Read-only text you can select any part of, in Ari's serif.
-    private struct SelectableText: UIViewRepresentable {
-        let text: String
+/// Read-only text you can select any part of, in Ari's serif.
+private struct SelectableText: UIViewRepresentable {
+    let text: String
 
-        func makeUIView(context: Context) -> UITextView {
-            let view = UITextView()
-            view.isEditable = false
-            view.isSelectable = true
-            view.backgroundColor = .clear
-            view.textContainerInset = UIEdgeInsets(top: 22, left: 18, bottom: 22, right: 18)
-            view.adjustsFontForContentSizeCategory = true
-            return view
-        }
-
-        func updateUIView(_ view: UITextView, context: Context) {
-            let body = UIFont.preferredFont(forTextStyle: .body)
-            let serif = body.fontDescriptor.withDesign(.serif).map {
-                UIFont(descriptor: $0, size: 0)
-            }
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineSpacing = Rhythm.ariLineSpacing
-            paragraph.paragraphSpacing = 10
-            view.attributedText = NSAttributedString(
-                string: text,
-                attributes: [
-                    .font: UIFontMetrics(forTextStyle: .body).scaledFont(for: serif ?? body),
-                    .foregroundColor: UIColor(Color.ariText), .paragraphStyle: paragraph,
-                ])
-        }
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.backgroundColor = .clear
+        view.textContainerInset = UIEdgeInsets(top: 22, left: 18, bottom: 22, right: 18)
+        view.adjustsFontForContentSizeCategory = true
+        return view
     }
-#endif
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        let body = UIFont.preferredFont(forTextStyle: .body)
+        let serif = body.fontDescriptor.withDesign(.serif).map {
+            UIFont(descriptor: $0, size: 0)
+        }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = Rhythm.ariLineSpacing
+        paragraph.paragraphSpacing = 10
+        view.attributedText = NSAttributedString(
+            string: text,
+            attributes: [
+                .font: UIFontMetrics(forTextStyle: .body).scaledFont(for: serif ?? body),
+                .foregroundColor: UIColor(Color.ariText), .paragraphStyle: paragraph,
+            ])
+    }
+}
 
 /// Something a sheet shows: a failure's details, or a reply to select from.
 enum SheetItem: Identifiable {

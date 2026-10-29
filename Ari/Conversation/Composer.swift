@@ -67,9 +67,6 @@ struct Composer<Leading: View, Above: View>: View {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(.ariLine, lineWidth: 1)
             )
-            #if os(macOS)
-                .onSubmit(send)
-            #endif
         let talks = role == .idle && talk != nil
         Button(action: role == .stop ? stop : talks ? talk ?? send : send) {
             ZStack {

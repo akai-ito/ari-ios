@@ -55,22 +55,12 @@ struct ConversationView: View {
     /// Each send and each Stop, for a light tap you can feel.
     @State private var sent = 0
     @State private var stops = 0
-    #if os(iOS)
-        /// Calls with Ari.
-        @Environment(Talk.self) private var talk: Talk?
-        /// Whether the server can talk.
-        @Environment(Voices.self) private var voices: Voices?
-    #endif
+    /// Calls with Ari.
+    @Environment(Talk.self) private var talk: Talk?
+    /// Whether the server can talk.
+    @Environment(Voices.self) private var voices: Voices?
 
     var body: some View {
-        let conversation = session.conversation
-        let working = conversation.turn != nil || reveal.isRevealing
-        // Stop while Ari works, or while it waits for you, which cancels what it asked.
-        let canStop =
-            (working && conversation.pendingStop == nil)
-            || (!working && conversation.waitingAsk != nil)
-        let target = conversation.turn?.id.rawValue ?? conversation.waitingAsk?.id.rawValue ?? ""
-        let stopCommand = canStop ? StopCommand(target: target, perform: { stop() }) : nil
         screen
             // The pinned line, compact lines and the trail open what's in motion over the chat.
             .environment(
@@ -84,21 +74,18 @@ struct ConversationView: View {
             .dropDestination(for: URL.self) { urls, _ in drop(urls) }
             .sensoryFeedback(.impact(weight: .light), trigger: sent)
             .sensoryFeedback(.impact(weight: .medium), trigger: stops)
-            .focusedSceneValue(\.stop, stopCommand)
-            #if os(iOS)
-                // Links in replies open in place, over the conversation.
-                .environment(
-                    \.openURL,
-                    OpenURLAction { url in
-                        guard WebPage.opens(url) else { return .systemAction }
-                        browsing = WebPage(url: url)
-                        return .handled
-                    }
-                )
-                .sheet(item: $browsing) { page in
-                    BrowserView(page: page).ignoresSafeArea()
+            // Links in replies open in place, over the conversation.
+            .environment(
+                \.openURL,
+                OpenURLAction { url in
+                    guard WebPage.opens(url) else { return .systemAction }
+                    browsing = WebPage(url: url)
+                    return .handled
                 }
-            #endif
+            )
+            .sheet(item: $browsing) { page in
+                BrowserView(page: page).ignoresSafeArea()
+            }
             .sheet(item: $sheet) { item in
                 switch item {
                 case .details(let error): DetailsSheet(error: error)
@@ -151,9 +138,9 @@ struct ConversationView: View {
                 }
                 ForEach(shown) { row in
                     rowView(row, in: conversation)
-                        // A comfortable reading width on a wide Mac window, inside a row as wide as
-                        // the screen: scrolling to a row lines up its edge with the screen's, so a
-                        // row starting at its margin slid the whole conversation sideways.
+                        // A comfortable reading width, inside a row as wide as the screen:
+                        // scrolling to a row lines up its edge with the screen's, so a row starting
+                        // at its margin slid the whole conversation sideways.
                         .frame(maxWidth: Rhythm.column, alignment: .leading)
                         .padding(.horizontal, 20)
                         .frame(maxWidth: .infinity)
@@ -246,14 +233,12 @@ struct ConversationView: View {
                 } else {
                     // While Ari waits for your answer, the composer takes it, as a secret if asked.
                     VStack(spacing: 0) {
-                        #if os(iOS)
-                            if let talk, let notice = talk.notice, talk.call == nil {
-                                TalkNotice(text: notice) { talk.notice = nil }
-                            }
-                            if let talk, let call = talk.call, !talk.showsCall {
-                                OnCallBar(call: call) { talk.showsCall = true }
-                            }
-                        #endif
+                        if let talk, let notice = talk.notice, talk.call == nil {
+                            TalkNotice(text: notice) { talk.notice = nil }
+                        }
+                        if let talk, let call = talk.call, !talk.showsCall {
+                            OnCallBar(call: call) { talk.showsCall = true }
+                        }
                         PinnedArea(holding: working)
                         ComposerArea(
                             session: session, attached: $attached, attachProblem: $attachProblem,
@@ -492,31 +477,19 @@ struct ConversationView: View {
 
     /// Talk, where Ari can take a call: on the iPhone.
     private var talkAction: (() -> Void)? {
-        #if os(iOS)
-            guard let talk else { return nil }
-            return { talk.start() }
-        #else
-            return nil
-        #endif
+        guard let talk else { return nil }
+        return { talk.start() }
     }
 
     /// Whether the server can talk now, so Talk shows as ready.
     private var talkReady: Bool {
-        #if os(iOS)
-            voices?.canTalk ?? false
-        #else
-            false
-        #endif
+        voices?.canTalk ?? false
     }
 
     /// Back to the call a block opened, when it's this phone's and still on.
     private func returnToCall(_ call: Call) -> (() -> Void)? {
-        #if os(iOS)
-            guard let talk, call.isOn, talk.call?.id == call.id else { return nil }
-            return { talk.showsCall = true }
-        #else
-            return nil
-        #endif
+        guard let talk, call.isOn, talk.call?.id == call.id else { return nil }
+        return { talk.showsCall = true }
     }
 
     /// Whatever you send while Ari waits answers it. A secret names the ask, and keeps no text.

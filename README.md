@@ -6,7 +6,7 @@
 
 > [!NOTE]
 > Ari connects to your Ito server and holds the conversation live, in its own look. Still to come:
-> opening instantly from the phone's cache, a light mode, and polish for the Mac. The
+> opening instantly from the phone's cache, a light mode, and an iPad layout. The
 > [map](https://github.com/akai-ito/.github/blob/main/map.md) has the design.
 
 ## What it will be
@@ -20,7 +20,7 @@
 
 | Path | What it is |
 | --- | --- |
-| [Ari](Ari) | The app, for iPhone and Mac from one SwiftUI target: the connect screen and the conversation |
+| [Ari](Ari) | The app, for iPhone, in SwiftUI: the connect screen and the conversation |
 | [AriKit](AriKit) | Everything but the screens: the protocol's models, the conversation store, the networking and the reading pace |
 | [protocol](protocol) | ito-core's client API, copied at the commit in [protocol.pin](protocol.pin) |
 | [project.yml](project.yml) | The Xcode project, which XcodeGen generates |
@@ -63,7 +63,7 @@
   code), it asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any
   message you send answers it, and a secret answer stays out of your history.
 - **Three places, and Settings.** Chat, Goals and Library, as the design map plans them, in the
-  iOS 26 tab bar (a sidebar on the Mac); Goals and Library say plainly what they'll hold. Settings
+  iOS 26 tab bar; Goals and Library say plainly what they'll hold. Settings
   open from the corner: the server (with "Connect to another server…"), notifications, and the
   app icon, Rest or Peeking.
 - **The look.** A cool slate dark with soft white text and no accent colour. Ari writes in New
@@ -85,8 +85,8 @@ xcodegen generate   # writes Ari.xcodeproj; run it again whenever project.yml ch
 open Ari.xcodeproj
 ```
 
-Ari runs in the Simulator and on your Mac as it is. To try it without an agent, run ito-core's
-demo engine on the same Mac (`node bin/ito.ts serve --engine demo` in an
+Ari runs in the Simulator as it is. To try it without an agent, run ito-core's
+demo engine on your Mac (`node bin/ito.ts serve --engine demo` in an
 [ito-core](https://github.com/akai-ito/ito-core) clone) and connect to `http://127.0.0.1:8787` with
 the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen,
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,

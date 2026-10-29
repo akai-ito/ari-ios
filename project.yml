@@ -5,7 +5,6 @@ options:
   xcodeVersion: "27.0"
   deploymentTarget:
     iOS: "26.0"
-    macOS: "26.0"
   indentWidth: 4
   tabWidth: 4
   usesTabs: false
@@ -24,7 +23,7 @@ packages:
 targets:
   Ari:
     type: application
-    supportedDestinations: [iOS, macOS]
+    platform: iOS
     sources:
       - path: Ari
         type: syncedFolder
@@ -34,21 +33,14 @@ targets:
       - package: AriKit
       # The notification service extension decrypts each push on the iPhone.
       - target: AriNotificationService
-        destinationFilters: [iOS]
       # Share to Ari, from any app's share sheet.
       - target: AriShare
-        destinationFilters: [iOS]
       # Talk to Ari from Control Centre, the Lock Screen or the Action button.
       - target: AriControls
-        destinationFilters: [iOS]
     settings:
       base:
         # Push, time-sensitive asks, and the app group the notification extension shares.
-        "CODE_SIGN_ENTITLEMENTS[sdk=iphone*]": Ari/Ari-iOS.entitlements
-        # XcodeGen gives a multiplatform target its iOS presets; undo the two that are wrong for
-        # the Mac. With the SDK's default identity, the Mac signs to run locally until a team is set.
-        CODE_SIGN_IDENTITY: $(inherited)
-        "LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]": "@executable_path/../Frameworks"
+        CODE_SIGN_ENTITLEMENTS: Ari/Ari-iOS.entitlements
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         # iPhone first: no iPad layout yet, and no "Designed for iPhone" listing on Vision Pro.
@@ -57,30 +49,24 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Ari
         # Only to scan the QR code ito pair shows.
-        "INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphone*]": "Ari uses the camera to scan the pairing code your server shows."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Ari uses the camera to scan the pairing code your server shows."
         # Talking with Ari on a call: your voice goes to your server.
-        "INFOPLIST_KEY_NSMicrophoneUsageDescription[sdk=iphone*]": "Ari listens on a call and sends your voice to your server, so you can talk with it."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ari listens on a call and sends your voice to your server, so you can talk with it."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        "INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphone*]": YES
-        "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphone*]": YES
-        "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphone*]": YES
-        "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone[sdk=iphone*]": UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         ENABLE_PREVIEWS: YES
         # Colours live in the asset catalogue; Xcode makes Color.ariBackground and the rest from it.
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Ari at rest is the icon; Peeking, looking up at you, is the one you can switch to.
-        "ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=iphone*]": AppIconPeeking
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIconPeeking
         # Dark first: the light values come later, and then this goes.
-        "INFOPLIST_KEY_UIUserInterfaceStyle[sdk=iphone*]": Dark
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
-        # Only the Mac build turns these into entitlements; iOS ignores them.
-        ENABLE_APP_SANDBOX: YES
-        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
-        # Files you pick to attach.
-        ENABLE_USER_SELECTED_FILES: readonly
-        ENABLE_HARDENED_RUNTIME: YES
     # ito://pair links, from the QR code ito pair shows: the Camera app opens them in Ari.
     info:
       path: Config/Ari-Info.plist

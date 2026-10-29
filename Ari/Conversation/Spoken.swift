@@ -136,13 +136,11 @@ final class AudioReplay: NSObject, AVAudioPlayerDelegate {
         guard let data = await bytes(id), let player = try? AVAudioPlayer(data: data) else {
             return
         }
-        #if os(iOS)
-            // A call keeps its own audio session; otherwise play as media, out of the speaker.
-            if !CallEngine.isOn {
-                try? AVAudioSession.sharedInstance().setCategory(.playback)
-                try? AVAudioSession.sharedInstance().setActive(true)
-            }
-        #endif
+        // A call keeps its own audio session; otherwise play as media, out of the speaker.
+        if !CallEngine.isOn {
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
         player.delegate = self
         player.play()
         self.player = player
@@ -190,9 +188,7 @@ struct FixWordSheet: View {
                 }
             }
             .navigationTitle("Fix a word")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

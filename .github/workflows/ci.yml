@@ -55,24 +55,6 @@ jobs:
             exit 1
           fi
 
-  build-mac:
-    name: Build (Mac)
-    runs-on: xcode-27
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/xcode
-        with:
-          project: "true"
-      - name: Build Ari for the Mac, unsigned
-        run: |
-          if ! xcodebuild build -project Ari.xcodeproj -scheme Ari \
-              -destination "generic/platform=macOS" ARCHS=arm64 CODE_SIGNING_ALLOWED=NO \
-              | xcbeautify --renderer github-actions; then
-            echo "::error title=Build (Mac)::Ari doesn't build for the Mac; the errors above say where."
-            exit 1
-          fi
-
   tests:
     name: Tests
     runs-on: xcode-27

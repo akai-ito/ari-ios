@@ -15,18 +15,13 @@ struct MainView: View {
     @State private var memory: Memory?
     /// What's in motion, for its tab, the pinned line and compact lines in the chat.
     @State private var motions: Motions?
-    #if os(iOS)
-        /// Calls with Ari, registered with iOS.
-        @State private var talk: Talk?
-        /// Ari's voice on the server, and whether it can talk.
-        @State private var voices: Voices?
-        /// The calls Siri asked for that have started here.
-        @State private var startedCalls = 0
-    #endif
+    /// Calls with Ari, registered with iOS.
+    @State private var talk: Talk?
+    /// Ari's voice on the server, and whether it can talk.
+    @State private var voices: Voices?
+    /// The calls Siri asked for that have started here.
+    @State private var startedCalls = 0
     @Environment(\.scenePhase) private var scenePhase
-    #if os(macOS)
-        @Environment(\.openSettings) private var openSettings
-    #endif
 
     enum Place: Hashable { case chat, motion, library }
 
@@ -91,63 +86,50 @@ struct MainView: View {
             place = .library
             libraryPath = NavigationPath([page])
         }
-        #if os(iOS)
-            .environment(talk)
-            .environment(voices)
-            .task {
-                makeTalk()
-                await voices?.refresh()
-                #if DEBUG
-                    if DebugScript.talks { talk?.start() }
-                #endif
+        .environment(talk)
+        .environment(voices)
+        .task {
+            makeTalk()
+            await voices?.refresh()
+            #if DEBUG
+                if DebugScript.talks { talk?.start() }
+            #endif
+        }
+        // "Hey Siri, talk to Ari", including when it opened Ari.
+        .onChange(of: TalkRequests.shared.count, initial: true) { _, count in
+            guard count > startedCalls else { return }
+            startedCalls = count
+            makeTalk()
+            place = .chat
+            Task {
+                // Opened by Siri: know whether the server can talk before starting.
+                if voices?.state == nil { await voices?.refresh() }
+                talk?.start()
             }
-            // "Hey Siri, talk to Ari", including when it opened Ari.
-            .onChange(of: TalkRequests.shared.count, initial: true) { _, count in
-                guard count > startedCalls else { return }
-                startedCalls = count
-                makeTalk()
-                place = .chat
-                Task {
-                    // Opened by Siri: know whether the server can talk before starting.
-                    if voices?.state == nil { await voices?.refresh() }
-                    talk?.start()
-                }
+        }
+        // The server's voice changed: Talk follows, and a call ends if it can't go on.
+        .onChange(of: session.voiceStatus) { _, status in
+            guard let status, let voices else { return }
+            voices.apply(status)
+            if talk?.call != nil, !voices.canTalk {
+                talk?.end(because: voices.reason ?? "Ari's voice stopped on your server.")
             }
-            // The server's voice changed: Talk follows, and a call ends if it can't go on.
-            .onChange(of: session.voiceStatus) { _, status in
-                guard let status, let voices else { return }
-                voices.apply(status)
-                if talk?.call != nil, !voices.canTalk {
-                    talk?.end(because: voices.reason ?? "Ari's voice stopped on your server.")
-                }
+        }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { talk?.showsCall ?? false }, set: { talk?.showsCall = $0 })
+        ) {
+            if let talk, let call = talk.call {
+                CallView(talk: talk, call: call, session: session)
             }
-            .fullScreenCover(
-                isPresented: Binding(
-                    get: { talk?.showsCall ?? false }, set: { talk?.showsCall = $0 })
-            ) {
-                if let talk, let call = talk.call {
-                    CallView(talk: talk, call: call, session: session)
-                }
-            }
-        #endif
-        // A tab bar on iPhone, a sidebar on the Mac.
+        }
+        // A tab bar on the iPhone; a sidebar once there's an iPad layout.
         .tabViewStyle(.sidebarAdaptable)
-        #if os(iOS)
-            .tabBarMinimizeBehavior(.onScrollDown)
-        #endif
-        #if os(iOS)
-            .sheet(isPresented: $showsSettings) {
-                // A sheet takes the environment from where it's attached, outside the one above.
-                SettingsView(model: model, session: session).environment(voices)
-            }
-        #else
-            // On the Mac, Settings is a window of its own.
-            .onChange(of: showsSettings) { _, shows in
-                guard shows else { return }
-                showsSettings = false
-                openSettings()
-            }
-        #endif
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .sheet(isPresented: $showsSettings) {
+            // A sheet takes the environment from where it's attached, outside the one above.
+            SettingsView(model: model, session: session).environment(voices)
+        }
         // The server pushes only while you're not looking at the conversation.
         .onChange(of: scenePhase == .active && place == .chat, initial: true) { _, looking in
             model.setLooking(looking)
@@ -155,10 +137,8 @@ struct MainView: View {
         .onChange(of: session.link) { _, link in
             guard link == .live else { return }
             model.reconnected()
-            #if os(iOS)
-                // The voice may have changed while the stream was down.
-                Task { await voices?.refresh() }
-            #endif
+            // The voice may have changed while the stream was down.
+            Task { await voices?.refresh() }
         }
         .onChange(of: model.opening) { _, message in
             if message != nil { place = .chat }
@@ -172,15 +152,13 @@ struct MainView: View {
     }
 }
 
-#if os(iOS)
-    extension MainView {
-        /// Ari's voice and calls, made once there's a server to talk to.
-        fileprivate func makeTalk() {
-            if voices == nil, let client = model.client() { voices = Voices(client: client) }
-            if talk == nil, let voices { talk = Talk(session: session, voices: voices) }
-        }
+extension MainView {
+    /// Ari's voice and calls, made once there's a server to talk to.
+    fileprivate func makeTalk() {
+        if voices == nil, let client = model.client() { voices = Voices(client: client) }
+        if talk == nil, let voices { talk = Talk(session: session, voices: voices) }
     }
-#endif
+}
 
 /// The gear in the corner: a small glass circle, quiet until you need it.
 struct SettingsButton: View {

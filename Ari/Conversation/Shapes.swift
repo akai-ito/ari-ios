@@ -1,10 +1,7 @@
 import AriKit
+import EventKitUI
 import MapKit
 import SwiftUI
-
-#if os(iOS)
-    import EventKitUI
-#endif
 
 /// What a reply's shapes can do: tick a plan, send a choice, show a picture. The conversation gives
 /// it to each of Ari's replies; elsewhere, as on a page of memory, a shape only shows.
@@ -300,30 +297,26 @@ private struct TimeView: View {
                     if let location = time.location {
                         Text(location).font(.footnote).foregroundStyle(.ariTertiary)
                     }
-                    #if os(iOS)
-                        if time.dates != nil {
-                            Button(added ? "Added to Calendar" : "Add to Calendar") {
-                                adding = true
-                            }
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.ariText)
-                            .disabled(added)
-                            .padding(.top, 6)
+                    if time.dates != nil {
+                        Button(added ? "Added to Calendar" : "Add to Calendar") {
+                            adding = true
                         }
-                    #endif
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.ariText)
+                        .disabled(added)
+                        .padding(.top, 6)
+                    }
                 }
                 Spacer(minLength: 0)
             }
         }
-        #if os(iOS)
-            .sheet(isPresented: $adding) {
-                EventEditor(time: time) { saved in
-                    adding = false
-                    if saved { added = true }
-                }
-                .ignoresSafeArea()
+        .sheet(isPresented: $adding) {
+            EventEditor(time: time) { saved in
+                adding = false
+                if saved { added = true }
             }
-        #endif
+            .ignoresSafeArea()
+        }
     }
 
     /// "Sat 7 Nov, 08:15–11:00", with the place's zone named when it isn't yours.
@@ -347,49 +340,47 @@ private struct TimeView: View {
     }
 }
 
-#if os(iOS)
-    /// The system's sheet for adding an event, filled in from Ari's time.
-    private struct EventEditor: UIViewControllerRepresentable {
-        let time: ReplyShape.Time
+/// The system's sheet for adding an event, filled in from Ari's time.
+private struct EventEditor: UIViewControllerRepresentable {
+    let time: ReplyShape.Time
+    let done: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(done: done) }
+
+    func makeUIViewController(context: Context) -> EKEventEditViewController {
+        let store = EKEventStore()
+        let event = EKEvent(eventStore: store)
+        event.title = time.title
+        event.location = time.location
+        event.timeZone = TimeZone(identifier: time.timezone)
+        event.isAllDay = time.isAllDay
+        if let dates = time.dates {
+            event.startDate = dates.start
+            event.endDate =
+                dates.end ?? dates.start.addingTimeInterval(time.isAllDay ? 0 : 3_600)
+        }
+        let controller = EKEventEditViewController()
+        controller.eventStore = store
+        controller.event = event
+        controller.editViewDelegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
+
+    final class Coordinator: NSObject, EKEventEditViewDelegate {
         let done: (Bool) -> Void
 
-        func makeCoordinator() -> Coordinator { Coordinator(done: done) }
+        init(done: @escaping (Bool) -> Void) { self.done = done }
 
-        func makeUIViewController(context: Context) -> EKEventEditViewController {
-            let store = EKEventStore()
-            let event = EKEvent(eventStore: store)
-            event.title = time.title
-            event.location = time.location
-            event.timeZone = TimeZone(identifier: time.timezone)
-            event.isAllDay = time.isAllDay
-            if let dates = time.dates {
-                event.startDate = dates.start
-                event.endDate =
-                    dates.end ?? dates.start.addingTimeInterval(time.isAllDay ? 0 : 3_600)
-            }
-            let controller = EKEventEditViewController()
-            controller.eventStore = store
-            controller.event = event
-            controller.editViewDelegate = context.coordinator
-            return controller
-        }
-
-        func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
-
-        final class Coordinator: NSObject, EKEventEditViewDelegate {
-            let done: (Bool) -> Void
-
-            init(done: @escaping (Bool) -> Void) { self.done = done }
-
-            func eventEditViewController(
-                _ controller: EKEventEditViewController,
-                didCompleteWith action: EKEventEditViewAction
-            ) {
-                done(action == .saved)
-            }
+        func eventEditViewController(
+            _ controller: EKEventEditViewController,
+            didCompleteWith action: EKEventEditViewAction
+        ) {
+            done(action == .saved)
         }
     }
-#endif
+}
 
 // MARK: - A comparison, choices
 

@@ -53,10 +53,8 @@ struct ConnectView: View {
                         .focused($focus, equals: .address)
                         .submitLabel(.next)
                         .onSubmit { focus = .token }
-                        #if os(iOS)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                        #endif
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
                 OutlinedField(title: "Pairing code or token") {
@@ -84,16 +82,14 @@ struct ConnectView: View {
             .buttonStyle(.plain)
             .disabled(connecting || address.isEmpty || token.isEmpty)
             .opacity(address.isEmpty || token.isEmpty ? 0.5 : 1)
-            #if os(iOS)
-                if CodeScanner.isAvailable {
-                    Button("Scan the code from ito pair", systemImage: "qrcode.viewfinder") {
-                        scanning = true
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .buttonStyle(.plain)
+            if CodeScanner.isAvailable {
+                Button("Scan the code from ito pair", systemImage: "qrcode.viewfinder") {
+                    scanning = true
                 }
-            #endif
+                .font(.subheadline)
+                .foregroundStyle(.ariSecondary)
+                .buttonStyle(.plain)
+            }
             if let cancel {
                 Button("Not now", action: cancel)
                     .font(.subheadline)
@@ -120,17 +116,15 @@ struct ConnectView: View {
         .task {
             if let pairing { use(pairing) }
         }
-        #if os(iOS)
-            .sheet(isPresented: $scanning) {
-                ScanSheet { text in
-                    guard let link = URL(string: text), let pairing = Connector.pairing(from: link)
-                    else { return false }
-                    scanning = false
-                    use(PairingLink(address: pairing.address, code: pairing.code))
-                    return true
-                }
+        .sheet(isPresented: $scanning) {
+            ScanSheet { text in
+                guard let link = URL(string: text), let pairing = Connector.pairing(from: link)
+                else { return false }
+                scanning = false
+                use(PairingLink(address: pairing.address, code: pairing.code))
+                return true
             }
-        #endif
+        }
         #if DEBUG
             .task {
                 guard let debug = DebugScript.connection else { return }
@@ -216,11 +210,7 @@ struct ConnectView: View {
 extension ConnectView {
     /// What the server calls this device in its list of paired devices.
     fileprivate static var deviceName: String {
-        #if os(iOS)
-            UIDevice.current.name
-        #else
-            Host.current().localizedName ?? "Mac"
-        #endif
+        UIDevice.current.name
     }
 }
 

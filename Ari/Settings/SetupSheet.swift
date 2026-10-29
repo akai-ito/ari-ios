@@ -60,9 +60,7 @@ struct SetupSheet: View {
             .scrollContentBackground(.hidden)
             .background(.ariBackground)
             .navigationTitle(capability.title)
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -97,9 +95,7 @@ struct SetupSheet: View {
         default:
             TextField(field.label, text: text(field.name))
                 .textContentType(nil)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
         }
     }

@@ -22,9 +22,7 @@ struct CapabilityView: View {
         .scrollContentBackground(.hidden)
         .background(.ariBackground)
         .navigationTitle(capabilities.capability(id)?.title ?? "")
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .navigationBarTitleDisplayMode(.inline)
         // Opened straight here, nothing has loaded the list yet.
         .task { if capabilities.capability(id) == nil { await capabilities.refresh() } }
         .onAppear { if opensSetup { settingUp = true } }
