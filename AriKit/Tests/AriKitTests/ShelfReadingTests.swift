@@ -45,6 +45,19 @@ struct ShelfReadingTests {
             ])
     }
 
+    @Test("people group by circle, closest first, those without one last")
+    func circles() {
+        let people = [
+            ("Bora", "friends"), ("Mum", "family"), ("Poppy Walton", "work"), ("Janki", "partner"),
+            ("Ayush", "friends"), ("Coach", "running"), ("Niwi", nil),
+        ].map {
+            PageSummary(address: PageAddress("memory:people/\($0.0)"), title: $0.0, circle: $0.1)
+        }
+        let circles = ShelfReading.circles(people)
+        #expect(circles.map(\.circle) == ["partner", "family", "friends", "work", "running", nil])
+        #expect(circles[2].pages.map(\.title) == ["Ayush", "Bora"])
+    }
+
     @Test("journal days group by month, newest first")
     func months() {
         let days = ["2026-10-26", "2026-09-11", "2026-10-24", "2026-09-12"].map {

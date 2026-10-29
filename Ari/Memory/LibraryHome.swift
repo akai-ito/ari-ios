@@ -140,7 +140,7 @@ struct LibraryHome: View {
 
     /// The shelves you'll reach for most first.
     private static func ordered(_ shelves: [Shelf]) -> [Shelf] {
-        let order = ["people", "projects", "journal", "goals", "topics", "places"]
+        let order = ["people", "projects", "journal", "groups", "goals", "topics", "places"]
         return shelves.sorted {
             (order.firstIndex(of: $0.shelf) ?? order.count)
                 < (order.firstIndex(of: $1.shelf) ?? order.count)
