@@ -22,9 +22,7 @@ struct PinnedArea: View {
         let live = motions?.pinned.map {
             Pinned(motion: $0.motion, detail: motions?.details[$0.motion.id], more: $0.more)
         }
-        // Until the hold has caught the line, it's the live one: a frame without it would let the
-        // conversation settle as if it had gone, then cover the reply's end when it came back.
-        let shown = holding ? held ?? live : live
+        let shown = holding ? held : live
         VStack(spacing: 0) {
             if let motions, let pinned = shown {
                 let source = "pinned \(pinned.motion.id)"
@@ -49,7 +47,7 @@ struct PinnedArea: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.68), value: shown?.motion.id)
         .onChange(of: holding, initial: true) { _, holding in
-            held = holding ? live : nil
+            if holding { held = live }
         }
     }
 }
@@ -115,8 +113,8 @@ struct PinnedLine: View {
 }
 
 extension PinnedLine {
-    /// The line's words: the name always, then the dates (`when`) and what's left (`now`) where
-    /// there's room, and how many more are pinned.
+    /// The line's words: the name always, then the dates (`when`) and what's left or on today
+    /// (`now`) where there's room, and how many more are pinned.
     fileprivate func parts(_ line: MotionLineText, when: Bool, now: Bool) -> some View {
         HStack(spacing: 5) {
             Text(line.name).fontWeight(.semibold).foregroundStyle(.ariText)
@@ -127,6 +125,10 @@ extension PinnedLine {
             if now, let left = line.left {
                 Dot()
                 LeftCount(left: left).foregroundStyle(.ariSecondary)
+            }
+            if now, let today = line.today {
+                Dot()
+                Text(today).foregroundStyle(.ariSecondary).contentTransition(.opacity)
             }
             if more > 0 {
                 Dot()

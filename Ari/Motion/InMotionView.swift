@@ -114,6 +114,10 @@ struct InMotionView: View {
                             Text("·").foregroundStyle(.ariTertiary)
                             LeftCount(left: left)
                         }
+                        if let today = line.today {
+                            Text("·").foregroundStyle(.ariTertiary)
+                            Text(today)
+                        }
                     }
                     .font(.subheadline)
                     .foregroundStyle(.ariSecondary)
