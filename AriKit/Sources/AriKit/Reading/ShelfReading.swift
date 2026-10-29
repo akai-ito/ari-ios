@@ -27,6 +27,25 @@ public enum ShelfReading {
         pages.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
+    /// People by the circle Ari keeps for each, closest first: partner and family, then friends, then
+    /// work, then any other circle Ari uses, A to Z. People without a circle yet come last, as `nil`.
+    /// Each circle's people read A to Z.
+    public static func circles(_ pages: [PageSummary]) -> [(circle: String?, pages: [PageSummary])]
+    {
+        let closest = ["partner", "family", "close", "friends", "work"]
+        let grouped = Dictionary(grouping: pages) { $0.circle?.lowercased() }
+        let named = grouped.keys.compactMap(\.self).sorted { a, b in
+            let first = closest.firstIndex(of: a) ?? closest.count
+            let second = closest.firstIndex(of: b) ?? closest.count
+            return first != second ? first < second : a < b
+        }
+        var circles = named.map { (circle: Optional($0), pages: everyone(grouped[$0] ?? [])) }
+        if let unplaced = grouped[nil], !unplaced.isEmpty {
+            circles.append((circle: nil, pages: everyone(unplaced)))
+        }
+        return circles
+    }
+
     /// A journal page's day, from its address: `memory:journal/2026-10-26`.
     public static func day(of page: PageSummary) -> DateComponents? {
         guard let last = page.address.rawValue.split(separator: "/").last else { return nil }

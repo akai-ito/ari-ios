@@ -2,12 +2,14 @@ import AriKit
 import SwiftUI
 
 /// The pages on one shelf: who and what Ari touched lately, then everyone, A to Z. The Journal is
-/// its days by month instead, or a calendar.
+/// its days by month instead, or a calendar, and People goes by circle, with groups after.
 struct ShelfView: View {
     let memory: Memory?
     let shelf: String
 
     @State private var pages: [PageSummary]?
+    /// On People, the groups too, in a section of their own.
+    @State private var groups: [PageSummary] = []
     @State private var problem: String?
     @State private var showsCalendar = false
 
@@ -25,6 +27,10 @@ struct ShelfView: View {
                     } else {
                         JournalList(months: ShelfReading.months(pages))
                     }
+                } else if shelf == "people" || shelf == "groups" {
+                    PeopleList(
+                        people: shelf == "people" ? pages : [],
+                        groups: shelf == "groups" ? pages : groups)
                 } else {
                     ShelfList(pages: pages)
                 }
@@ -55,7 +61,9 @@ struct ShelfView: View {
             #endif
             guard let memory else { return }
             do throws(RequestError) {
-                pages = try await memory.pages(on: shelf)
+                let loaded = try await memory.pages(on: shelf)
+                if shelf == "people" { groups = try await memory.pages(on: "groups") }
+                pages = loaded
             } catch {
                 problem = "Couldn't load this shelf: \(error.plainWords)"
             }
@@ -94,6 +102,110 @@ private struct ShelfList: View {
             }
         }
         .listRowBackground(Color.ariSurface)
+    }
+}
+
+/// People, by the circles Ari keeps (partner and family first), each with a monogram in Ari's dots
+/// and Ari's line on who they are to you; then groups of people, in a section of their own.
+private struct PeopleList: View {
+    let people: [PageSummary]
+    let groups: [PageSummary]
+
+    var body: some View {
+        let circles = ShelfReading.circles(people)
+        Form {
+            ForEach(circles.indices, id: \.self) { index in
+                let circle = circles[index]
+                Section {
+                    rows(circle.pages, group: false)
+                } header: {
+                    if let name = circle.circle {
+                        heading(name.prefix(1).uppercased() + name.dropFirst())
+                    } else if circles.count > 1 {
+                        heading("Everyone else")
+                    }
+                }
+            }
+            if !groups.isEmpty {
+                Section {
+                    rows(ShelfReading.everyone(groups), group: true)
+                } header: {
+                    heading("Groups")
+                }
+            }
+        }
+    }
+
+    private func rows(_ pages: [PageSummary], group: Bool) -> some View {
+        ForEach(pages) { page in
+            NavigationLink(value: page.address) {
+                HStack(spacing: 12) {
+                    Monogram(name: page.title, group: group)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(page.title).foregroundStyle(.ariText)
+                        if let gist = page.gist {
+                            Text(gist).font(.footnote).foregroundStyle(.ariSecondary).lineLimit(2)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .listRowBackground(Color.ariSurface)
+    }
+}
+
+/// A person's initial in Ari's bone dots, bright on a faint disc of them; a group shows three dots
+/// in place of an initial.
+private struct Monogram: View {
+    let name: String
+    let group: Bool
+
+    var body: some View {
+        ZStack {
+            Dots(step: 3.4, size: 0.34).opacity(0.28)
+            Dots(step: 2.2, size: 0.42)
+                .mask {
+                    if group {
+                        HStack(spacing: 3) {
+                            ForEach(0..<3, id: \.self) { _ in Circle().frame(width: 7) }
+                        }
+                    } else {
+                        Text(name.prefix(1).uppercased())
+                            .font(.system(size: 27, weight: .black, design: .serif))
+                    }
+                }
+        }
+        .frame(width: 36, height: 36)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A disc of bone dots on a square grid, `size` being each dot's radius as a share of the step.
+private struct Dots: View {
+    let step: CGFloat
+    let size: CGFloat
+
+    var body: some View {
+        Canvas { context, canvas in
+            let radius = canvas.width / 2
+            var dots = Path()
+            var y = step / 2
+            while y < canvas.height {
+                var x = step / 2
+                while x < canvas.width {
+                    let dx = x - radius
+                    let dy = y - radius
+                    if (dx * dx + dy * dy).squareRoot() < radius {
+                        let r = step * size
+                        dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+                    }
+                    x += step
+                }
+                y += step
+            }
+            context.fill(dots, with: .color(.ariBone))
+        }
     }
 }
 
