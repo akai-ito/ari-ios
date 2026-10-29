@@ -29,6 +29,8 @@ public final class Session {
     public private(set) var refusedMessages: [MessageID: RequestError] = [:]
     /// The server's voice, as the stream last said: for Talk to follow.
     public private(set) var voiceStatus: VoiceStatus?
+    /// What's in motion, which follows the same stream.
+    @ObservationIgnored public weak var motions: Motions?
 
     public enum Link: Equatable, Sendable {
         /// The first attempt since ``start()``.
@@ -473,6 +475,7 @@ public final class Session {
 
     private func receive(_ event: Event) {
         conversation.apply(event)
+        motions?.apply(event)
         if case .voiceStatus(let status) = event.payload { voiceStatus = status }
         switch event.payload {
         case .snapshot:

@@ -256,6 +256,9 @@ extension Conversation {
                 entries[index].ticks.removeAll { $0.part == tick.part && $0.item == tick.item }
                 entries[index].ticks.append(tick)
             }
+        // In motion follows these, not the conversation.
+        case .motionStarted, .motionChanged, .motionFinished, .motionState, .motionRemoved:
+            break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.
             break

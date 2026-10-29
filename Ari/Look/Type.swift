@@ -6,6 +6,7 @@ extension Font {
     static let ariStrong = Font.system(.body, design: .serif).weight(.semibold).monospacedDigit()
     static let ariName = Font.system(.headline, design: .serif)
     static let ariHeading = Font.system(.title3, design: .serif).weight(.semibold)
+    static let ariTitle = Font.system(.largeTitle, design: .serif).weight(.semibold)
     static let code = Font.callout.monospaced()
 }
 

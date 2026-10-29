@@ -295,6 +295,9 @@ enum Route: Equatable {
     case tickItem
     case speech
     case callStream(CallID)
+    case motions
+    case motion(MotionID)
+    case motionState(MotionID)
     case other
 
     init(method: String, path: String) {
@@ -364,6 +367,11 @@ enum Route: Equatable {
         case ("PUT", 7) where parts[0] == "v0" && parts[1] == "messages" && parts[3] == "parts":
             self = .tickItem
         case ("POST", 2) where parts == ["v0", "speech"]: self = .speech
+        case ("GET", 2) where parts == ["v0", "motion"]: self = .motions
+        case ("GET", 3) where parts[0] == "v0" && parts[1] == "motion":
+            self = .motion(MotionID(parts[2]))
+        case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "motion" && parts[3] == "state":
+            self = .motionState(MotionID(parts[2]))
         default: self = .other
         }
     }
@@ -374,7 +382,7 @@ enum Route: Equatable {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability, .memoryInMind,
             .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
             .chooseModel, .teachVocabulary, .voices, .chooseVoice, .forgetVoiceprint, .speech,
-            .callStream, .tickItem:
+            .callStream, .tickItem, .motions, .motion, .motionState:
             true
         default: false
         }

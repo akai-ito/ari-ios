@@ -6,7 +6,9 @@ import SwiftUI
     /// `ARI_TOKEN` fill in and submit the connect screen, `ARI_SAY` sends a message once the stream
     /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, `ARI_DRAFT` fills in the
     /// composer (`\n` for a new line), `ARI_OPEN_TRAIL` opens every run and step on the trail,
-    /// `ARI_PLACE` opens a tab (`chat`, `goals` or `library`), `ARI_SETTINGS` opens Settings (or, with
+    /// `ARI_PLACE` opens a tab (`chat`, `motion` or `library`), `ARI_MOTION` opens a thing in motion
+    /// there (with `ARI_MOTION_TAB` on one of a trip's sections, such as `Map`, or `changes`
+    /// for what changed), `ARI_SETTINGS` opens Settings (or, with
     /// `capabilities`, `capability:<id>`, `setup:<id>`, `model` or `voice`, goes on to that place), `ARI_IN_MIND`
     /// opens In mind, `ARI_TOPICS` the conversation's topics, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
     /// `ARI_SHELF` opens a shelf (`people`, or `journal` and with `ARI_CALENDAR` its calendar), and
@@ -59,6 +61,8 @@ import SwiftUI
             _ = store.deviceID
         }
         static let place = environment["ARI_PLACE"]
+        static let motion = environment["ARI_MOTION"]
+        static let motionTab = environment["ARI_MOTION_TAB"]
         static let openRow = environment["ARI_OPEN_ROW"]
         static let talks = environment["ARI_TALK"] != nil
         static let openURL = environment["ARI_OPEN_URL"].flatMap(URL.init(string:))

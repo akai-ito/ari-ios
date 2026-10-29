@@ -2,8 +2,8 @@ import AriKit
 import CoreSpotlight
 import SwiftUI
 
-/// Ari's three places, as the map plans them: Chat, where you talk; Goals, what's in motion; and
-/// Library, what Ari has made for you. Settings open from the corner of each.
+/// Ari's three places: Chat, where you talk; In motion, what you're actually doing, which Ari keeps
+/// current; and Library, what Ari knows. Settings open from the corner of each.
 struct MainView: View {
     let session: Session
     let model: AppModel
@@ -13,6 +13,8 @@ struct MainView: View {
     @State private var libraryPath = LibraryView.startingPath
     /// What Ari knows, for the Library, In mind and memory steps on the trail.
     @State private var memory: Memory?
+    /// What's in motion, for its tab, the pinned line and compact lines in the chat.
+    @State private var motions: Motions?
     #if os(iOS)
         /// Calls with Ari, registered with iOS.
         @State private var talk: Talk?
@@ -26,7 +28,7 @@ struct MainView: View {
         @Environment(\.openSettings) private var openSettings
     #endif
 
-    enum Place: Hashable { case chat, goals, library }
+    enum Place: Hashable { case chat, motion, library }
 
     var body: some View {
         TabView(selection: $place) {
@@ -34,6 +36,8 @@ struct MainView: View {
                 ConversationView(
                     session: session, connectAgain: model.connectAgain,
                     opening: Binding(get: { model.opening }, set: { model.opening = $0 }),
+                    openingPosition: Binding(
+                        get: { model.openingPosition }, set: { model.openingPosition = $0 }),
                     offersNotifications: model.offersNotifications,
                     answerOffer: { yes in
                         if yes {
@@ -50,18 +54,29 @@ struct MainView: View {
                         .padding(.top, 2)
                 }
             }
-            Tab("Goals", systemImage: "scope", value: .goals) {
-                ComingPlace(
-                    title: "Goals",
-                    text: "Nothing in motion yet. When Ari is working towards something for you, "
-                        + "it shows here."
-                ) { showsSettings = true }
+            Tab("In motion", systemImage: "circle.dotted.circle", value: .motion) {
+                InMotionView { showsSettings = true }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
                 LibraryView(memory: memory, path: $libraryPath) { showsSettings = true }
             }
         }
         .environment(memory)
+        .environment(motions)
+        .environment(\.attachmentBytes) { await session.bytes(of: $0) }
+        // "What changed" goes back to where in the chat it happened.
+        .environment(\.openInChat) { model.openingPosition = $0 }
+        .task {
+            if motions == nil, let client = model.client() {
+                let made = Motions(client: client)
+                session.motions = made
+                motions = made
+            }
+            await motions?.refresh()
+        }
+        .onChange(of: model.openingPosition) { _, position in
+            if position != nil { place = .chat }
+        }
         .task {
             if memory == nil { memory = model.client().map(Memory.init(client:)) }
             // Every page in the device's search, from the start, not only once the Library opens.
@@ -150,7 +165,7 @@ struct MainView: View {
         }
         #if DEBUG
             .task {
-                place = ["goals": .goals, "library": .library][DebugScript.place ?? ""] ?? place
+                place = ["motion": .motion, "library": .library][DebugScript.place ?? ""] ?? place
                 showsSettings = DebugScript.opensSettings
             }
         #endif
@@ -184,30 +199,5 @@ struct SettingsButton: View {
         // nothing when tapped.
         .glassEffect(.regular.interactive(), in: Circle())
         .accessibilityLabel("Settings")
-    }
-}
-
-/// A place that has nothing in it yet, saying plainly what it will hold.
-private struct ComingPlace: View {
-    let title: String
-    let text: String
-    let openSettings: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Text(text)
-                .font(.ariBody)
-                .foregroundStyle(.ariTertiary)
-                .multilineTextAlignment(.center)
-                .padding(40)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.ariBackground)
-                .navigationTitle(title)
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Settings", systemImage: "gearshape", action: openSettings)
-                    }
-                }
-        }
     }
 }

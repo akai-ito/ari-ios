@@ -765,6 +765,29 @@ extension ConversationTranscriptTests {
                 "I keep thinking about Florence. Should we take a day for Pisa, or stay put?"),
             reply("m_0002_04269", 77, "Pisa's an easy morning if you want it."),
         ],
+        "62-a-trip-in-motion": [
+            you(
+                "6263dd37-678a-48e1-9e92-66bca36d37fd",
+                "Can you plan Florence with Janki? 6 to 9 November. Good food, the Uffizi, maybe "
+                    + "Pisa for a day."),
+            reply(
+                "m_0001_45782", 212,
+                "```ari:motion\n{\"motion\":\"florence-with-janki\",\"change\":1}\n```"),
+        ],
+        "63-keeping-it-current": [
+            you(
+                "608ab84a-e392-44b5-b555-efd5bda55b69",
+                "Can you plan Florence with Janki? 6 to 9 November."),
+            reply(
+                "m_0001_25023", 98,
+                "```ari:motion\n{\"motion\":\"florence-with-janki\",\"change\":1}\n```"),
+            you("7b89b9c4-799e-4333-869b-47370519e4f5", "Booked the Uffizi for 8:15 Saturday."),
+            reply(
+                "m_0002_54669", 148,
+                "```ari:motion\n{\"motion\":\"florence-with-janki\",\"change\":2}\n```"),
+            you("24b63d4b-0f1b-4ee6-8fa9-09fd345ce3d8", "Thanks! What's left?"),
+            reply("m_0003_82783", 66, "The Pisa train's ticked off."),
+        ],
         "49-the-voice-fails-mid-call": [
             you("m_0001_83382", "What's on tomorrow?"),
             reply("m_0002_93163", 42, "dentist at nine, then the design review."),

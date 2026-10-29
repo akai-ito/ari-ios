@@ -31,6 +31,11 @@ public struct Event: Sendable, Equatable, Decodable {
         case topicStarted(TopicStarted)
         case planTicked(PlanTicked)
         case messageAmended(MessageAmended)
+        case motionStarted(MotionEvent)
+        case motionChanged(MotionEvent)
+        case motionFinished(MotionEvent)
+        case motionState(MotionStateChanged)
+        case motionRemoved(MotionRemoved)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -41,7 +46,8 @@ public struct Event: Sendable, Equatable, Decodable {
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "turn.ended", "call.started",
         "call.ended", "call.audio_deleted", "voice.status", "topic.started", "plan.ticked",
-        "message.amended",
+        "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
+        "motion.removed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -76,6 +82,11 @@ public struct Event: Sendable, Equatable, Decodable {
             case "topic.started": .topicStarted(try TopicStarted(from: decoder))
             case "plan.ticked": .planTicked(try PlanTicked(from: decoder))
             case "message.amended": .messageAmended(try MessageAmended(from: decoder))
+            case "motion.started": .motionStarted(try MotionEvent(from: decoder))
+            case "motion.changed": .motionChanged(try MotionEvent(from: decoder))
+            case "motion.finished": .motionFinished(try MotionEvent(from: decoder))
+            case "motion.state": .motionState(try MotionStateChanged(from: decoder))
+            case "motion.removed": .motionRemoved(try MotionRemoved(from: decoder))
             default: .unknown
             }
     }
