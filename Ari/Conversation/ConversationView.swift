@@ -16,49 +16,49 @@ struct ConversationView: View {
     var offersNotifications = false
     var answerOffer: (Bool) -> Void = { _ in }
 
-    @State private var reveal = RevealModel()
+    @State var reveal = RevealModel()
     /// The status line and the character's pose, paced for reading.
-    @State private var header = HeaderState()
+    @State var header = HeaderState()
     /// Photos and files on the message you're writing, uploading as you write.
-    @State private var attached: [PendingAttachment] = []
+    @State var attached: [PendingAttachment] = []
     /// Something you picked that can't be attached, said for a few seconds.
-    @State private var attachProblem: String?
-    @State private var sheet: SheetItem?
+    @State var attachProblem: String?
+    @State var sheet: SheetItem?
     /// The trail's runs and steps you've opened.
-    @State private var opened: Set<String> = []
+    @State var opened: Set<String> = []
     // Scrolled by message, not by edge: scrolling to an edge also shifts the content sideways.
-    @State private var position = ScrollPosition(idType: String.self)
-    @State private var distanceFromEnd = Distance.atEnd
+    @State var position = ScrollPosition(idType: String.self)
+    @State var distanceFromEnd = Distance.atEnd
     /// Whether your finger is on the conversation.
-    @State private var scrolling = false
+    @State var scrolling = false
     /// The topics and days of the conversation, to jump between.
-    @State private var showsTopics = Self.opensTopics
+    @State var showsTopics = Self.opensTopics
     /// Whether you've scrolled near the top of what's shown: more history comes in while you are.
-    @State private var nearTop = false
+    @State var nearTop = false
     /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
     /// latest.
-    @State private var firstShown: String?
+    @State var firstShown: String?
     /// Whether the conversation follows what arrives. It does while you're at the end, stops once
     /// you scroll up, and starts again when you come back to the end, send, or tap the pill.
-    @State private var following = true
-    @State private var repliedWhileAway = false
+    @State var following = true
+    @State var repliedWhileAway = false
     /// A turn has run long enough that a nudge when it's done would help.
-    @State private var offering = false
+    @State var offering = false
     /// A linked page, open in place.
-    @State private var browsing: WebPage?
+    @State var browsing: WebPage?
     /// A thing in motion, open full screen, and what it grew from.
-    @State private var openedMotion: OpenedMotion?
-    @Namespace private var motionSpace
+    @State var openedMotion: OpenedMotion?
+    @Namespace var motionSpace
     /// Rows and parsed replies, kept between frames: a reply revealing redraws the screen every
     /// frame, and working the whole conversation out again each time froze long ones.
-    @State private var cache = RowsCache()
+    @State var cache = RowsCache()
     /// Each send and each Stop, for a light tap you can feel.
-    @State private var sent = 0
-    @State private var stops = 0
+    @State var sent = 0
+    @State var stops = 0
     /// Calls with Ari.
-    @Environment(Talk.self) private var talk: Talk?
+    @Environment(Talk.self) var talk: Talk?
     /// Whether the server can talk.
-    @Environment(Voices.self) private var voices: Voices?
+    @Environment(Voices.self) var voices: Voices?
 
     var body: some View {
         screen
@@ -114,7 +114,7 @@ struct ConversationView: View {
     }
 
     /// The conversation itself, the composer, and what follows the session and the screen.
-    private var screen: some View {
+    var screen: some View {
         let conversation = session.conversation
         let revealing = reveal.isRevealing
         let working = conversation.turn != nil || revealing
@@ -292,23 +292,7 @@ struct ConversationView: View {
         }
     }
 
-    /// How far you are from the end, in the three bands the screen cares about.
-    private enum Distance: Equatable {
-        /// Within 100 points: following resumes here, even while a reply grows.
-        case atEnd
-        case near
-        /// More than 600 points up: far enough for the Latest pill.
-        case far
-
-        init(_ points: CGFloat) {
-            self = points < 100 ? .atEnd : points > 600 ? .far : .near
-        }
-    }
-
-    /// The marker after the last row.
-    private static let end = "end"
-    /// How many rows show at first, and how many more each time you reach the top.
-    private static var opensTopics: Bool {
+    static var opensTopics: Bool {
         #if DEBUG
             DebugScript.opensTopics
         #else
@@ -316,172 +300,28 @@ struct ConversationView: View {
         #endif
     }
 
-    private static let window = 60
-    private static let more = 40
-
-    // MARK: - Rows
-
-    typealias Row = ConversationRow
-
-    /// The conversation as it reads (messages, and Ari's trail between them), with the date at the
-    /// start of each day.
-    private func rows(_ conversation: Conversation) -> [Row] {
-        let key = RowsCache.Key(
-            revision: conversation.revision, held: reveal.held,
-            offering: offering && offersNotifications)
-        if cache.key == key { return cache.rows }
-        let rows = RowsCache.make(conversation, reveal: reveal.reveal, offering: key.offering)
-        cache.key = key
-        cache.rows = rows
-        return rows
-    }
-
-    @ViewBuilder
-    private func rowView(_ row: Row, in conversation: Conversation) -> some View {
-        switch row.kind {
-        case .day(let date):
-            DayLabel(date: date)
-        case .topic(let topic):
-            TopicLabel(label: topic.label) { showsTopics = true }
-        case .yours(let entry):
-            YourMessage(
-                text: entry.text,
-                tag: tag(for: entry, in: conversation)
-            ) {
-                if !entry.attachments.isEmpty {
-                    MessageAttachments(attachments: entry.attachments) {
-                        await session.bytes(of: $0)
-                    }
-                }
-            } footer: {
-                if let spoken = entry.spoken {
-                    SpokenFooter(spoken: spoken) { await session.bytes(of: $0) }
-                }
-            }
-        case .call(let call):
-            CallBlock(
-                call: call, returnToCall: returnToCall(call),
-                deleteAudio: { session.deleteAudio(of: call.id) })
-        case .ari(let entry):
-            let text = entry.text
-            let document = cache.document(entry.id, text)
-            Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
-                VStack(alignment: .leading, spacing: 8) {
-                    if !text.isEmpty {
-                        ReplyView(document: document, position: position)
-                            .environment(\.replyActions, replyActions(for: entry, in: conversation))
-                    }
-                    if position == .infinity { footer(for: entry, in: conversation) }
-                }
-            }
-            .contextMenu {
-                Button("Copy", systemImage: "doc.on.doc") { Pasteboard.copy(entry.text) }
-                Button("Select Text", systemImage: "selection.pin.in.out") {
-                    sheet = .selecting(entry.text)
-                }
-                ShareLink(item: entry.text)
-            } preview: {
-                // A long reply lifted whole would cover the screen, so the menu shows its opening.
-                ReplyPreview(text: entry.text)
-            }
-        case .trail(let trail):
-            TrailView(
-                trail: trail, conversation: conversation, reveal: reveal, opened: $opened,
-                answer: answer)
-        case .failure(let turn, let error):
-            failureLine(turn: turn, error: error, in: conversation)
-        case .offer:
-            NotificationOffer(answer: answerOffer)
-        }
-    }
-
-    /// What a reply's shapes can do here: tick its plans, fetch its pictures, and, while it's the
-    /// latest thing said and Ari is idle, send one of its choices.
-    private func replyActions(for entry: Conversation.Entry, in conversation: Conversation)
-        -> ReplyActions
-    {
-        let latest =
-            conversation.turn == nil && conversation.entries.last(where: \.isShown)?.id == entry.id
-        let session = session
-        return ReplyActions(
-            choose: latest
-                ? { label in
-                    guard session.send(label) != nil else { return }
-                    scrollToEnd()
-                } : nil)
-    }
-
-    /// Under your message: whether the server has it, and whether Ari took it in or it waits.
-    private func tag(for entry: Conversation.Entry, in conversation: Conversation) -> String? {
-        if session.refusedMessages[entry.id] != nil { return "Couldn't send" }
-        if entry.delivery == .sending {
-            return session.link == .live ? "Sending" : "Waiting to send"
-        }
-        switch entry.mark {
-        case .next: return "Next"
-        case .read:
-            // Once the adjusted reply starts, the reply itself shows Ari listened.
-            let index = conversation.entries.firstIndex { $0.id == entry.id } ?? 0
-            let answered = conversation.entries[index...].contains {
-                $0.role == .agent && $0.isShown
-            }
-            return answered ? nil : "Read"
-        default: return nil
-        }
-    }
-
-    /// Under a reply, once it's all on screen: how it ended, if not as it should.
-    @ViewBuilder
-    private func footer(for entry: Conversation.Entry, in conversation: Conversation) -> some View {
-        switch entry.outcome {
-        case .stopped: Tag(text: "Stopped")
-        case .interrupted: Tag(text: "Interrupted · Your server restarted")
-        case .failed:
-            if let turn = entry.turn {
-                failureLine(turn: turn, error: entry.error, in: conversation)
-            }
-        default: EmptyView()
-        }
-    }
-
-    private func failureLine(turn: TurnID, error: ServerError?, in conversation: Conversation)
-        -> some View
-    {
-        FailureLine(
-            message: "Couldn't finish. "
-                + (error?.message ?? "Something went wrong on the server."),
-            canTryAgain: !conversation.retriedTurns.contains(turn),
-            tryAgain: { session.tryAgain(turn) },
-            details: {
-                sheet = .details(
-                    error
-                        ?? ServerError(code: ErrorCode(rawValue: "unknown"), message: "No details.")
-                )
-            })
-    }
-
     // MARK: - What you do
 
     /// Talk, where Ari can take a call: on the iPhone.
-    private var talkAction: (() -> Void)? {
+    var talkAction: (() -> Void)? {
         guard let talk else { return nil }
         return { talk.start() }
     }
 
     /// Whether the server can talk now, so Talk shows as ready.
-    private var talkReady: Bool {
+    var talkReady: Bool {
         voices?.canTalk ?? false
     }
 
     /// Back to the call a block opened, when it's this phone's and still on.
-    private func returnToCall(_ call: Call) -> (() -> Void)? {
+    func returnToCall(_ call: Call) -> (() -> Void)? {
         guard let talk, call.isOn, talk.call?.id == call.id else { return nil }
         return { talk.showsCall = true }
     }
 
     /// Whatever you send while Ari waits answers it. Returns whether it went, so the composer can
     /// clear.
-    private func send(_ text: String) -> Bool {
+    func send(_ text: String) -> Bool {
         guard !Self.anyRefused(attached, in: session),
             session.send(text, attachments: attached.map(\.id)) != nil
         else { return false }
@@ -492,7 +332,7 @@ struct ConversationView: View {
     }
 
     /// Files dropped on the conversation: each attaches, as if picked with the +.
-    private func drop(_ urls: [URL]) {
+    func drop(_ urls: [URL]) {
         let room = AttachmentMaker.mostPerMessage - attached.count
         guard room > 0, session.problem == nil else { return }
         Task {
@@ -509,13 +349,13 @@ struct ConversationView: View {
     }
 
     /// A photo or file you picked: it starts uploading at once.
-    private func attach(_ attachment: PendingAttachment) {
+    func attach(_ attachment: PendingAttachment) {
         guard attached.count < AttachmentMaker.mostPerMessage else { return }
         attached.append(attachment)
         session.attach(attachment)
     }
 
-    private func detach(_ attachment: AttachmentID) {
+    func detach(_ attachment: AttachmentID) {
         attached.removeAll { $0.id == attachment }
         session.detach(attachment)
     }
@@ -528,126 +368,14 @@ struct ConversationView: View {
     }
 
     /// You tapped one of an ask's options: its label is your answer.
-    private func answer(_ ask: Ask, _ option: Ask.Option) {
+    func answer(_ ask: Ask, _ option: Ask.Option) {
         guard session.send(option.label) != nil else { return }
         scrollToEnd()
     }
 
-    private func scrollToEnd() {
-        follow()
-        withAnimation(.smooth(duration: 0.4)) {
-            position.scrollTo(id: Self.end, anchor: .bottom)
-        }
-    }
-
-    private func follow() {
-        following = true
-        repliedWhileAway = false
-        // Back at the end, the older rows shown on the way up can go.
-        firstShown = nil
-    }
-
-    private func withoutAnimation(_ change: () -> Void) {
-        var settle = Transaction(animation: nil)
-        settle.disablesAnimations = true
-        withTransaction(settle, change)
-    }
-
-    /// Opens the conversation at a row, as from a tapped notification: an older one is shown first,
-    /// since only the latest rows are on screen until you scroll back.
-    private func open(at id: String, in rows: [Row]) {
-        following = false
-        if !shownRows(rows).contains(where: { $0.id == id }),
-            let index = rows.firstIndex(where: { $0.id == id })
-        {
-            firstShown = rows[max(0, index - 2)].id
-        }
-        Task {
-            // A moment for the newly shown rows to be laid out before scrolling to one.
-            try? await Task.sleep(for: .milliseconds(80))
-            withAnimation(.smooth(duration: 0.4)) { position.scrollTo(id: id, anchor: .top) }
-        }
-    }
-
-    /// The rows on screen: the latest ones, from `firstShown` on. More are shown as you scroll up
-    /// (see ``showEarlier(_:)``), and the oldest are let go again once you're back at the end.
-    private func shownRows(_ rows: [Row]) -> ArraySlice<Row> {
-        if let firstShown, let start = rows.firstIndex(where: { $0.id == firstShown }) {
-            return rows[start...]
-        }
-        return rows.suffix(Self.window)
-    }
-
-    /// You reached the top of what's shown: show more of what Ari has, then ask the server for
-    /// what came before.
-    private func showEarlier(_ rows: [Row]) {
-        let first = shownRows(rows).first?.id
-        let start = rows.firstIndex(where: { $0.id == first }) ?? 0
-        if start > 0 {
-            firstShown = rows[max(0, start - Self.more)].id
-            return
-        }
-        firstShown = first
-        // Only once you've scrolled up: at the end, a short screen would otherwise page back
-        // through the whole history by itself.
-        guard !following, session.conversation.hasEarlierMessages, !session.isLoadingEarlier
-        else { return }
-        Task {
-            await session.loadEarlier()
-            // The page arrives above what you're reading: show some of it, keeping your place.
-            let now = self.rows(session.conversation)
-            if let index = now.firstIndex(where: { $0.id == first }), index > 0 {
-                firstShown = now[max(0, index - Self.more)].id
-            }
-        }
-    }
-
-    /// Goes to a topic or a day: older history comes in until it's there, then the conversation
-    /// opens at it, and settles there once the rows above have their heights.
-    private func jump(to id: String) {
-        following = false
-        Task {
-            var rows = self.rows(session.conversation)
-            while !rows.contains(where: { $0.id == id }), session.conversation.hasEarlierMessages {
-                let before = rows.count
-                await session.loadEarlier()
-                rows = self.rows(session.conversation)
-                if rows.count == before { break }
-            }
-            guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-            firstShown = rows[max(0, index - 2)].id
-            // The sheet goes, and the rows are laid out, before scrolling; and once more after,
-            // when the rows above have settled their heights.
-            try? await Task.sleep(for: .milliseconds(350))
-            withoutAnimation { position.scrollTo(id: id, anchor: .top) }
-            try? await Task.sleep(for: .milliseconds(200))
-            withoutAnimation { position.scrollTo(id: id, anchor: .top) }
-        }
-    }
-
-    /// Goes to the message at a position, such as where Ari changed a thing in motion: older history
-    /// comes in until it reaches that far back, then the conversation opens at it.
-    private func jump(toPosition position: Int) {
-        Task {
-            while session.conversation.hasEarlierMessages,
-                (session.conversation.entries.first?.position ?? 0) > position
-            {
-                let before = session.conversation.entries.count
-                await session.loadEarlier()
-                if session.conversation.entries.count == before { break }
-            }
-            guard
-                let entry = session.conversation.entries.first(where: {
-                    ($0.position ?? .max) >= position
-                })
-            else { return }
-            jump(to: entry.id.rawValue)
-        }
-    }
-
     /// Stop ends the turn, and what Ari wrote shows at once. While Ari only waits for you, it
     /// cancels what Ari asked.
-    private func stop() {
+    func stop() {
         stops += 1
         let conversation = session.conversation
         if conversation.turn == nil, !reveal.isRevealing,
@@ -662,7 +390,7 @@ struct ConversationView: View {
 
     // MARK: - Status and poses
 
-    private func pose(revealing: Bool) -> Pose {
+    func pose(revealing: Bool) -> Pose {
         if header.linkDown { return .offline }
         if let turn = session.conversation.turn {
             if session.conversation.pendingStop != nil { return .stopping }
@@ -685,7 +413,7 @@ struct ConversationView: View {
         return session.conversation.waitingAsk == nil ? .resting : .asking
     }
 
-    private func liveStatus(revealing: Bool) -> StatusText? {
+    func liveStatus(revealing: Bool) -> StatusText? {
         if header.linkDown {
             return .quiet(session.link == .offline ? "No connection" : "Reconnecting")
         }
@@ -699,10 +427,4 @@ struct ConversationView: View {
         return header.stopped ? .quiet("Stopped") : nil
     }
 
-    private func pillText(working: Bool) -> String? {
-        guard !following, distanceFromEnd != .atEnd else { return nil }
-        if working { return "Ari is writing" }
-        if repliedWhileAway { return "Ari has replied" }
-        return distanceFromEnd == .far ? "Latest" : nil
-    }
 }
