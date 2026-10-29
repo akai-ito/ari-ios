@@ -1,4 +1,5 @@
 import AriKit
+import MapKit
 import SwiftUI
 
 #if os(iOS)
@@ -130,50 +131,153 @@ private struct PlanView: View {
 
 // MARK: - A place, a time
 
-/// A place you might go: a tap opens it in Maps.
+/// A place you might go, on a real map: the pin in the card, and a tap opens a map you can move
+/// around, with Directions and Open in Maps, which go to the Maps app.
 private struct PlaceView: View {
     let place: ReplyShape.Place
 
-    @Environment(\.openURL) private var openURL
+    @State private var item: MKMapItem?
+    @State private var opens = false
 
     var body: some View {
         Button {
-            if let maps = Self.maps(place) { openURL(maps) }
+            opens = true
         } label: {
-            Card {
+            VStack(alignment: .leading, spacing: 0) {
+                PlaceMap(item: item, interactive: false)
+                    .frame(height: 150)
+                    .allowsHitTesting(false)
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "mappin.circle").font(.title3).foregroundStyle(.ariSecondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(place.name).foregroundStyle(.ariText)
                         if let address = place.address {
                             Text(address).font(.footnote).foregroundStyle(.ariSecondary)
                         }
-                        if let url = place.url {
-                            Link("Website", destination: url).font(.footnote)
-                                .foregroundStyle(.ariSecondary)
-                        }
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.right").font(.footnote).foregroundStyle(
-                        .ariTertiary)
+                    Image(systemName: "map").font(.footnote).foregroundStyle(.ariTertiary)
                 }
                 .multilineTextAlignment(.leading)
+                .padding(14)
             }
+            .background(.ariSurface)
+            .clipShape(.rect(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Opens in Maps")
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens a map")
+        .task(id: place.name) { item = await Self.find(place) }
+        .sheet(isPresented: $opens) {
+            PlaceSheet(place: place, item: item)
+        }
     }
 
-    static func maps(_ place: ReplyShape.Place) -> URL? {
-        var components = URLComponents(string: "https://maps.apple.com/")
-        var items = [URLQueryItem(name: "q", value: place.name)]
+    /// The place on the map: where Ari put it, or, without coordinates, what Maps finds for its
+    /// name and address.
+    static func find(_ place: ReplyShape.Place) async -> MKMapItem? {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = [place.name, place.address].compactMap(\.self).joined(
+            separator: ", ")
         if let lat = place.lat, let lon = place.lon {
-            items.append(URLQueryItem(name: "ll", value: "\(lat),\(lon)"))
-        } else if let address = place.address {
-            items.append(URLQueryItem(name: "address", value: address))
+            let center = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            request.region = MKCoordinateRegion(
+                center: center, latitudinalMeters: 400, longitudinalMeters: 400)
+            if let found = try? await MKLocalSearch(request: request).start().mapItems.first {
+                return found
+            }
+            let item = MKMapItem(
+                location: CLLocation(latitude: lat, longitude: lon), address: nil)
+            item.name = place.name
+            return item
         }
-        components?.queryItems = items
-        return components?.url
+        return try? await MKLocalSearch(request: request).start().mapItems.first
+    }
+}
+
+/// The map itself: Apple's, dark like Ari, with the place's pin.
+private struct PlaceMap: View {
+    let item: MKMapItem?
+    let interactive: Bool
+
+    @State private var camera: MapCameraPosition = .automatic
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ariSurface)
+            if let item {
+                Map(position: $camera, interactionModes: interactive ? .all : []) {
+                    Marker(item: item)
+                }
+                .mapStyle(
+                    .standard(
+                        pointsOfInterest: .including([.restaurant, .museum, .publicTransport]))
+                )
+                .onAppear {
+                    camera = .region(
+                        MKCoordinateRegion(
+                            center: item.location.coordinate, latitudinalMeters: 700,
+                            longitudinalMeters: 700))
+                }
+            }
+        }
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// A place, full screen: the map to move around, and the way there in Maps.
+private struct PlaceSheet: View {
+    let place: ReplyShape.Place
+    let item: MKMapItem?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                PlaceMap(item: item, interactive: true)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(place.name).font(.headline).foregroundStyle(.ariText)
+                    if let address = place.address {
+                        Text(address).font(.subheadline).foregroundStyle(.ariSecondary)
+                    }
+                    HStack(spacing: 10) {
+                        Button {
+                            item?.openInMaps(launchOptions: [
+                                MKLaunchOptionsDirectionsModeKey:
+                                    MKLaunchOptionsDirectionsModeDefault
+                            ])
+                        } label: {
+                            Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.ariText)
+                        .foregroundStyle(.ariBackground)
+                        Button {
+                            item?.openInMaps()
+                        } label: {
+                            Text("Open in Maps").frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.ariText)
+                    }
+                    .disabled(item == nil)
+                    if let url = place.url {
+                        Link("Website", destination: url).font(.footnote).foregroundStyle(
+                            .ariSecondary)
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.ariBackground)
+            }
+            .ignoresSafeArea(edges: .top)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
