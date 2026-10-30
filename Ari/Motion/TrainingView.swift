@@ -31,7 +31,6 @@ struct TrainingView: View {
                 if training.weeks.count > 1 {
                     allWeeks(current: current?.week.id)
                 }
-                ChangesList(changes: detail.changes)
             }
             .padding(.horizontal, 20)
             .padding(.top, 64)

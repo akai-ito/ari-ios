@@ -1,59 +1,101 @@
 import AriKit
 import SwiftUI
 
-/// A thing in motion, open: its widget, full screen, with what changed at the bottom. Swipe down,
-/// or the chevron, to put it back.
+/// A thing in motion, open: its widget, full screen, with what changed behind a button at the top.
+/// Swipe down, or the chevron, to put it back.
 struct MotionView: View {
     let id: MotionID
 
     @Environment(Motions.self) private var motions: Motions?
     @Environment(\.dismiss) private var dismiss
     @State private var problem: String?
+    @State private var showsChanges = false
+    /// The newest change you've seen, so a faint dot says when there's something new.
+    @State private var seen = 0
+    /// What you'd seen when the sheet opened, so the new ones stay marked inside it.
+    @State private var seenBefore = 0
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.ariBackground.ignoresSafeArea()
-            if let detail = motions?.details[id] {
-                switch detail.content {
-                case .trip(let trip): TripView(detail: detail, trip: trip)
-                case .training(let training): TrainingView(detail: detail, training: training)
-                case .unknown, .unreadable: PlainMotionView(detail: detail)
+        // A stack, so a trip's place can open as its own page.
+        NavigationStack {
+            ZStack(alignment: .top) {
+                Color.ariBackground.ignoresSafeArea()
+                if let detail = motions?.details[id] {
+                    switch detail.content {
+                    case .trip(let trip): TripView(detail: detail, trip: trip)
+                    case .training(let training): TrainingView(detail: detail, training: training)
+                    case .unknown, .unreadable: PlainMotionView(detail: detail)
+                    }
+                } else if let problem {
+                    Notice(text: problem) {
+                        self.problem = nil
+                        Task { await load() }
+                    }
+                } else if motions?[id] == nil, motions?.load == .loaded {
+                    Notice(text: "This is no longer in motion.")
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } else if let problem {
-                Notice(text: problem) {
-                    self.problem = nil
-                    Task { await load() }
+                HStack {
+                    GlassButton(symbol: "chevron.down", label: "Close") { dismiss() }
+                    Spacer()
+                    if let changes = motions?.details[id]?.changes, !changes.isEmpty {
+                        GlassButton(symbol: "clock.arrow.circlepath", label: "What changed") {
+                            showsChanges = true
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if (changes.map(\.version).max() ?? 0) > seen {
+                                Circle().fill(.ariBone).frame(width: 8, height: 8)
+                                    .offset(x: -2, y: 2)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .accessibilityValue(
+                            (changes.map(\.version).max() ?? 0) > seen ? "Something new" : "")
+                    }
                 }
-            } else if motions?[id] == nil, motions?.load == .loaded {
-                Notice(text: "This is no longer in motion.")
-            } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
             }
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.ariText)
-                    .frame(width: 40, height: 40)
-                    .contentShape(Circle())
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .sheet(isPresented: $showsChanges) {
+            if let changes = motions?.details[id]?.changes {
+                NavigationStack {
+                    ScrollView {
+                        ChangesList(changes: changes, seen: seenBefore).padding(20)
+                    }
+                    .background(.ariBackground)
+                    .navigationTitle("What changed")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
+                .presentationDetents([.medium, .large])
             }
-            .buttonStyle(.plain)
-            // Tinted dark, so the chevron still shows over a bright cover photo.
-            .glassEffect(.regular.tint(.black.opacity(0.3)).interactive(), in: Circle())
-            .accessibilityLabel("Close")
-            .padding(.leading, 16)
-            .padding(.top, 4)
+        }
+        .onChange(of: showsChanges) { _, shows in
+            guard shows, let newest = motions?.details[id]?.changes.map(\.version).max() else {
+                return
+            }
+            seenBefore = seen
+            withAnimation(.smooth(duration: 0.3)) { seen = newest }
+            SeenChanges.see(newest, of: id)
         }
         // A link back to the chat closes the thing first.
         .transformEnvironment(\.openInChat) { open in
             guard let inner = open else { return }
             open = { position in
+                showsChanges = false
                 dismiss()
                 inner(position)
             }
         }
-        .task { await load() }
+        .task {
+            seen = SeenChanges.newest(of: id)
+            #if DEBUG
+                if DebugScript.opensChanges { showsChanges = true }
+            #endif
+            await load()
+        }
     }
 
     private func load() async {
@@ -63,6 +105,39 @@ struct MotionView: View {
         } catch {
             if motions.details[id] == nil { problem = "Couldn't open it: \(error.plainWords)" }
         }
+    }
+}
+
+/// The newest change you've seen of each thing, kept on this phone.
+enum SeenChanges {
+    private static func key(_ id: MotionID) -> String { "seen change \(id.rawValue)" }
+
+    static func newest(of id: MotionID) -> Int {
+        UserDefaults.standard.integer(forKey: key(id))
+    }
+
+    static func see(_ version: Int, of id: MotionID) {
+        UserDefaults.standard.set(version, forKey: key(id))
+    }
+}
+
+/// A round glass button over a thing's cover, tinted dark so it shows over a bright photo.
+private struct GlassButton: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.ariText)
+                .frame(width: 40, height: 40)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(.black.opacity(0.3)).interactive(), in: Circle())
+        .accessibilityLabel(label)
     }
 }
 
@@ -86,8 +161,8 @@ private struct Notice: View {
     }
 }
 
-/// A kind this Ari doesn't know, or can't read: its title, Ari's line on where it stands, and what
-/// changed. Nothing pretends to be the widget it should be.
+/// A kind this Ari doesn't know, or can't read: its title and Ari's line on where it stands. Nothing
+/// pretends to be the widget it should be.
 struct PlainMotionView: View {
     let detail: MotionDetail
 
@@ -106,7 +181,6 @@ struct PlainMotionView: View {
                 )
                 .font(.footnote)
                 .foregroundStyle(.ariTertiary)
-                ChangesList(changes: detail.changes)
             }
             .padding(.horizontal, 20)
             .padding(.top, 64)
@@ -117,33 +191,50 @@ struct PlainMotionView: View {
     }
 }
 
-/// "What changed": Ari's notes, newest first, each linking back to where in the chat it happened.
+/// "What changed": Ari's notes, newest first, on a rail like the chat's trail, each linking back to
+/// where in the chat it happened. What's new since you last looked has a bone dot.
 struct ChangesList: View {
     let changes: [MotionChange]
+    /// The newest change you'd seen before.
+    var seen = Int.max
 
     @Environment(\.openInChat) private var openInChat
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("What changed").font(.ariHeading).foregroundStyle(.ariText)
-            ForEach(changes) { change in
+        let ordered = changes.sorted { $0.version > $1.version }
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, change in
                 Button {
                     openInChat?(change.position)
                 } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(change.note)
-                            .font(.subheadline)
-                            .foregroundStyle(.ariText)
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 8)
-                        Text(change.at.date, format: .relative(presentation: .named))
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(spacing: 0) {
+                            Circle()
+                                .fill(change.version > seen ? Color.ariBone : .ariDusk)
+                                .frame(width: 7, height: 7)
+                                .padding(.top, 6)
+                            if index < ordered.count - 1 {
+                                Rectangle().fill(.ariLine).frame(width: 1)
+                                    .frame(maxHeight: .infinity)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(change.note)
+                                .font(.subheadline)
+                                .foregroundStyle(.ariText)
+                                .multilineTextAlignment(.leading)
+                            HStack(spacing: 5) {
+                                Text(change.at.date, format: .relative(presentation: .named))
+                                if openInChat != nil {
+                                    Text("·")
+                                    Text("In the chat")
+                                }
+                            }
                             .font(.caption)
                             .foregroundStyle(.ariTertiary)
-                        if openInChat != nil {
-                            Image(systemName: "bubble.left")
-                                .font(.caption)
-                                .foregroundStyle(.ariTertiary)
                         }
+                        .padding(.bottom, 18)
+                        Spacer(minLength: 0)
                     }
                     .contentShape(Rectangle())
                 }

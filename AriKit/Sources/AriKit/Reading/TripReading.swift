@@ -33,11 +33,62 @@ public enum TripReading {
         return Trip.Booking(status: .booked, ref: booking.ref, url: booking.url)
     }
 
-    /// Where a place stands: booked once a to-do about it is done.
+    /// Where a place stands: booked once a to-do about it is done, and in the plan once a stop in
+    /// the days goes there, whatever Ari last called it.
     public static func status(of place: Trip.Place, in trip: Trip, state: MotionState)
         -> PlaceStatus
     {
-        place.status != .booked && ticked(place.id, in: trip, state: state) ? .booked : place.status
+        if place.status == .booked || ticked(place.id, in: trip, state: state) { return .booked }
+        if place.status == .shortlisted, isPlanned(place.id, in: trip) { return .picked }
+        return place.status
+    }
+
+    /// Whether a stop in the days goes to the place.
+    public static func isPlanned(_ place: String, in trip: Trip) -> Bool {
+        trip.days.contains { $0.stops.contains { $0.place == place } }
+    }
+
+    /// The stops that go to a place, with their days: where it sits in the plan.
+    public static func stops(at place: String, in trip: Trip) -> [(day: Trip.Day, stop: Trip.Stop)]
+    {
+        trip.days.flatMap { day in day.stops.filter { $0.place == place }.map { (day, $0) } }
+    }
+
+    /// One row of the Places tab: the places for one kind of thing to do.
+    public struct PlaceRow: Sendable, Equatable, Identifiable {
+        public let title: String
+        public let places: [Trip.Place]
+
+        public var id: String { title }
+    }
+
+    /// The places by what you'd do there (Eat, See, Do, then anything else), each row with the
+    /// ideas still to decide on first, then what's in the plan, then what's booked.
+    public static func placeRows(_ trip: Trip, state: MotionState) -> [PlaceRow] {
+        let kinds: [(title: String, categories: [PlaceCategory])] = [
+            ("Eat", [.restaurant, .cafe, .bar]),
+            ("See", [.museum, .sight, .park]),
+            ("Do", [.activity, .shop]),
+        ]
+        func rank(_ place: Trip.Place) -> Int {
+            switch status(of: place, in: trip, state: state) {
+            case .shortlisted: 0
+            case .picked: 1
+            case .booked: 2
+            default: 3
+            }
+        }
+        func row(_ title: String, _ places: [Trip.Place]) -> PlaceRow? {
+            guard !places.isEmpty else { return nil }
+            let ordered = places.enumerated().sorted {
+                (rank($0.element), $0.offset) < (rank($1.element), $1.offset)
+            }
+            return PlaceRow(title: title, places: ordered.map(\.element))
+        }
+        let known = kinds.flatMap(\.categories)
+        return kinds.compactMap { kind in
+            row(kind.title, trip.places.filter { kind.categories.contains($0.category) })
+        } + [row("Other", trip.places.filter { !known.contains($0.category) })].compactMap(\.self)
     }
 
     private static func ticked(_ item: String, in trip: Trip, state: MotionState) -> Bool {

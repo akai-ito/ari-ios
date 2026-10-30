@@ -7,8 +7,9 @@ import SwiftUI
     /// is live, `ARI_STOP_AFTER` taps Stop that many seconds later, `ARI_DRAFT` fills in the
     /// composer (`\n` for a new line), `ARI_OPEN_TRAIL` opens every run and step on the trail,
     /// `ARI_PLACE` opens a tab (`chat`, `motion` or `library`), `ARI_MOTION` opens a thing in motion
-    /// there (with `ARI_MOTION_TAB` on one of a trip's sections, such as `Map`, or `changes`
-    /// for what changed), `ARI_SETTINGS` opens Settings (or, with
+    /// there (with `ARI_MOTION_TAB` on one of a trip's sections, such as `Map`,
+    /// `ARI_MOTION_PLACE` on a place's page,
+    /// `ARI_MOTION_PIN` with a map pin's callout up (a stop's id), or `ARI_MOTION_CHANGES` showing what changed), `ARI_SETTINGS` opens Settings (or, with
     /// `capabilities`, `capability:<id>`, `setup:<id>`, `model` or `voice`, goes on to that place),
     /// `ARI_TOPICS` opens the conversation's topics, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
     /// `ARI_SHELF` opens a shelf (`people`, or `journal` and with `ARI_CALENDAR` its calendar), and
@@ -62,6 +63,9 @@ import SwiftUI
         static let place = environment["ARI_PLACE"]
         static let motion = environment["ARI_MOTION"]
         static let motionTab = environment["ARI_MOTION_TAB"]
+        static let motionPlace = environment["ARI_MOTION_PLACE"]
+        static let motionPin = environment["ARI_MOTION_PIN"]
+        static let opensChanges = environment["ARI_MOTION_CHANGES"] != nil
         static let openRow = environment["ARI_OPEN_ROW"]
         static let talks = environment["ARI_TALK"] != nil
         static let openURL = environment["ARI_OPEN_URL"].flatMap(URL.init(string:))
