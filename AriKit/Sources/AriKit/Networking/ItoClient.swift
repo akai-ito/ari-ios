@@ -210,6 +210,19 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return answer.state
     }
 
+    /// `PATCH /v0/motion/{id}/state` with your choice for a trip's place: an idea, in the plan, or
+    /// not for you; `nil` takes it back, to how Ari wrote it.
+    public func choose(_ motion: MotionID, place: String, status: PlaceStatus?)
+        async throws(RequestError) -> MotionState
+    {
+        let patch = PlaceChoicePatch(places: [place: status.map(MotionTick.init(status:))])
+        let answer: MotionStateBody = try await call(
+            HTTPRequest(
+                .patch, "/v0/motion/\(Self.segment(motion.rawValue))/state",
+                body: try Self.json(patch)))
+        return answer.state
+    }
+
     // MARK: - Talk
 
     /// `PUT /v0/calls/{call}`: start a call under the id Ari chose, so starting it again is safe.
@@ -432,5 +445,30 @@ public enum RequestError: Error, Equatable, Sendable {
     /// The server's reason, in its own words, if it gave one.
     public var serverError: ServerError? {
         if case .refused(_, let error, _) = self { error } else { nil }
+    }
+}
+
+/// A choice for a place, as a merge patch: `null` takes the choice back.
+private struct PlaceChoicePatch: Encodable {
+    let places: [String: MotionTick?]
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        var items = c.nestedContainer(keyedBy: Key.self, forKey: Key("places"))
+        for (place, choice) in places {
+            if let choice {
+                try items.encode(choice, forKey: Key(place))
+            } else {
+                try items.encodeNil(forKey: Key(place))
+            }
+        }
+    }
+
+    private struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(_ string: String) { stringValue = string }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
     }
 }

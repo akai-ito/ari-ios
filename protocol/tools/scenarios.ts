@@ -5,12 +5,12 @@ import { loadSpec } from "./spec.ts";
 import { transcriptDirectory } from "./transcript-files.ts";
 import { demoModels } from "#engine/scripted/models.ts";
 import { defaultVoice, voices } from "#voice/voices.ts";
-import { florenceId, florenceTrip } from "./florence.ts";
+import { florenceId, florencePictures, florenceTrip, type FlorencePictures } from "./florence.ts";
 import { sub20Id, sub20Training } from "./sub20.ts";
 import { createTranscript, type Transcript } from "./transcript.ts";
 
-const protocol = "0.14";
-const serverVersion = "0.14.0";
+const protocol = "0.15";
+const serverVersion = "0.15.0";
 const yesterdayAt = "2026-10-11T21:14:00.000Z";
 const todayAt = "2026-10-12T08:41:00.000Z";
 const authorization = "Bearer ito_example_not_a_real_token_00000000000000000000";
@@ -134,13 +134,13 @@ const reports = (state: string, isTokenSet: boolean, detail?: string): Readonly<
   id: "reports",
   kind: "hand",
   title: "Reports",
-  summary: "Files the gaps Ari hits as public issues on Ito's repositories.",
+  summary: "Takes your feedback, and what Ari couldn't do, to Ito's developers as public GitHub issues.",
   symbol: "exclamationmark.bubble",
-  version: "0.1",
+  version: "0.2",
   state,
   ...(detail !== undefined && { detail }),
   fields: [{ ...reportsTokenField, set: isTokenSet }],
-  uses: { hosts: ["api.github.com", "github.com"], folders: [] },
+  uses: { hosts: ["api.github.com", "github.com"], folders: ["uploads"] },
 });
 
 const capabilityCall = (
@@ -279,16 +279,20 @@ const motionStep = (
 const motionLine = (id: string, version: number): string =>
   ["```ari:motion", JSON.stringify({ motion: id, change: version }), "```"].join("\n");
 
-const startFlorence = (transcript: Transcript, cover: string): ReturnType<Transcript["motion"]> => {
+const startFlorence = (transcript: Transcript, pictures: FlorencePictures): ReturnType<Transcript["motion"]> => {
   agentCalls(transcript, "start_motion", {
     id: florenceId,
     kind: florenceCard.kind,
     title: florenceCard.title,
     summary: florenceCard.summary,
-    content: florenceTrip(cover),
+    content: florenceTrip(pictures),
     note: "Started the trip",
   });
-  const started = transcript.motion("started", { ...florenceCard, cover, version: 1 }, "Started the trip");
+  const started = transcript.motion(
+    "started",
+    { ...florenceCard, cover: pictures.cover, version: 1 },
+    "Started the trip",
+  );
   motionStep(transcript, "started", started.motion, {
     title: "Starting Florence with Janki",
     endedTitle: "Started Florence with Janki",
@@ -312,15 +316,20 @@ const withWeekNote = (week: string, note: string): Readonly<Record<string, unkno
   weeks: (sub20Training.weeks as readonly TrainingWeek[]).map((each) => (each.id === week ? { ...each, note } : each)),
 });
 
-const findFlorenceCover = (transcript: Transcript): string => {
-  transcript.step("web_search", searching("Florence Duomo photograph"));
+const findFlorencePictures = (transcript: Transcript): FlorencePictures => {
+  transcript.step("web_search", searching("Florence Duomo, Uffizi, Pitti and Pisa photographs"));
   transcript.wait(1500);
   transcript.endStep();
-  const url = "https://upload.wikimedia.org/wikipedia/commons/florence-duomo-dusk.jpg";
-  transcript.world("web_has", { url, file: "riverside.jpg" });
-  const cover = transcript.keptImage("riverside.jpg", "florence-duomo-dusk.jpg");
-  agentCalls(transcript, "keep_image", { url }, { attachment: cover });
-  return cover;
+  return Object.fromEntries(
+    florencePictures.map((name) => {
+      const url = `https://upload.wikimedia.org/wikipedia/commons/florence-${name}.jpg`;
+      transcript.world("web_has", { url, file: "riverside.jpg" });
+      const attachment = transcript.keptImage("riverside.jpg", `florence-${name}.jpg`);
+      agentCalls(transcript, "keep_image", { url }, { attachment });
+      transcript.wait(200);
+      return [name, attachment];
+    }),
+  ) as FlorencePictures;
 };
 
 const spokenWav = { "Content-Type": "audio/wav", "Content-Length": "12044" };
@@ -1037,51 +1046,84 @@ const scenarios: readonly (() => Transcript)[] = [
     const transcript = createTranscript({
       name: "17-reporting-a-gap",
       scenario: 17,
-      title: "Reporting a gap",
+      title: "Reporting what you noticed",
       summary:
-        "The agent can't load a page it needs, so it gives its best answer, reports the gap to Ito and says so " +
-        "in one line. Reports is a capability that's switched on, and the report is a tool step titled by " +
-        "what it did, linking the issue it opened.",
-      guarantees: ["G10", "G14"],
+        "You send a screenshot and ask Ari to pass on what bothers you. Ari drafts a report in your words, and it " +
+        "waits inside the turn as an approval showing the draft and the screenshot it would attach. You file it, " +
+        "and the tool step links the issue. Later you add a thought, and Ari adds it to the same issue.",
+      guarantees: ["G10", "G14", "G28"],
     });
     yesterday(transcript);
     transcript.begin(todayAt, { cursor: "latest" });
     transcript.world("capability_on", { capability: "reports", values: { token: "github_pat_example" } });
     transcript.connect();
     transcript.wait(2000);
-    sendAndStart(transcript, "What time does the Battersea parkrun start?");
-    transcript.wait(300);
-    transcript.step("web_search", searching("Battersea parkrun start time"));
+    const shot = transcript.upload("library-shelves.png");
+    transcript.wait(200);
+    const noticed = transcript.send(
+      "The Library shelves just show cut-off page names. Can you pass that on? I'd rather each had an icon.",
+      { attachments: [shot] },
+    );
+    transcript.startTurn([noticed]);
     transcript.wait(900);
-    transcript.step("command", {
-      title: "Fetching a web page",
-      endedTitle: "Fetched a web page",
-      fields: { command: "curl -sf https://www.parkrun.org.uk/battersea/", cwd: "/home/you/.ito/workspace" },
-    });
-    transcript.wait(700);
-    transcript.endStep({ fields: { exit_code: 22, output: "curl: (22) The requested URL returned error: 403\n" } });
+    const title = "Library shelves need icons, not clipped names";
+    const body =
+      "The Library's shelf cards show fragments of page titles that end in ellipses, so they read like search " +
+      "results rather than places to browse.\n\nA distinct icon for each shelf, in the app's own style, with " +
+      "its name and count, would tell them apart at a glance.";
+    const reporting = { title: "Reporting it to Ito", endedTitle: "Reported it to Ito" };
     transcript.step("tool", {
-      title: "Reporting it to Ito",
-      endedTitle: "Reported it to Ito",
+      ...reporting,
       fields: {
         capability: "reports",
         operation: "report",
         arguments: {
-          capability: "web search",
-          operation: "open a page",
-          tried: "Fetched the parkrun event page to read the start time",
-          failed: "The page answered 403 to every fetch",
-          would_help: "A browser that can load pages behind bot protection",
+          title,
+          body,
+          screenshots: [{ file: "uploads/library-shelves.png", shows: "the Library shelves" }],
         },
       },
     });
-    transcript.wait(1200);
-    transcript.endStep({ fields: { url: "https://github.com/akai-ito/ito-core/issues/42" } });
-    writeWhole(
-      transcript,
-      "Most parkruns start at 9:00, but I couldn't load Battersea's event page to confirm it, and I've " +
-        "reported that. Check the page before you go.",
-    );
+    transcript.wait(300);
+    transcript.approval({
+      question: "File this on GitHub?",
+      preview: [title, "", body, "", "Screenshots: the Library shelves", "Public, on akai-ito/ito-core."].join("\n"),
+      options: [{ label: "File it", acts: true }, { label: "Don't" }],
+      attachments: [shot],
+    });
+    transcript.wait(6000);
+    const filed = transcript.send("File it");
+    transcript.read(filed);
+    transcript.status("working", "Going ahead");
+    transcript.wait(1500);
+    const issue = "https://github.com/akai-ito/ito-core/issues/42";
+    transcript.endStep({ fields: { url: issue } });
+    writeWhole(transcript, `Filed, with your screenshot: [${title}](${issue}).`);
+    transcript.endTurn("completed");
+    transcript.wait(5 * 60 * 1000);
+    const more = transcript.send("Actually, no description is fine too: just the icon, the name and the count.");
+    transcript.startTurn([more]);
+    transcript.wait(700);
+    const addition =
+      "An icon with the shelf's name and count, and no description at all, would be just as good: better than " +
+      "filler or a clipped list.";
+    transcript.step("tool", {
+      ...reporting,
+      fields: { capability: "reports", operation: "report", arguments: { body: addition, issue: 42 } },
+    });
+    transcript.wait(300);
+    transcript.approval({
+      question: "Add this to issue #42 on GitHub?",
+      preview: [addition, "", "Public, on akai-ito/ito-core#42."].join("\n"),
+      options: [{ label: "Add it", acts: true }, { label: "Don't" }],
+    });
+    transcript.wait(4000);
+    const added = transcript.send("Add it");
+    transcript.read(added);
+    transcript.status("working", "Going ahead");
+    transcript.wait(1000);
+    transcript.endStep({ fields: { url: `${issue}#issuecomment-6510000001` } });
+    writeWhole(transcript, "Added to the same issue.");
     transcript.endTurn("completed");
     return transcript;
   },
@@ -1686,7 +1728,7 @@ const scenarios: readonly (() => Transcript)[] = [
         protocol,
         agent: { name: "Ari" },
         setup: { notifications: false, memory_backup: false },
-        capabilities: [{ id: "reports", version: "0.1" }],
+        capabilities: [{ id: "reports", version: "0.2" }],
       },
       { headers: { "Ito-Protocol": protocol } },
     );
@@ -2742,9 +2784,10 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 58,
       title: "Topics",
       summary:
-        "Last night you planned Florence, then asked about Bora. Ari marked each change of subject with a quiet " +
-        "label on the message that changed it, and none for a follow-up. In the morning the snapshot carries " +
-        "both labels, and when you come back to Florence, Ari marks it with the same label.",
+        "Last night you planned Florence, then asked about Bora. After each turn, Ito marked each change of " +
+        "subject with a quiet label on the message that changed it, and none for a follow-up. In the morning the " +
+        "snapshot carries both labels, and when you come back to Florence, the label arrives just after the reply " +
+        "and is the same as before.",
       guarantees: ["G29"],
     });
     transcript.time("2026-10-27T19:00:00.000Z");
@@ -2768,12 +2811,11 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.connect();
     transcript.wait(3000);
     const back = sendAndStart(transcript, "Back to Florence: which day should we do the Uffizi?");
-    transcript.wait(700);
-    agentCalls(transcript, "mark_topic", { label: "Florence trip" });
-    transcript.topic("Florence trip", back.user);
-    transcript.wait(300);
+    transcript.world("topic_decided", { label: "Florence trip" });
+    transcript.wait(1000);
     writeWhole(transcript, "The first morning, before it gets busy. Book the 8:15 slot.");
     transcript.endTurn("completed");
+    transcript.topic("Florence trip", back.user);
     return transcript;
   },
 
@@ -2911,9 +2953,10 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 62,
       title: "A trip in motion",
       summary:
-        "You ask Ari to plan a weekend. Ari finds a cover photo, starts the trip as a thing in motion with its days, " +
-        "places, travel, stay and to-do list, and answers in a line with a compact line under it. The trip is " +
-        "pinned; the app lists it, opens it, and fetches its photo from the server.",
+        "You ask Ari to plan a weekend. Ari finds a cover and a photo for every place, starts the trip as a thing " +
+        "in motion with its days, places, travel, stay and to-do list, every stop at its place, and answers in a " +
+        "line with a compact line under it. The trip is pinned; the app lists it, opens it, and fetches its cover " +
+        "from the server.",
       guarantees: ["G32"],
     });
     transcript.begin("2026-10-29T09:00:00.000Z");
@@ -2924,9 +2967,9 @@ const scenarios: readonly (() => Transcript)[] = [
       "Can you plan Florence with Janki? 6 to 9 November. Good food, the Uffizi, maybe Pisa for a day.",
     );
     transcript.wait(800);
-    const cover = findFlorenceCover(transcript);
+    const pictures = findFlorencePictures(transcript);
     transcript.wait(2500);
-    const { motion, change } = startFlorence(transcript, cover);
+    const { motion, change } = startFlorence(transcript, pictures);
     transcript.wait(400);
     writeWhole(
       transcript,
@@ -2943,12 +2986,12 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.wait(1500);
     memoryCall(transcript, `/v0/motion/${florenceId}`, {
       motion,
-      content: florenceTrip(cover),
+      content: florenceTrip(pictures),
       state: {},
       changes: [change],
     });
     transcript.wait(300);
-    transcript.fetchAttachment(cover);
+    transcript.fetchAttachment(pictures.cover);
     return transcript;
   },
 
@@ -2960,7 +3003,8 @@ const scenarios: readonly (() => Transcript)[] = [
       summary:
         "You tell Ari you booked the Uffizi. Ari reads the trip and changes it by id, citing the version it read: " +
         "the to-do is ticked, the stop is booked and the pinned line counts one fewer. You tick the Pisa train " +
-        "yourself, every app hears it, and Ari learns of it with your next message. The trip shows what changed.",
+        "yourself and put the Boboli Gardens in the plan; every app hears it, a few seconds later Ari quietly fits " +
+        "the gardens into Saturday, and it learns of both with your next message. The trip shows what changed.",
       guarantees: ["G32"],
     });
     transcript.begin("2026-10-29T09:00:00.000Z");
@@ -2968,9 +3012,9 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.wait(2000);
     sendAndStart(transcript, "Can you plan Florence with Janki? 6 to 9 November.");
     transcript.wait(800);
-    const cover = findFlorenceCover(transcript);
+    const pictures = findFlorencePictures(transcript);
     transcript.wait(2000);
-    const started = startFlorence(transcript, cover);
+    const started = startFlorence(transcript, pictures);
     transcript.wait(400);
     writeWhole(transcript, `Here's a first shape, in In motion.\n\n${motionLine(florenceId, 1)}`);
     transcript.endTurn("completed");
@@ -2993,7 +3037,7 @@ const scenarios: readonly (() => Transcript)[] = [
     });
     const changed = transcript.motion(
       "changed",
-      { ...florenceCard, cover, version: 2, summary: "6–9 Nov · 3 to book" },
+      { ...florenceCard, cover: pictures.cover, version: 2, summary: "6–9 Nov · 3 to book" },
       note,
     );
     motionStep(
@@ -3013,38 +3057,64 @@ const scenarios: readonly (() => Transcript)[] = [
     );
     transcript.endTurn("completed");
     transcript.wait(5 * 60 * 1000);
-    const state = transcript.patchMotion(florenceId, { todo: { "book-pisa": { done: true } } });
+    transcript.patchMotion(florenceId, { todo: { "book-pisa": { done: true } } });
+    transcript.wait(1500);
+    const state = transcript.patchMotion(florenceId, { places: { boboli: { status: "picked" } } });
+    const gardens = { id: "boboli-stop", title: "Boboli Gardens", time: "15:30", place: "boboli" };
+    const fitted = "Fitted the Boboli Gardens into Saturday";
+    transcript.world("ari_keeps_up", {
+      changes: [
+        { add: gardens, to: "sat", after: "pitti" },
+        { set: "boboli", fields: { status: "picked" } },
+      ],
+      summary: "6–9 Nov · 2 to book",
+      note: fitted,
+    });
     transcript.wait(3000);
+    const keptUp = transcript.motion(
+      "changed",
+      { ...florenceCard, cover: pictures.cover, version: 3, summary: "6–9 Nov · 2 to book" },
+      fitted,
+    );
+    transcript.wait(2000);
+    const trip = florenceTrip(pictures);
     memoryCall(transcript, `/v0/motion/${florenceId}`, {
-      motion: changed.motion,
+      motion: keptUp.motion,
       content: {
-        ...florenceTrip(cover),
-        days: (florenceTrip(cover).days as readonly Readonly<Record<string, unknown>>[]).map((day) =>
+        ...trip,
+        days: (trip.days as readonly Readonly<Record<string, unknown>>[]).map((day) =>
           day.id === "sat"
             ? {
                 ...day,
-                stops: (day.stops as readonly Readonly<Record<string, unknown>>[]).map((stop) =>
-                  stop.id === "uffizi" ? { ...stop, booking: { status: "booked", ref: "UF-2291" } } : stop,
-                ),
+                stops: [
+                  ...(day.stops as readonly Readonly<Record<string, unknown>>[]).map((stop) =>
+                    stop.id === "uffizi" ? { ...stop, booking: { status: "booked", ref: "UF-2291" } } : stop,
+                  ),
+                  gardens,
+                ],
               }
             : day,
         ),
-        places: (florenceTrip(cover).places as readonly Readonly<Record<string, unknown>>[]).map((place) =>
-          place.id === "uffizi-place"
-            ? { ...place, status: "booked", booking: { status: "booked", ref: "UF-2291" } }
-            : place,
-        ),
-        todo: (florenceTrip(cover).todo as readonly Readonly<Record<string, unknown>>[]).map((item) =>
+        places: (trip.places as readonly Readonly<Record<string, unknown>>[]).map((place) => {
+          if (place.id === "uffizi-place") {
+            return { ...place, status: "booked", booking: { status: "booked", ref: "UF-2291" } };
+          }
+          return place.id === "boboli" ? { ...place, status: "picked" } : place;
+        }),
+        todo: (trip.todo as readonly Readonly<Record<string, unknown>>[]).map((item) =>
           item.id === "book-uffizi" ? { ...item, done: true } : item,
         ),
       },
       state,
-      changes: [changed.change, started.change],
+      changes: [keptUp.change, changed.change, started.change],
     });
     transcript.wait(2000);
     sendAndStart(transcript, "Thanks! What's left?");
     transcript.wait(900);
-    writeWhole(transcript, "The Duomo climb and the Pitti Palace. The Pisa train's ticked off.");
+    writeWhole(
+      transcript,
+      "The Duomo climb and the Pitti Palace. The Pisa train's ticked off, and the gardens follow the Pitti.",
+    );
     transcript.endTurn("completed");
     return transcript;
   },

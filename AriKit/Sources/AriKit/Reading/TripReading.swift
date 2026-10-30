@@ -33,14 +33,24 @@ public enum TripReading {
         return Trip.Booking(status: .booked, ref: booking.ref, url: booking.url)
     }
 
-    /// Where a place stands: booked once a to-do about it is done, and in the plan once a stop in
-    /// the days goes there, whatever Ari last called it.
+    /// Where a place stands. Booked wins, as Ari wrote it or once a to-do about it is done; then
+    /// your choice; then Ari's word, and a place a stop in the days goes to is in the plan,
+    /// whatever Ari last called it.
     public static func status(of place: Trip.Place, in trip: Trip, state: MotionState)
         -> PlaceStatus
     {
         if place.status == .booked || ticked(place.id, in: trip, state: state) { return .booked }
+        if let chosen = choice(for: place.id, in: state) { return chosen }
         if place.status == .shortlisted, isPlanned(place.id, in: trip) { return .picked }
         return place.status
+    }
+
+    /// The list your choices for places are kept under.
+    public static let placesList = "places"
+
+    /// Your choice for a place, if you made one.
+    public static func choice(for place: String, in state: MotionState) -> PlaceStatus? {
+        state[placesList]?[place]?.status
     }
 
     /// Whether a stop in the days goes to the place.
@@ -63,7 +73,8 @@ public enum TripReading {
     }
 
     /// The places by what you'd do there (Eat, See, Do, then anything else), each row with the
-    /// ideas still to decide on first, then what's in the plan, then what's booked.
+    /// ideas still to decide on first, then what's in the plan, then what's booked; the ones you
+    /// passed on come last, in a row of their own.
     public static func placeRows(_ trip: Trip, state: MotionState) -> [PlaceRow] {
         let kinds: [(title: String, categories: [PlaceCategory])] = [
             ("Eat", [.restaurant, .cafe, .bar]),
@@ -86,9 +97,15 @@ public enum TripReading {
             return PlaceRow(title: title, places: ordered.map(\.element))
         }
         let known = kinds.flatMap(\.categories)
+        let passed = trip.places.filter { status(of: $0, in: trip, state: state) == .passed }
+        let open = trip.places.filter { status(of: $0, in: trip, state: state) != .passed }
         return kinds.compactMap { kind in
-            row(kind.title, trip.places.filter { kind.categories.contains($0.category) })
-        } + [row("Other", trip.places.filter { !known.contains($0.category) })].compactMap(\.self)
+            row(kind.title, open.filter { kind.categories.contains($0.category) })
+        }
+            + [
+                row("Other", open.filter { !known.contains($0.category) }),
+                row("Passed", passed),
+            ].compactMap(\.self)
     }
 
     private static func ticked(_ item: String, in trip: Trip, state: MotionState) -> Bool {

@@ -579,14 +579,16 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Tick items in a thing
+     * Tick items in a thing, or choose for its places
      * @description A JSON Merge Patch (RFC 7386) on the state, keyed by item ids, such as
-     *     `{"todo": {"book-uffizi": {"done": true}}}`, sent as `application/merge-patch+json` or
-     *     `application/json`. Its kind in [the motion schema](motion.schema.json) says which keys the
-     *     state has. Every app hears `motion.state`. A few seconds later, gathering ticks made in
-     *     quick succession, Ari keeps the thing up with them, such as marking what a to-do books as
-     *     booked or writing the week's line: that's an ordinary `motion.changed`, with no chat
-     *     message. Ari also hears of the ticks with your next message. Sending the same patch twice
+     *     `{"todo": {"book-uffizi": {"done": true}}}` or
+     *     `{"places": {"pitti-place": {"status": "picked"}}}`, sent as `application/merge-patch+json`
+     *     or `application/json`; `null` takes a tick or a choice back. Its kind in
+     *     [the motion schema](motion.schema.json) says which keys the state has. Every app hears
+     *     `motion.state`. A few seconds later, gathering taps made in quick succession, Ari keeps the
+     *     thing up with them, such as marking what a to-do books as booked, fitting a place you put
+     *     in the plan into a day or writing the week's line: that's an ordinary `motion.changed`, with
+     *     no chat message. Ari also hears of them with your next message. Sending the same patch twice
      *     changes nothing.
      */
     patch: operations["patchMotionState"];
@@ -996,9 +998,9 @@ export interface components {
      *       "id": "reports",
      *       "kind": "hand",
      *       "title": "Reports",
-     *       "summary": "Files the gaps Ari hits as public issues on Ito's repositories.",
+     *       "summary": "Takes your feedback, and what Ari couldn't do, to Ito's developers as public GitHub issues.",
      *       "symbol": "exclamationmark.bubble",
-     *       "version": "0.1",
+     *       "version": "0.2",
      *       "state": "needs_you",
      *       "detail": "GitHub rejected the token.",
      *       "fields": [
@@ -1006,15 +1008,18 @@ export interface components {
      *           "name": "token",
      *           "kind": "secret",
      *           "title": "GitHub token",
-     *           "description": "A fine-grained token for akai-ito/ito-core, with Issues set to read and write.",
+     *           "description": "Connect GitHub, so Reports files issues on akai-ito/ito-core as you.",
      *           "set": true
      *         }
      *       ],
      *       "uses": {
      *         "hosts": [
-     *           "api.github.com"
+     *           "api.github.com",
+     *           "github.com"
      *         ],
-     *         "folders": []
+     *         "folders": [
+     *           "uploads"
+     *         ]
      *       }
      *     }
      */
@@ -1359,6 +1364,8 @@ export interface components {
       allows_text: boolean;
       /** @description Approvals only: what would happen, in plain text, to show before you agree. */
       preview?: string;
+      /** @description Approvals only: pictures that would leave the box if you agree, such as a report's screenshots, to show with the preview. Fetch each with `GET /v0/attachments/{attachment}`. */
+      attachments?: components["schemas"]["AttachmentId"][];
       at: components["schemas"]["Timestamp"];
       position: components["schemas"]["Position"];
       /** @description When it was answered or cancelled. */
@@ -1454,7 +1461,7 @@ export interface components {
       query?: string;
       /** @description `web_search`: every query, when there were several. */
       queries?: string[];
-      /** @description `web_search`: the page opened or searched within. `tool`: what the tool made, such as the issue a gap report opened or added to. */
+      /** @description `web_search`: the page opened or searched within. `tool`: what the tool made, such as the issue a report opened or added to. */
       url?: string;
       /** @description `web_search`: the words looked for on a page. */
       pattern?: string;
@@ -1853,7 +1860,7 @@ export interface components {
        * @example trip
        */
       kind: string;
-      /** @description Such as "Florence with Janki". */
+      /** @description Short, such as "Florence with Janki": Ari keeps it to 28 characters or fewer. */
       title: string;
       /** @description Where it stands, in one line, for the pinned line and the In motion tab, such as "6–9 Nov · 3 to book". Ari keeps it current with every change. */
       summary: string;
@@ -2423,7 +2430,7 @@ export interface operations {
            *       "capabilities": [
            *         {
            *           "id": "reports",
-           *           "version": "0.1"
+           *           "version": "0.2"
            *         }
            *       ]
            *     }

@@ -35,6 +35,9 @@ struct MotionTests {
         let state = try await server.client.tick(
             florence, list: TripReading.todoList, item: "book-pisa", done: true)
         #expect(state[TripReading.todoList]?["book-pisa"]?.done == true)
+        // Your choice for a place goes the same way, and Ari fits it into a day.
+        let chosen = try await server.client.choose(florence, place: "boboli", status: .picked)
+        #expect(TripReading.choice(for: "boboli", in: chosen) == .picked)
         let detail = try await server.client.motion(florence)
         let trip = try #require(Self.trip(detail))
         // The Uffizi as Ari wrote it, the Pisa train by your tick.
@@ -45,8 +48,14 @@ struct MotionTests {
         #expect(
             TripReading.booking(train.booking, of: train.id, in: trip, state: detail.state)?.status
                 == .booked)
+        let boboli = try #require(trip.places.first { $0.id == "boboli" })
+        #expect(TripReading.status(of: boboli, in: trip, state: detail.state) == .picked)
+        #expect(TripReading.stops(at: "boboli", in: trip).map(\.stop.id) == ["boboli-stop"])
         #expect(
-            detail.changes.map(\.note) == ["Booked the Uffizi, 8:15 Saturday", "Started the trip"])
+            detail.changes.map(\.note) == [
+                "Fitted the Boboli Gardens into Saturday", "Booked the Uffizi, 8:15 Saturday",
+                "Started the trip",
+            ])
         let mismatches = await server.mismatches
         #expect(mismatches.isEmpty, "\(mismatches)")
         #expect(await server.unanswered == 0)
@@ -61,7 +70,7 @@ struct MotionTests {
 
         #expect(motions.going.map(\.id) == [florence])
         let pinned = try #require(motions.pinned)
-        #expect(pinned.motion.version == 2 && pinned.more == 0)
+        #expect(pinned.motion.version == 3 && pinned.more == 0)
         #expect(motions.change(florence, version: 2)?.note == "Booked the Uffizi, 8:15 Saturday")
         try await until { motions.details[florence] != nil }
         #expect(motions.details[florence]?.state[TripReading.todoList]?["book-pisa"]?.done == true)
@@ -153,8 +162,9 @@ struct MotionTests {
             Self.trip(try Self.lastDetail(in: transcript).decode(MotionDetail.self)))
         let stops = TripReading.mapStops(trip)
         #expect(stops.map(\.number) == Array(1...stops.count))
-        #expect(stops.first?.stop.id == "duomo")
-        #expect(!stops.contains { $0.stop.id == "land" }, "landing has no place to pin")
+        // Every stop names its place now, the airport too.
+        #expect(stops.first?.stop.id == "land")
+        #expect(stops.count == trip.days.flatMap(\.stops).count)
     }
 
     @Test("places go in rows by kind, ideas first, and a place a stop goes to is in the plan")
