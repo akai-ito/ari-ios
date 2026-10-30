@@ -290,16 +290,21 @@ struct ConversationTranscriptTests {
         #expect(turn.map(\.id).prefix(2) == ["s_0002_84756", plan])
     }
 
-    @Test("Scenario 17: a gap report is a tool step that links to its issue")
-    func reportingAGap() throws {
+    @Test("Scenario 17: a report waits for your yes, shows its screenshots, and links its issue")
+    func reporting() throws {
         var replay = Replay(try Fixtures.transcript("17-reporting-a-gap"))
         try replay.play()
-        // The page that wouldn't load still ran, so it completed, with its exit code.
-        let fetch = try #require(replay.conversation[step: "s_0003_94980"])
-        #expect(fetch.outcome == .completed && fetch.exitCode == 22)
-        let report = try #require(replay.conversation[step: "s_0004_29982"])
+        // Nothing left the box before you agreed, and the draft showed the screenshot it would share.
+        let draft = try #require(replay.conversation.asks.first { $0.id == "a_0001_65902" })
+        #expect(draft.kind == .approval && draft.preview != nil)
+        #expect(draft.attachments == ["ccb15bb0-ea37-49ed-9d33-d215acfcf881"])
+        #expect(draft.outcome == .answered)
+        let report = try #require(replay.conversation[step: "s_0002_13555"])
         #expect(report.kind == .tool && report.title == "Reported it to Ito")
         #expect(report.url == "https://github.com/akai-ito/ito-core/issues/42")
+        // A follow-up adds to the same issue.
+        let followUp = try #require(replay.conversation[step: "s_0003_94980"])
+        #expect(followUp.url?.hasPrefix("https://github.com/akai-ito/ito-core/issues/42#") == true)
     }
 
     @Test("Scenario 19: Ari asks and waits; a tapped option answers it, settling it at once")

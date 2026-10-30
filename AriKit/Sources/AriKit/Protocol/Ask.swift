@@ -14,6 +14,9 @@ public struct Ask: Hashable, Sendable, Decodable, Identifiable {
     public var allowsText: Bool
     /// Approvals only: what would happen, to show before you agree.
     public var preview: String?
+    /// Approvals only: pictures that would leave your server if you agree, such as a report's
+    /// screenshots, to show with the preview.
+    public var attachments: [AttachmentID]?
     public var at: Timestamp
     /// Where it sits in the conversation, in one order with messages and steps.
     public var position: Int
@@ -47,7 +50,7 @@ public struct Ask: Hashable, Sendable, Decodable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, turn, kind, question, options, preview, at, position, outcome, answer
+        case id, turn, kind, question, options, preview, attachments, at, position, outcome, answer
         case allowsText = "allows_text"
         case endedAt = "ended_at"
     }

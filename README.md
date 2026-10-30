@@ -58,7 +58,8 @@
   eight lines.
 - **Asks that wait for you.** When Ari needs something (which one you meant, your go-ahead), it
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
-  send answers it, from a notification too.
+  send answers it, from a notification too. An approval shows what it would do, and any pictures
+  it would make public, such as a report's screenshots.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block.
   It's pinned above the composer and opens full screen; In motion is its own tab. A trip has its
   days, a map whose pins show their place, its places by kind (each with a page of its own, where

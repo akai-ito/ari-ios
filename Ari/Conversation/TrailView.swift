@@ -553,18 +553,22 @@ private struct AskView: View {
                 .lineSpacing(Rhythm.ariLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
             if let preview = ask.preview {
-                Text(preview)
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .lineSpacing(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(.ariLine, lineWidth: 1)
-                    }
-                    .textSelection(.enabled)
+                // A draft, such as a report, can carry headings and lists.
+                ReplyView(
+                    document: ReplyDocument(markdown: preview), position: .infinity, tone: .note
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(.ariLine, lineWidth: 1)
+                }
+                .textSelection(.enabled)
+            }
+            if let pictures = ask.attachments, !pictures.isEmpty {
+                // What would be made public if you agree: shown, not just named.
+                SharedPictures(pictures: pictures)
             }
             if !ask.options.isEmpty {
                 WrappingStack(spacing: 8) {
@@ -670,5 +674,72 @@ struct WrappingStack: Layout {
             rows[rows.count - 1].height = max(rows[rows.count - 1].height, size.height)
         }
         return rows
+    }
+}
+
+/// Pictures an approval would send out, such as a report's screenshots, small and in a row; tap
+/// one to see it whole.
+private struct SharedPictures: View {
+    let pictures: [AttachmentID]
+
+    /// The picture open whole.
+    private struct Opened: Identifiable { let id: AttachmentID }
+    @State private var opened: Opened?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(pictures, id: \.self) { picture in
+                        Button {
+                            opened = Opened(id: picture)
+                        } label: {
+                            Picture(id: picture, longest: 480)
+                                .frame(height: 150)
+                                .clipShape(.rect(cornerRadius: 10, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .strokeBorder(.ariLine))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Screenshot to be shared")
+                        .accessibilityHint("Shows it whole")
+                    }
+                }
+            }
+            Text(pictures.count == 1 ? "Goes public if you agree" : "These go public if you agree")
+                .font(.caption)
+                .foregroundStyle(.ariTertiary)
+        }
+        .sheet(item: $opened) { picture in
+            Picture(id: picture.id, longest: 2400)
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ariBackground)
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// One picture, fitted, fetched from your server.
+    private struct Picture: View {
+        let id: AttachmentID
+        let longest: Int
+
+        @Environment(\.attachmentBytes) private var bytes
+        @State private var image: CGImage?
+
+        var body: some View {
+            Group {
+                if let image {
+                    Image(decorative: image, scale: 1).resizable().scaledToFit()
+                } else {
+                    Rectangle().fill(.ariSurface).aspectRatio(0.46, contentMode: .fit)
+                }
+            }
+            .task(id: id) {
+                guard let bytes else { return }
+                image = await Thumbnails.image(for: id, longest: longest) { await bytes(id) }
+            }
+        }
     }
 }
