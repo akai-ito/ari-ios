@@ -35,10 +35,10 @@ struct TalkTests {
         var replay = Replay(try Fixtures.transcript("40-delete-a-call-s-audio"))
         let call: CallID = "77429675-c07e-4b87-aa08-044fa314791d"
         let mine: MessageID = "m_0001_90849"
-        try replay.play(throughLine: 33, expecting: "call.ended e_0009_54098")
+        try replay.play(throughLine: 35, expecting: "call.ended e_0009_54098")
         #expect(replay.conversation[mine]?.spoken?.audio != nil)
 
-        try replay.play(throughLine: 36, expecting: "call.audio_deleted e_0010_64795")
+        try replay.play(throughLine: 38, expecting: "call.audio_deleted e_0010_64795")
         #expect(replay.conversation[call: call]?.audioDeleted == true)
         #expect(replay.conversation[mine]?.spoken?.audio == nil)
         #expect(replay.conversation[mine]?.spoken?.call == call)
@@ -59,7 +59,7 @@ struct TalkTests {
     @Test("Forgetting older messages keeps the call that's on")
     func history() throws {
         var replay = Replay(try Fixtures.transcript("38-a-walk-with-ari"))
-        try replay.play(throughLine: 41, expecting: "turn.ended e_0014_69065")
+        try replay.play(throughLine: 44, expecting: "turn.ended e_0014_69065")
         var conversation = replay.conversation
         conversation.forgetMessages(before: "m_0003_60545")
         #expect(conversation.callOn?.id == "c40b7f14-bcb1-451e-8d2a-797ec1b00d4c")
