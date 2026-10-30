@@ -26,6 +26,8 @@ public enum CallStreamEvent: Sendable, Equatable {
     case saying(id: String, text: String)
     /// Ari's voice: 16-bit PCM, mono, 24 kHz, little-endian, to play in order.
     case audio(Data)
+    /// The sentence's audio is all here: answer with `played` once it has played.
+    case said(id: String)
     /// Drop all queued audio now: you started talking.
     case stopPlayback
     /// The call can't go on; the server closes it with this reason.
@@ -46,6 +48,7 @@ public enum CallStreamEvent: Sendable, Equatable {
                 text: frame.text ?? "", final: frame.final ?? false,
                 message: frame.message.map(MessageID.init(rawValue:)))
         case "saying": self = .saying(id: frame.id ?? "", text: frame.text ?? "")
+        case "said": self = .said(id: frame.id ?? "")
         case "stop_playback": self = .stopPlayback
         case "problem": self = .problem(reason: frame.reason ?? "The call ended.")
         default: self = .unknown

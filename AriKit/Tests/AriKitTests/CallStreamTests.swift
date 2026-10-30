@@ -24,6 +24,7 @@ struct CallStreamTests {
             event(#"{"type":"saying","id":"s1","text":"She wants one more round."}"#)
                 == .saying(id: "s1", text: "She wants one more round."))
         #expect(event(#"{"type":"stop_playback"}"#) == .stopPlayback)
+        #expect(event(#"{"type":"said","id":"s3"}"#) == .said(id: "s3"))
         #expect(
             event(#"{"type":"problem","reason":"The connection dropped."}"#)
                 == .problem(reason: "The connection dropped."))
