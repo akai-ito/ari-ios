@@ -61,8 +61,8 @@
   send answers it, from a notification too.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block.
   It's pinned above the composer and opens full screen; In motion is its own tab.
-- **What Ari knows.** The Library shows Ari's memory: In mind, shelves of pages (people by circle),
-  and the journal, all in the device's search.
+- **What Ari knows.** The Library shows Ari's memory: In mind, shelves of pages (each with its glyph
+  in Ari's dots; people by circle), and the journal, all in the device's search.
 - **Talk.** A call with Ari through CallKit: your voice goes to your server, and Ari's comes back
   with captions as each line is heard.
 - **Capabilities.** What Ari can reach, switched on in Settings, and connected through the

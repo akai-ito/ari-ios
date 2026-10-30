@@ -2,8 +2,8 @@ import AriKit
 import SwiftUI
 
 /// The Library's front page, as Ari's notebook: what's going on now, in a few lines you can read at
-/// a glance, the other pages always in mind, what Ari learnt lately, then the shelves, each with a
-/// peek at what's on it.
+/// a glance, the other pages always in mind (what used to open from the character in the chat),
+/// what Ari learnt lately, then the shelves, each with its glyph.
 struct LibraryHome: View {
     let memory: Memory
 
@@ -110,32 +110,10 @@ struct LibraryHome: View {
                 spacing: 12
             ) {
                 ForEach(Self.ordered(memory.shelves)) { shelf in
-                    ShelfTile(shelf: shelf, peek: peek(shelf.shelf))
+                    ShelfTile(shelf: shelf)
                 }
             }
         }
-    }
-
-    /// A glimpse of what's on a shelf: its latest day, or who and what Ari touched lately, else
-    /// the first few.
-    private func peek(_ shelf: String) -> String? {
-        guard let pages = memory.shelfPages[shelf], !pages.isEmpty else { return nil }
-        if shelf == "journal" {
-            guard let month = ShelfReading.months(pages).first, let day = month.days.first else {
-                return nil
-            }
-            let date = DateComponents(
-                calendar: Calendar(identifier: .gregorian), timeZone: .gmt, year: month.year,
-                month: month.month, day: day.day
-            ).date
-            return date.map {
-                "Latest: "
-                    + $0.formatted(Date.FormatStyle(timeZone: .gmt).day().month(.abbreviated))
-            }
-        }
-        let lately = ShelfReading.lately(pages)
-        let names = (lately.isEmpty ? ShelfReading.everyone(pages) : lately).prefix(3).map(\.title)
-        return names.joined(separator: ", ") + (pages.count > names.count ? "…" : "")
     }
 
     /// The shelves you'll reach for most first.
@@ -193,28 +171,25 @@ private struct NowCard: View {
     }
 }
 
-/// A shelf on the front page: its name, how many pages, and a peek inside.
+/// A shelf on the front page: its glyph in Ari's dots, its name and how many pages. No peek
+/// inside: a clipped list of names said less than a glance at the glyph.
 private struct ShelfTile: View {
     let shelf: Shelf
-    let peek: String?
 
     var body: some View {
         NavigationLink(value: ShelfRoute(shelf: shelf.shelf)) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(LibraryHome.title(ofShelf: shelf.shelf))
-                        .font(.headline)
-                        .foregroundStyle(.ariText)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    ShelfGlyph(shelf: shelf.shelf)
                     Spacer(minLength: 4)
                     Text("\(shelf.count)")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.ariTertiary)
                 }
-                Text(peek ?? "")
-                    .font(.footnote)
-                    .foregroundStyle(.ariSecondary)
-                    .lineLimit(2, reservesSpace: true)
-                    .multilineTextAlignment(.leading)
+                Text(LibraryHome.title(ofShelf: shelf.shelf))
+                    .font(.headline)
+                    .foregroundStyle(.ariText)
+                    .lineLimit(1)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -222,5 +197,29 @@ private struct ShelfTile: View {
             .contentShape(.rect(cornerRadius: 16))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(LibraryHome.title(ofShelf: shelf.shelf)), \(shelf.count) pages")
+    }
+}
+
+/// A shelf's glyph: two heads for People, a closed book for the Journal.
+struct ShelfGlyph: View {
+    let shelf: String
+
+    var body: some View {
+        DotGlyph(symbol: Self.symbol(for: shelf))
+    }
+
+    static func symbol(for shelf: String) -> String {
+        switch shelf {
+        case "people": "person.2.fill"
+        case "groups": "person.3.fill"
+        case "projects": "square.stack.3d.up.fill"
+        case "journal": "book.closed.fill"
+        case "goals": "flag.fill"
+        case "topics": "text.bubble.fill"
+        case "places": "mappin.and.ellipse"
+        default: "circle.grid.2x2.fill"
+        }
     }
 }

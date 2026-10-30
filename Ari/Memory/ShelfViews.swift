@@ -2,14 +2,13 @@ import AriKit
 import SwiftUI
 
 /// The pages on one shelf: who and what Ari touched lately, then everyone, A to Z. The Journal is
-/// its days by month instead, or a calendar, and People goes by circle, with groups after.
+/// its days by month instead, or a calendar, and People goes by circle. Groups keep their own
+/// shelf, and aren't listed again under People.
 struct ShelfView: View {
     let memory: Memory?
     let shelf: String
 
     @State private var pages: [PageSummary]?
-    /// On People, the groups too, in a section of their own.
-    @State private var groups: [PageSummary] = []
     @State private var problem: String?
     @State private var showsCalendar = false
 
@@ -30,7 +29,7 @@ struct ShelfView: View {
                 } else if shelf == "people" || shelf == "groups" {
                     PeopleList(
                         people: shelf == "people" ? pages : [],
-                        groups: shelf == "groups" ? pages : groups)
+                        groups: shelf == "groups" ? pages : [])
                 } else {
                     ShelfList(pages: pages)
                 }
@@ -61,9 +60,7 @@ struct ShelfView: View {
             #endif
             guard let memory else { return }
             do throws(RequestError) {
-                let loaded = try await memory.pages(on: shelf)
-                if shelf == "people" { groups = try await memory.pages(on: "groups") }
-                pages = loaded
+                pages = try await memory.pages(on: shelf)
             } catch {
                 problem = "Couldn't load this shelf: \(error.plainWords)"
             }
@@ -106,7 +103,7 @@ private struct ShelfList: View {
 }
 
 /// People, by the circles Ari keeps (partner and family first), each with a monogram in Ari's dots
-/// and Ari's line on who they are to you; then groups of people, in a section of their own.
+/// and Ari's line on who they are to you; or, on their own shelf, groups of people.
 private struct PeopleList: View {
     let people: [PageSummary]
     let groups: [PageSummary]
@@ -129,8 +126,6 @@ private struct PeopleList: View {
             if !groups.isEmpty {
                 Section {
                     rows(ShelfReading.everyone(groups), group: true)
-                } header: {
-                    heading("Groups")
                 }
             }
         }
@@ -178,34 +173,6 @@ private struct Monogram: View {
         }
         .frame(width: 36, height: 36)
         .accessibilityHidden(true)
-    }
-}
-
-/// A disc of bone dots on a square grid, `size` being each dot's radius as a share of the step.
-private struct Dots: View {
-    let step: CGFloat
-    let size: CGFloat
-
-    var body: some View {
-        Canvas { context, canvas in
-            let radius = canvas.width / 2
-            var dots = Path()
-            var y = step / 2
-            while y < canvas.height {
-                var x = step / 2
-                while x < canvas.width {
-                    let dx = x - radius
-                    let dy = y - radius
-                    if (dx * dx + dy * dy).squareRoot() < radius {
-                        let r = step * size
-                        dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
-                    }
-                    x += step
-                }
-                y += step
-            }
-            context.fill(dots, with: .color(.ariBone))
-        }
     }
 }
 
