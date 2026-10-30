@@ -38,6 +38,9 @@ struct ConversationView: View {
     /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
     /// latest.
     @State var firstShown: String?
+    /// The last row on screen while you read far back, or around a day you jumped to; `nil` shows
+    /// everything down to the end. See ``ConversationView/mostShown``.
+    @State var lastShown: String?
     /// Whether the conversation follows what arrives. It does while you're at the end, stops once
     /// you scroll up, and starts again when you come back to the end, send, or tap the pill.
     @State var following = true
@@ -163,7 +166,7 @@ struct ConversationView: View {
         } action: { _, distance in
             distanceFromEnd = distance
             // Back at the end without a finger on the screen, as a fling comes to rest: follow.
-            if distance == .atEnd, !scrolling { follow() }
+            if distance == .atEnd, !scrolling, lastShown == nil { follow() }
         }
         // A new row while following: settle at the end, at once. Following every change in
         // height, with an animation, fed itself in a long conversation (each scroll measured
@@ -185,7 +188,7 @@ struct ConversationView: View {
             scrolling = phase == .tracking || phase == .interacting
             if scrolling {
                 following = false
-            } else if distanceFromEnd == .atEnd {
+            } else if distanceFromEnd == .atEnd, lastShown == nil {
                 follow()
             }
         }
@@ -200,12 +203,19 @@ struct ConversationView: View {
             guard let top = cache.topmost(of: ids) else { return }
             header.show(whereabouts: cache.whereabouts[top])
         }
-        // Near the top, older history comes in, page after page, for as long as you stay there.
+        // Well before the top, older history comes in, page after page, for as long as you keep
+        // going, so it's there by the time you reach it.
         .onScrollGeometryChange(for: Bool.self) { geometry in
-            geometry.contentOffset.y + geometry.contentInsets.top < 400
+            geometry.contentOffset.y + geometry.contentInsets.top < Self.ahead
         } action: { _, near in
             nearTop = near
             if near { showEarlier(rows) }
+        }
+        // Reading back down from far back: the newer rows come back below.
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentSize.height - geometry.visibleRect.maxY < Self.ahead
+        } action: { _, near in
+            if near, lastShown != nil { showLater(rows) }
         }
         .sheet(isPresented: $showsTopics) {
             TopicsSheet(

@@ -47,8 +47,9 @@
   [swift-markdown](https://github.com/swiftlang/swift-markdown) and keeps where each run sits in the
   source, so text never reflows as it arrives. Stop shows everything Ari wrote at once.
 - **Replies shaped by what they are.** Where Markdown can't, Ari writes a block the app draws: a
-  place on a real map with Directions, short answers to tap, pictures it found (credited on tap),
-  and a line that opens a thing in motion.
+  place on Apple's map (a still picture in the chat, a live map with Directions when you open it),
+  short answers to tap, pictures it found (credited on tap), and a line that opens a thing in
+  motion.
 - **Ari's trail.** Between your message and Ari's answer, what it did along the way, in plain words
   that change tense as it finishes, with its short notes as quiet grey lines. `Timeline` merges
   messages and steps, groups similar steps, and folds each run once the turn is over; tap a step
