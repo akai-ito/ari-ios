@@ -39,7 +39,8 @@ struct MotionView: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: Circle())
+            // Tinted dark, so the chevron still shows over a bright cover photo.
+            .glassEffect(.regular.tint(.black.opacity(0.3)).interactive(), in: Circle())
             .accessibilityLabel("Close")
             .padding(.leading, 16)
             .padding(.top, 4)

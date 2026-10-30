@@ -201,9 +201,12 @@ struct FoundPhoto: View {
     var longest = 720
     var creditOnTap = true
     var creditAlignment = Alignment.bottomLeading
+    /// It couldn't be loaded: where a photo can go, the place it held can go too.
+    var failed: (() -> Void)?
 
     @Environment(\.attachmentBytes) private var bytes
     @State private var image: CGImage?
+    @State private var didFail = false
     @State private var showsCredit = false
 
     var body: some View {
@@ -215,6 +218,12 @@ struct FoundPhoto: View {
                         .resizable()
                         .scaledToFill()
                         .transition(.opacity)
+                } else if didFail {
+                    // Said quietly, rather than an empty box that looks like it's still coming.
+                    Image(systemName: "photo")
+                        .font(.title3)
+                        .foregroundStyle(.ariTertiary.opacity(0.6))
+                        .accessibilityLabel("Couldn't load this photo")
                 }
             }
             .clipped()
@@ -254,7 +263,12 @@ struct FoundPhoto: View {
                 let loaded = await Thumbnails.image(for: photo.attachment, longest: longest) {
                     await bytes(photo.attachment)
                 }
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeOut(duration: 0.25)) { image = loaded }
+                if loaded == nil {
+                    didFail = true
+                    failed?()
+                }
             }
     }
 }

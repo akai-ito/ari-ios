@@ -450,16 +450,23 @@ private struct TripMap: View {
         }
     }
 
-    /// The camera around a day's stops, with room at the edges.
-    private static func fit(_ stops: [TripReading.MapStop]) -> MapCameraPosition {
-        guard let first = stops.first else { return .automatic }
-        var rect = MKMapRect(origin: MKMapPoint(first.location.coordinate), size: MKMapSize())
-        for stop in stops.dropFirst() {
-            rect = rect.union(
-                MKMapRect(origin: MKMapPoint(stop.location.coordinate), size: MKMapSize()))
-        }
-        let room = max(rect.width, rect.height) * 0.4 + 1200
-        return .rect(rect.insetBy(dx: -room, dy: -room))
+    /// The camera around a day's stops, every one in view with room at the edges. A region, not a
+    /// map rect: a rect could be cropped to the map's shape, leaving the first and last stops off
+    /// the edges.
+    static func fit(_ stops: [TripReading.MapStop]) -> MapCameraPosition {
+        guard !stops.isEmpty else { return .automatic }
+        let latitudes = stops.map(\.location.lat)
+        let longitudes = stops.map(\.location.lon)
+        let (south, north) = (latitudes.min()!, latitudes.max()!)
+        let (west, east) = (longitudes.min()!, longitudes.max()!)
+        let center = CLLocationCoordinate2D(
+            latitude: (south + north) / 2, longitude: (west + east) / 2)
+        // Half again around the stops, so the pins and their callouts clear the edges, and at
+        // least a few streets for a single stop.
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((north - south) * 1.5, 0.006),
+            longitudeDelta: max((east - west) * 1.5, 0.006))
+        return .region(MKCoordinateRegion(center: center, span: span))
     }
 
     /// The place a pin stands for, with the way there.

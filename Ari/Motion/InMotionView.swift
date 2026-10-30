@@ -145,21 +145,29 @@ struct InMotionView: View {
         return Button {
             opened = OpenedMotion(id: motion.id, source: source)
         } label: {
-            HStack {
+            // A quieter card than the ones still going, with the same insets: the transition
+            // rounds its source's corners, and a row with none had its tick and date cut off.
+            HStack(spacing: 12) {
                 Image(systemName: "checkmark")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.ariTertiary)
-                Text(motion.title).foregroundStyle(.ariSecondary)
-                Spacer()
+                    .frame(width: 20)
+                Text(motion.title)
+                    .foregroundStyle(.ariSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
                 if let doneAt = motion.doneAt {
                     Text(doneAt.date, format: .dateTime.day().month(.abbreviated))
                         .font(.caption)
                         .foregroundStyle(.ariTertiary)
+                        .fixedSize()
                 }
             }
             .font(.subheadline)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(.ariSurface.opacity(0.6), in: .rect(cornerRadius: 18, style: .continuous))
+            .contentShape(.rect(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .motionSource(source, in: space)
