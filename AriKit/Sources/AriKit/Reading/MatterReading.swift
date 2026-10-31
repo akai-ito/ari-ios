@@ -1,16 +1,16 @@
 import Foundation
 
-/// How the times in a matter read: when it's waited since, when the next step is. Times are the
-/// server's, read in the device's calendar and time zone.
+/// How the times in a matter read: when it's waited since, when the next step is. A matter's times
+/// are local days and times, read on the device's calendar.
 public enum MatterReading {
     /// A day, short: "15 Oct", with its year when that isn't this one: "15 Oct 2025".
     public static func day(
-        _ time: Timestamp, now: Date = .now, calendar: Calendar = .current,
+        _ time: LocalTime, now: Date = .now, calendar: Calendar = .current,
         locale: Locale = .current
     ) -> String {
-        let sameYear = calendar.isDate(time.date, equalTo: now, toGranularity: .year)
+        let sameYear = calendar.isDate(time.date(in: calendar), equalTo: now, toGranularity: .year)
         return format(sameYear ? "d MMM" : "d MMM y", calendar: calendar, locale: locale)
-            .string(from: time.date)
+            .string(from: time.date(in: calendar))
     }
 
     /// When something is, as said: "Today 14:00", "Tomorrow 09:30", "Yesterday 18:00", a weekday
@@ -18,21 +18,23 @@ public enum MatterReading {
     /// midnight is a day without a time, so none shows, nor for a whole day (`allDay`). Inside a
     /// line, not `first`, it's "today", "tomorrow" and "yesterday".
     public static func when(
-        _ time: Timestamp, allDay: Bool = false, first: Bool = true, now: Date = .now,
+        _ time: LocalTime, allDay: Bool = false, first: Bool = true, now: Date = .now,
         calendar: Calendar = .current, locale: Locale = .current
     ) -> String {
-        let days = daysFrom(now, to: time.date, in: calendar)
+        let days = daysFrom(now, to: time.date(in: calendar), in: calendar)
         let dayText: String
         switch days {
         case 0: dayText = first ? "Today" : "today"
         case 1: dayText = first ? "Tomorrow" : "tomorrow"
         case -1: dayText = first ? "Yesterday" : "yesterday"
         case 2...6:
-            dayText = format("EEE", calendar: calendar, locale: locale).string(from: time.date)
+            dayText = format("EEE", calendar: calendar, locale: locale).string(
+                from: time.date(in: calendar))
         default:
-            let sameYear = calendar.isDate(time.date, equalTo: now, toGranularity: .year)
+            let sameYear = calendar.isDate(
+                time.date(in: calendar), equalTo: now, toGranularity: .year)
             return format(sameYear ? "EEE d MMM" : "d MMM y", calendar: calendar, locale: locale)
-                .string(from: time.date)
+                .string(from: time.date(in: calendar))
         }
         guard !allDay, !isMidnight(time, in: calendar) else { return dayText }
         return "\(dayText) \(clock(time, calendar: calendar, locale: locale))"
@@ -40,11 +42,11 @@ public enum MatterReading {
 
     /// A time of day: "14:00", or "2:00 PM" where that's how the clock reads.
     public static func clock(
-        _ time: Timestamp, calendar: Calendar = .current, locale: Locale = .current
+        _ time: LocalTime, calendar: Calendar = .current, locale: Locale = .current
     )
         -> String
     {
-        format("jjmm", calendar: calendar, locale: locale).string(from: time.date)
+        format("jjmm", calendar: calendar, locale: locale).string(from: time.date(in: calendar))
     }
 
     /// Who it's waiting on and since when: "Waiting on Poppy since 15 Oct".
@@ -53,7 +55,7 @@ public enum MatterReading {
         locale: Locale = .current
     ) -> String {
         let since =
-            daysFrom(now, to: waiting.since.date, in: calendar) == 0
+            daysFrom(now, to: waiting.since.date(in: calendar), in: calendar) == 0
             ? "today" : day(waiting.since, now: now, calendar: calendar, locale: locale)
         return "Waiting on \(waiting.who) since \(since)"
     }
@@ -77,9 +79,9 @@ public enum MatterReading {
         ).day ?? 0
     }
 
-    static func isMidnight(_ time: Timestamp, in calendar: Calendar) -> Bool {
-        let parts = calendar.dateComponents([.hour, .minute], from: time.date)
-        return parts.hour == 0 && parts.minute == 0
+    /// A day without a time, or a time of midnight, which reads as the day alone.
+    static func isMidnight(_ time: LocalTime, in calendar: Calendar) -> Bool {
+        time.isDay || (time.components.hour == 0 && time.components.minute == 0)
     }
 
     static func format(_ template: String, calendar: Calendar, locale: Locale) -> DateFormatter {

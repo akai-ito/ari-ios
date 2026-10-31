@@ -56,11 +56,11 @@ public enum PursuitReading {
         let leading = leading(in: pursuit)
         let lead = pursuit.options.first { leading.contains($0.id) } ?? pursuit.options.first
         let today = calendar.startOfDay(for: now)
-        let upcoming = pursuit.options.compactMap { option -> (Pursuit.Option, Timestamp)? in
-            guard let at = option.next?.at, at.date >= today else { return nil }
+        let upcoming = pursuit.options.compactMap { option -> (Pursuit.Option, LocalTime)? in
+            guard let at = option.next?.at, at.date(in: calendar) >= today else { return nil }
             return (option, at)
         }
-        let soonest = upcoming.min { $0.1.date < $1.1.date }
+        let soonest = upcoming.min { $0.1.date(in: calendar) < $1.1.date(in: calendar) }
         let soon = soonest.map { option, at in
             let when = MatterReading.when(
                 at, first: false, now: now, calendar: calendar, locale: locale)

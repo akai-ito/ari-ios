@@ -132,13 +132,22 @@ struct MatterPage<Content: View>: View {
     }
 
     extension Timestamp {
-        /// A day this far from today at a time on the clock, for previews that stay current.
+        /// A moment this far from today at a time on the clock, for previews that stay current.
         static func day(_ days: Int, at hour: Int, _ minute: Int = 0) -> Timestamp {
+            Timestamp(LocalTime.day(days, at: hour, minute).date.ISO8601Format())!
+        }
+    }
+
+    extension LocalTime {
+        /// A day this far from today at a time on the clock, for previews that stay current.
+        static func day(_ days: Int, at hour: Int, _ minute: Int = 0) -> LocalTime {
             let calendar = Calendar.current
             let day = calendar.date(byAdding: .day, value: days, to: .now) ?? .now
-            let time =
-                calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
-            return Timestamp(time.ISO8601Format())!
+            let parts = calendar.dateComponents([.year, .month, .day], from: day)
+            return LocalTime(
+                String(
+                    format: "%04d-%02d-%02dT%02d:%02d", parts.year ?? 0, parts.month ?? 0,
+                    parts.day ?? 0, hour, minute))!
         }
     }
 #endif
