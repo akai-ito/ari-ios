@@ -244,9 +244,12 @@ struct FoundPhoto: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                guard creditOnTap else { return }
                 withAnimation(.easeOut(duration: 0.2)) { showsCredit.toggle() }
             }
+            // Without its credit to show, it takes no taps at all, so a tap on the photo reaches the
+            // card it's in. Its gesture took them even when it did nothing, so a place's photo
+            // opened nothing while its name opened its page.
+            .allowsHitTesting(creditOnTap)
             .task(id: showsCredit) {
                 guard showsCredit else { return }
                 try? await Task.sleep(for: .seconds(5))

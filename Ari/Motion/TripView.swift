@@ -586,11 +586,12 @@ private struct MapPin: View {
     }
 }
 
-/// The way to one of the trip's places, and booking it while it's still to book, or its website.
+/// The way to one of the trip's places, opening its listing in Maps, and booking it while it's
+/// still to book, or its website.
 private func directions(
-    to name: String, at location: Trip.Location?, booking: Trip.Booking? = nil,
-    website: URL? = nil
-) -> DirectionsButtons {
+    to name: String, at location: Trip.Location?, address: String? = nil,
+    booking: Trip.Booking? = nil, website: URL? = nil
+) -> PlaceDirections {
     let link: (title: String, url: URL)? =
         if booking?.status == .toBook, let url = booking?.url {
             ("Book", url)
@@ -599,8 +600,8 @@ private func directions(
         } else {
             nil
         }
-    return DirectionsButtons(
-        item: location.map { .at(lat: $0.lat, lon: $0.lon, name: name) }, link: link)
+    return PlaceDirections(
+        name: name, address: address, location: location?.coordinate, link: link)
 }
 
 extension Trip.Location {
@@ -802,7 +803,8 @@ private struct PlacePage: View {
                     facts(place)
                     plan(place, in: trip)
                     directions(
-                        to: place.name, at: place.location, booking: booking, website: place.url)
+                        to: place.name, at: place.location, address: place.address,
+                        booking: booking, website: place.url)
                     if let photo = place.photo {
                         Link(destination: photo.sourceURL) {
                             Label("Photo: \(photo.credit)", systemImage: "camera")
@@ -1011,7 +1013,8 @@ private struct StayList: View {
                             Text("Ref \(reference)").font(.caption).foregroundStyle(.ariTertiary)
                         }
                         directions(
-                            to: stay.name, at: stay.location, booking: booking, website: stay.url
+                            to: stay.name, at: stay.location, address: stay.address,
+                            booking: booking, website: stay.url
                         )
                         .padding(.top, 4)
                     }
