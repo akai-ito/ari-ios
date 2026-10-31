@@ -323,13 +323,17 @@ public struct CapabilitySetup: Sendable, Equatable, Codable {
     public init(values: [String: SetupValue]) { self.values = values }
 }
 
-/// What *Test connection* found: nothing when the values work, or the problem.
+/// What *Test connection* found: the problem, or, when the values work, perhaps what they reached.
 public struct CheckResult: Sendable, Equatable, Codable {
     /// What's wrong, in the server's words, such as "iCloud rejected the password".
     public let problem: String?
+    /// When the values work, what they reached, in the server's words, such as "Connected: 2
+    /// addresses, 4 calendars."
+    public let summary: String?
 
-    public init(problem: String? = nil) {
+    public init(problem: String? = nil, summary: String? = nil) {
         self.problem = problem
+        self.summary = summary
     }
 
     public var ok: Bool { problem == nil }

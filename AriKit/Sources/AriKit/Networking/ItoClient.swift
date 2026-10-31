@@ -31,6 +31,82 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/messages", body: try Self.json(message)))
     }
 
+    // MARK: - Getting started
+
+    /// `GET /v0/onboarding`: where getting started stands.
+    public func onboarding() async throws(RequestError) -> Onboarding {
+        try await call(HTTPRequest(.get, "/v0/onboarding"))
+    }
+
+    /// `POST /v0/onboarding/done`: you've seen what Kumo found, so getting started is over. The
+    /// answer is getting started, now done; `onboarding.changed` says the same to every device.
+    public func finishOnboarding() async throws(RequestError) -> Onboarding {
+        try await call(HTTPRequest(.post, "/v0/onboarding/done"))
+    }
+
+    /// `POST /v0/onboarding/beliefs/{belief}`: a belief is still true, or here's your correction.
+    /// Its answer follows in `onboarding.changed`.
+    public func answerBelief(_ belief: BeliefID, answer: BeliefAnswer) async throws(RequestError) {
+        try await callWithoutAnswer(
+            HTTPRequest(
+                .post, "/v0/onboarding/beliefs/\(Self.segment(belief.rawValue))",
+                body: try Self.json(answer)))
+    }
+
+    // MARK: - The Desk
+
+    /// `GET /v0/desk`: the morning card, what's coming up and what's waiting on you.
+    public func desk() async throws(RequestError) -> Desk {
+        try await call(HTTPRequest(.get, "/v0/desk"))
+    }
+
+    /// `POST /v0/desk/cards/{id}/answer`. The card comes back `working` while the box acts on it,
+    /// and leaves the Desk once it's done.
+    public func answer(_ card: CardID, _ answer: CardAnswer) async throws(RequestError)
+        -> CardResult
+    {
+        try await call(
+            HTTPRequest(
+                .post, "/v0/desk/cards/\(Self.segment(card.rawValue))/answer",
+                body: try Self.json(answer)))
+    }
+
+    /// `POST /v0/desk/briefing/{id}/read`: the morning card was seen, so only something new after
+    /// it makes a "since this morning" card.
+    public func readBriefing(_ id: BriefingID) async throws(RequestError) {
+        try await callWithoutAnswer(
+            HTTPRequest(.post, "/v0/desk/briefing/\(Self.segment(id.rawValue))/read"))
+    }
+
+    /// `GET /v0/done?before=…&limit=…`: what Kumo did without you, newest first.
+    public func done(before entry: DoneID?, limit: Int) async throws(RequestError) -> DonePage {
+        var query = ["limit": String(limit)]
+        query["before"] = entry?.rawValue
+        return try await call(HTTPRequest(.get, Self.path("/v0/done", query)))
+    }
+
+    /// `POST /v0/done/{entry}/undo`: takes back one thing Kumo did. The answer is the entry, marked
+    /// undone in its text.
+    public func undo(_ entry: DoneID) async throws(RequestError) -> DoneEntry {
+        let answer: DoneResult = try await call(
+            HTTPRequest(.post, "/v0/done/\(Self.segment(entry.rawValue))/undo"))
+        return answer.entry
+    }
+
+    /// `GET /v0/jobs`: the looks Kumo scheduled for itself, soonest first.
+    public func jobs() async throws(RequestError) -> [Job] {
+        let answer: JobList = try await call(HTTPRequest(.get, "/v0/jobs"))
+        return answer.jobs
+    }
+
+    /// `POST /v0/calendar/events`: the box writes the event into your calendar, and answers with
+    /// it as the calendar holds it.
+    public func addEvent(_ event: NewCalendarEvent) async throws(RequestError) -> CalendarItem {
+        let answer: CalendarEventResult = try await call(
+            HTTPRequest(.post, "/v0/calendar/events", body: try Self.json(event)))
+        return answer.event
+    }
+
     /// `POST /v0/turns/{turn}/stop`: the reply keeps what Ari had written.
     public func stop(_ turn: TurnID) async throws(RequestError) -> StopResult {
         try await call(HTTPRequest(.post, "/v0/turns/\(Self.segment(turn.rawValue))/stop"))
@@ -268,13 +344,10 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     public func messages(before oldest: MessageID, limit: Int) async throws(RequestError)
         -> MessagePage
     {
-        var components = URLComponents()
-        components.path = "/v0/messages"
-        components.queryItems = [
-            URLQueryItem(name: "before", value: oldest.rawValue),
-            URLQueryItem(name: "limit", value: String(limit)),
-        ]
-        return try await call(HTTPRequest(.get, components.string ?? "/v0/messages"))
+        try await call(
+            HTTPRequest(
+                .get,
+                Self.path("/v0/messages", ["before": oldest.rawValue, "limit": String(limit)])))
     }
 
     /// `GET /v0/events`, resuming after `cursor` or, without one, from a snapshot.

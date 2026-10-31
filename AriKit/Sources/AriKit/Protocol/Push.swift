@@ -14,19 +14,28 @@ public struct NotificationKind: OpenValue {
     public static let ask = NotificationKind(rawValue: "ask")
     /// An ask still waiting after three hours; sent once.
     public static let reminder = NotificationKind(rawValue: "reminder")
-    public static let known = [reply, failed, ask, reminder]
+    /// Kumo posted from work it did in the background.
+    public static let post = NotificationKind(rawValue: "post")
+    /// Something started waiting on you on the Desk.
+    public static let card = NotificationKind(rawValue: "card")
+    /// The morning briefing is ready.
+    public static let briefing = NotificationKind(rawValue: "briefing")
+    public static let known = [reply, failed, ask, reminder, post, card, briefing]
 }
 
 /// What a notification shows, once the notification service extension has decrypted it.
 public struct PushNotification: Sendable, Equatable, Decodable {
     public var kind: NotificationKind
-    /// Plain words: a reply's first line, "Couldn't finish: …", or the question.
+    /// Plain words: a reply's or a post's first line, "Couldn't finish: …", the question, a card's
+    /// title, or the briefing's first line.
     public var text: String
     public var turn: TurnID?
     /// A reply's message, so a tap opens the conversation there.
     public var message: MessageID?
     /// What's needed to answer an ask from the notification.
     public var ask: AskSummary?
+    /// A card's notification: the card, to open the Desk at it.
+    public var card: CardID?
 
     public struct AskSummary: Sendable, Equatable, Decodable {
         public var id: AskID

@@ -49,7 +49,7 @@ struct CapabilityView: View {
             } else if capability.state == .needsYou, let detail = capability.detail {
                 Text("Needs you: \(detail)")
             } else if capability.state == .setup {
-                Text("It's on, but setup isn't finished, so Ari can't use it yet.")
+                Text("It's on, but setup isn't finished, so \(LeadName.current) can't use it yet.")
             }
         }
         .listRowBackground(Color.ariSurface)
@@ -102,18 +102,18 @@ struct CapabilityView: View {
             })
     }
 
-    /// A field's saved value as a row shows it. Passwords show only whether one is saved.
-    /// What opens setup: Reconnect when a connection lapsed, the provider's own words before it's
-    /// connected, otherwise setting it up or changing it.
+    /// What opens setup: Reconnect when a connection lapsed, Connect before it's connected,
+    /// otherwise setting it up or changing it. The provider's own words (such as "Open Microsoft")
+    /// are for the button in the sheet, which opens its page.
     static func setupTitle(_ capability: Capability) -> String {
-        let connect = capability.fields.first { $0.connect?.kind == .oauthDevice }?.connect
-        if let connect {
+        if capability.deviceField != nil {
             if capability.state == .needsYou { return "Reconnect…" }
-            if !capability.isSetUp { return connect.title + "…" }
+            if !capability.isSetUp { return "Connect…" }
         }
         return capability.isSetUp ? "Change setup…" : "Set up…"
     }
 
+    /// A field's saved value as a row shows it. Passwords show only whether one is saved.
     static func describe(_ field: SetupField) -> String {
         if field.connect?.kind == .oauthDevice { return field.set ? "Connected" : "Not connected" }
         return switch (field.kind, field.value) {

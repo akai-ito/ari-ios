@@ -72,11 +72,27 @@ struct OutboxTests {
         for message in messages { try outbox.add(message) }
         try outbox.add(messages[0])
         try outbox.remove("m2")
-        try outbox.add(SendMessage(id: "m5", text: "Message 5"))
+        try outbox.add(SendMessage(id: "m5", text: "Message 5", done: "d1"))
 
         let reopened = OutboxStore(directory: directory)
         #expect(try reopened.load().map(\.id) == ["m1", "m3", "m4", "m5"])
         #expect(try reopened.load().first?.text == "Message 1")
+        #expect(try reopened.load().last?.done == "d1")
+    }
+
+    @Test("a message an older Ari left in another shape is deleted")
+    func olderFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "AriKitTests/\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outbox = OutboxStore(directory: directory)
+        try outbox.add(SendMessage(id: "m1", text: "Kept"))
+        try Data(#"{"message":{"id":"m0","text":"Older"},"space":"home"}"#.utf8).write(
+            to: directory.appending(path: "000000000002-m0.json"))
+
+        #expect(try outbox.load().map(\.id) == ["m1"])
+        let left = try FileManager.default.contentsOfDirectory(atPath: directory.path())
+        #expect(left == ["000000000001-m1.json"])
     }
 }
 

@@ -33,7 +33,7 @@ struct SessionEdgeTests {
         await bench.clock.advance(by: .seconds(46))
         let resume = try await bench.nextRequest()
         #expect(resume.path == "/v0/events")
-        #expect(resume.headers["Last-Event-ID"] == "e_0009_44455")
+        #expect(resume.headers["Last-Event-ID"] == bench.transcript.header.app.cursor?.rawValue)
     }
 
     @Test("Stop goes at once, even while the stream is still reconnecting")
@@ -122,7 +122,7 @@ struct SessionEdgeTests {
         defer { bench.close() }
         bench.session.start()
         _ = try await bench.nextRequest()
-        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.16"])
+        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.17"])
         await bench.settle()
 
         guard case .protocolMismatch(let mismatch) = bench.session.problem else {

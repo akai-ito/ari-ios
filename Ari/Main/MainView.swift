@@ -2,13 +2,14 @@ import AriKit
 import CoreSpotlight
 import SwiftUI
 
-/// Ari's three places: Chat, where you talk; In motion, what you're actually doing, which Ari keeps
-/// current; and Library, what Ari knows. Settings open from the corner of each.
+/// Ito's four places: the Desk, home for everything admin; Chat, the one conversation with Kumo; In
+/// motion, what you're actually doing, which Kumo keeps current; and You, what Kumo knows. Settings
+/// open from the corner of each.
 struct MainView: View {
     let session: Session
     let model: AppModel
 
-    @State private var place = Place.chat
+    @State private var place = Place.desk
     @State private var showsSettings = false
     @State private var libraryPath = LibraryView.startingPath
     /// What Ari knows, for the Library, In mind and memory steps on the trail.
@@ -23,10 +24,21 @@ struct MainView: View {
     @State private var startedCalls = 0
     @Environment(\.scenePhase) private var scenePhase
 
-    enum Place: Hashable { case chat, motion, library }
+    enum Place: Hashable { case desk, chat, motion, library }
 
     var body: some View {
         TabView(selection: $place) {
+            Tab("Desk", systemImage: "rectangle.grid.1x2", value: .desk) {
+                DeskScreen(
+                    session: session, openChat: { place = .chat },
+                    openSettings: { showsSettings = true },
+                    talk: {
+                        makeTalk()
+                        place = .chat
+                        talk?.start()
+                    },
+                    talkReady: voices?.canTalk ?? false)
+            }
             Tab("Chat", systemImage: "bubble.left", value: .chat) {
                 ConversationView(
                     session: session, connectAgain: model.connectAgain,
@@ -52,7 +64,7 @@ struct MainView: View {
             Tab("In motion", systemImage: "circle.dotted.circle", value: .motion) {
                 InMotionView { showsSettings = true }
             }
-            Tab("Library", systemImage: "books.vertical", value: .library) {
+            Tab("You", systemImage: "person.crop.circle", value: .library) {
                 LibraryView(memory: memory, path: $libraryPath) { showsSettings = true }
             }
         }
@@ -112,16 +124,27 @@ struct MainView: View {
             guard let status, let voices else { return }
             voices.apply(status)
             if talk?.call != nil, !voices.canTalk {
-                talk?.end(because: voices.reason ?? "Ari's voice stopped on your server.")
+                talk?.end(
+                    because: voices.reason ?? "\(LeadName.current)'s voice stopped on your server.")
             }
         }
         .fullScreenCover(
             isPresented: Binding(
-                get: { talk?.showsCall ?? false }, set: { talk?.showsCall = $0 })
+                // During onboarding, onboarding shows the call over itself.
+                get: { (talk?.showsCall ?? false) && !onboarding }, set: { talk?.showsCall = $0 })
         ) {
             if let talk, let call = talk.call {
                 CallView(talk: talk, call: call, session: session)
             }
+        }
+        // Getting started, until Kumo has caught up and you've opened the Desk.
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { onboarding }, set: { _ in })
+        ) {
+            OnboardingHost(session: session, app: model)
+                .environment(talk)
+                .environment(voices)
         }
         // A tab bar on the iPhone; a sidebar once there's an iPad layout.
         .tabViewStyle(.sidebarAdaptable)
@@ -145,7 +168,9 @@ struct MainView: View {
         }
         #if DEBUG
             .task {
-                place = ["motion": .motion, "library": .library][DebugScript.place ?? ""] ?? place
+                place =
+                    ["chat": .chat, "motion": .motion, "library": .library, "you": .library][
+                        DebugScript.place ?? ""] ?? place
                 showsSettings = DebugScript.opensSettings
             }
         #endif
@@ -153,6 +178,9 @@ struct MainView: View {
 }
 
 extension MainView {
+    /// Whether getting started is still going: Kumo catching up, or the reveal not yet seen.
+    fileprivate var onboarding: Bool { session.onboarding.map { $0.state != .done } ?? false }
+
     /// Ari's voice and calls, made once there's a server to talk to.
     fileprivate func makeTalk() {
         if voices == nil, let client = model.client() { voices = Voices(client: client) }

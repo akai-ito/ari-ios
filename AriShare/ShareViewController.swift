@@ -81,7 +81,8 @@ final class ShareModel {
             for attachment in attachments { try shares.add(attachment) }
             try shares.add(message)
         } catch {
-            state = .problem("Couldn't keep this for Ari: \(error.localizedDescription)")
+            state = .problem(
+                "Couldn't keep this for \(LeadName.current): \(error.localizedDescription)")
             return
         }
         Task {

@@ -47,11 +47,13 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Ari
+        INFOPLIST_KEY_CFBundleDisplayName: Ito
         # Only to scan the QR code ito pair shows.
-        INFOPLIST_KEY_NSCameraUsageDescription: "Ari uses the camera to scan the pairing code your server shows."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Ito uses the camera to scan the pairing code your server shows."
         # Talking with Ari on a call: your voice goes to your server.
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ari listens on a call and sends your voice to your server, so you can talk with it."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ito listens on a call and sends your voice to your server, so you can talk with Kumo."
+        # Opening an event from Coming up in Apple's own event view.
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "Ito opens the events on your Desk in Calendar's own view, so you can see and edit them."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
@@ -78,6 +80,9 @@ targets:
             CFBundleURLSchemes: [ito]
         # A call with Ari carries on locked and in your pocket.
         UIBackgroundModes: [audio, voip]
+        # Siri answers to Kumo as well as Ito: "Ask Kumo".
+        INAlternativeAppNames:
+          - INAlternativeAppName: Kumo
     # Ari.xcodeproj isn't in git: a project generated before project.yml last changed builds fine
     # but quietly lacks its newer settings, such as entitlements. Stop and say so instead.
     preBuildScripts:
@@ -105,7 +110,7 @@ targets:
     info:
       path: AriNotificationService/Info.plist
       properties:
-        CFBundleDisplayName: Ari
+        CFBundleDisplayName: Ito
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -133,7 +138,7 @@ targets:
     info:
       path: AriShare/Info.plist
       properties:
-        CFBundleDisplayName: Ari
+        CFBundleDisplayName: Ito
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -166,7 +171,7 @@ targets:
     info:
       path: AriControls/Info.plist
       properties:
-        CFBundleDisplayName: Ari
+        CFBundleDisplayName: Ito
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

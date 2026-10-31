@@ -12,7 +12,7 @@ struct VoicePickerView: View {
     /// The voice whose preview is on its way.
     @State private var previewing: String?
     @State private var problem: String?
-    private static let line = "Hi, I'm Ari. This is how I sound."
+    private static var line: String { "Hi, I'm \(LeadName.current). This is how I sound." }
     private static let log = Logger(subsystem: "io.github.akai-ito.ari", category: "talk")
 
     var body: some View {
@@ -20,7 +20,9 @@ struct VoicePickerView: View {
             if !voices.canTalk {
                 Section {
                 } footer: {
-                    Text(voices.reason ?? "Ari's voice isn't ready on your server yet.")
+                    Text(
+                        voices.reason
+                            ?? "\(LeadName.current)'s voice isn't ready on your server yet.")
                 }
             }
             ForEach([VoiceAccent.american, .british], id: \.self) { accent in
@@ -39,7 +41,7 @@ struct VoicePickerView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(.ariBackground)
-        .navigationTitle("Ari's voice")
+        .navigationTitle("\(LeadName.current)'s voice")
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if voices.list == nil { ProgressView() }
@@ -74,7 +76,7 @@ struct VoicePickerView: View {
             do {
                 try await voices.choose(voice.id)
             } catch {
-                problem = "Ari couldn't choose that voice."
+                problem = "\(LeadName.current) couldn't choose that voice."
                 return
             }
             guard voices.canTalk else { return }
@@ -95,7 +97,7 @@ struct VoicePickerView: View {
             } catch {
                 Self.log.error(
                     "Preview \(voice.id, privacy: .public) failed: \(error, privacy: .public)")
-                problem = "Ari couldn't play that voice."
+                problem = "\(LeadName.current) couldn't play that voice."
             }
         }
     }

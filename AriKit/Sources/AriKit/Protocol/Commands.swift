@@ -21,14 +21,20 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     public let version: String
     /// The protocol version of this route.
     public let protocolVersion: ProtocolVersion
+    /// Who leads: Kumo, until you choose another name.
+    public let lead: Lead
+    /// The earliest the morning briefing may come.
+    public let briefing: BriefingTime
     public let agent: Agent
+
+    /// The lead's name, as Settings shows it.
+    public var leadName: String { lead.name }
 
     /// What's set up on the server, so Settings can say what isn't yet.
     public let setup: Setup?
 
+    /// The model Kumo runs on.
     public struct Agent: Sendable, Equatable, Codable {
-        /// What the agent is called; Ari until you choose another name.
-        public let name: String
         /// The model the agent last ran on, such as `demo` for the demo engine; absent until it has
         /// run once.
         public let model: String?
@@ -73,7 +79,7 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, version, agent, setup, capabilities
+        case name, version, lead, briefing, agent, setup, capabilities
         case protocolVersion = "protocol"
     }
 }
@@ -86,12 +92,27 @@ public struct SendMessage: Sendable, Equatable, Codable {
     public let text: String
     /// Photos and files already uploaded, in order. The text may then be empty.
     public let attachments: [AttachmentID]?
+    /// The line of Done it replies to, such as a correction to one of Kumo's calls.
+    public let done: DoneID?
 
-    public init(id: MessageID, text: String, attachments: [AttachmentID] = []) {
+    public init(
+        id: MessageID, text: String, attachments: [AttachmentID] = [], done: DoneID? = nil
+    ) {
         self.id = id
         self.text = text
         self.attachments = attachments.isEmpty ? nil : attachments
+        self.done = done
     }
+}
+
+/// The answer to a card: the card as it is now, perhaps `working`.
+public struct CardResult: Sendable, Equatable, Decodable {
+    public let card: DeskCard
+}
+
+/// The answer to `POST /v0/calendar/events`: the event as the calendar now holds it.
+public struct CalendarEventResult: Sendable, Equatable, Decodable {
+    public let event: CalendarItem
 }
 
 /// The answer to `POST /v0/messages`: the message, once it is on the server's disk.

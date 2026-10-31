@@ -48,7 +48,7 @@ final class Talk: NSObject {
         }
         // Without the server's voice there's no call, rather than a worse one.
         guard voices.canTalk else {
-            notice = voices.reason ?? "Ari's voice isn't ready on your server yet."
+            notice = voices.reason ?? "\(LeadName.current)'s voice isn't ready on your server yet."
             return
         }
         problem = nil
@@ -69,9 +69,9 @@ final class Talk: NSObject {
             try? AVAudioSession.sharedInstance().setActive(true)
             call.audioActivated()
         #else
-            let handle = CXHandle(type: .generic, value: "Ari")
+            let handle = CXHandle(type: .generic, value: LeadName.current)
             let action = CXStartCallAction(call: call.uuid, handle: handle)
-            action.contactIdentifier = "Ari"
+            action.contactIdentifier = LeadName.current
             controller.request(CXTransaction(action: action)) { [weak self] error in
                 guard let error else { return }
                 Task { @MainActor in self?.couldNotStart(error) }

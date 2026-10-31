@@ -6,7 +6,7 @@ import SwiftUI
 /// character's poses, holding each status long enough to read, and where you've scrolled.
 struct ConversationView: View {
     let session: Session
-    var name = "Ari"
+    var name = LeadName.current
     let connectAgain: () -> Void
     /// A reply to open the conversation at, from a tapped notification.
     var opening: Binding<MessageID?> = .constant(nil)

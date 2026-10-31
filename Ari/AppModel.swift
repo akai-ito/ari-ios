@@ -47,6 +47,7 @@ final class AppModel {
         address = saved.address
         lastAddress = saved.address.description
         server = saved.server
+        LeadName.remember(saved.server.lead.name)
         if let token = try? self.tokens.token(for: saved.address) {
             session = Self.session(
                 for: Connection(address: saved.address, token: token, server: saved.server))
@@ -62,6 +63,7 @@ final class AppModel {
         address = connection.address
         lastAddress = connection.address.description
         server = connection.server
+        LeadName.remember(connection.server.lead.name)
         if let previous = session, previous.address != connection.address {
             forgetDevice(at: previous.address)
         }
@@ -105,6 +107,7 @@ final class AppModel {
         Task {
             guard let info = try? await client.server(), info != server else { return }
             server = info
+            LeadName.remember(info.lead.name)
             Saved(address: address, server: info).save(to: defaults)
         }
     }

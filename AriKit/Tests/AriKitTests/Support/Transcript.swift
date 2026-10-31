@@ -14,6 +14,15 @@ struct Transcript: Sendable, CustomTestStringConvertible {
 
     var testDescription: String { name }
 
+    /// Whether Ari is closed when the scenario starts, opening only later.
+    var startsClosed: Bool {
+        for step in steps {
+            if case .world(let world) = step, world.marker == "app_opened" { return true }
+            if case .app(let request) = step, request.route == .events { return false }
+        }
+        return false
+    }
+
     struct Header: Sendable, Decodable {
         let transcript: String
         let scenario: Int
@@ -262,6 +271,18 @@ enum Route: Equatable {
     case events
     case send
     case earlierMessages(before: MessageID, limit: Int?)
+    case done
+    case jobs
+    case undo(DoneID)
+    case desk
+    case answerCard(CardID)
+    case readBriefing(BriefingID)
+    case addEvent
+    case lead
+    case briefingSettings
+    case onboarding
+    case answerBelief(BeliefID)
+    case finishOnboarding
     case stop(TurnID)
     case retry(TurnID)
     case cancelAsk(AskID)
@@ -313,6 +334,25 @@ enum Route: Equatable {
         case ("GET", 2) where parts == ["v0", "messages"]:
             self = .earlierMessages(
                 before: MessageID(query["before"] ?? ""), limit: query["limit"].flatMap { Int($0) })
+        case ("GET", 2) where parts == ["v0", "done"]: self = .done
+        case ("GET", 2) where parts == ["v0", "jobs"]: self = .jobs
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "done" && parts[3] == "undo":
+            self = .undo(DoneID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "desk"]: self = .desk
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "cards" && parts[4] == "answer":
+            self = .answerCard(CardID(parts[3]))
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "briefing" && parts[4] == "read":
+            self = .readBriefing(BriefingID(parts[3]))
+        case ("POST", 3) where parts == ["v0", "calendar", "events"]: self = .addEvent
+        case ("PUT", 2) where parts == ["v0", "lead"]: self = .lead
+        case ("PUT", 2) where parts == ["v0", "briefing"]: self = .briefingSettings
+        case ("GET", 2) where parts == ["v0", "onboarding"]: self = .onboarding
+        case ("POST", 4)
+        where parts[0] == "v0" && parts[1] == "onboarding" && parts[2] == "beliefs":
+            self = .answerBelief(BeliefID(parts[3]))
+        case ("POST", 3) where parts == ["v0", "onboarding", "done"]: self = .finishOnboarding
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "stop":
             self = .stop(TurnID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "retry":
@@ -374,9 +414,11 @@ enum Route: Equatable {
         }
     }
 
-    /// Settings, the Library and a call ask for these, not the conversation's session.
+    /// Settings, the Library and a call ask for these, not the session.
     var isOutsideSession: Bool {
         switch self {
+        case .lead, .briefingSettings:
+            true
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability,
             .connectCapability,
             .memoryInMind,

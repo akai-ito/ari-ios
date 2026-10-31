@@ -23,6 +23,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case messageStarted(MessageStarted)
         case messageDelta(MessageDelta)
         case messageEnded(MessageEnded)
+        case messagePosted(MessagePosted)
         case turnEnded(TurnEnded)
         case callStarted(CallEvent)
         case callEnded(CallEvent)
@@ -35,6 +36,8 @@ public struct Event: Sendable, Equatable, Decodable {
         case motionFinished(MotionEvent)
         case motionState(MotionStateChanged)
         case motionRemoved(MotionRemoved)
+        case deskChanged(DeskChanged)
+        case onboardingChanged(OnboardingChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -43,10 +46,10 @@ public struct Event: Sendable, Equatable, Decodable {
     public static let knownTypes = [
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
-        "message.started", "message.delta", "message.ended", "turn.ended", "call.started",
-        "call.ended", "call.audio_deleted", "voice.status", "topic.started",
+        "message.started", "message.delta", "message.ended", "message.posted", "turn.ended",
+        "call.started", "call.ended", "call.audio_deleted", "voice.status", "topic.started",
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
-        "motion.removed",
+        "motion.removed", "desk.changed", "onboarding.changed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -73,6 +76,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "message.started": .messageStarted(try MessageStarted(from: decoder))
             case "message.delta": .messageDelta(try MessageDelta(from: decoder))
             case "message.ended": .messageEnded(try MessageEnded(from: decoder))
+            case "message.posted": .messagePosted(try MessagePosted(from: decoder))
             case "turn.ended": .turnEnded(try TurnEnded(from: decoder))
             case "call.started": .callStarted(try CallEvent(from: decoder))
             case "call.ended": .callEnded(try CallEvent(from: decoder))
@@ -85,13 +89,16 @@ public struct Event: Sendable, Equatable, Decodable {
             case "motion.finished": .motionFinished(try MotionEvent(from: decoder))
             case "motion.state": .motionState(try MotionStateChanged(from: decoder))
             case "motion.removed": .motionRemoved(try MotionRemoved(from: decoder))
+            case "desk.changed": .deskChanged(try DeskChanged(from: decoder))
+            case "onboarding.changed": .onboardingChanged(try OnboardingChanged(from: decoder))
             default: .unknown
             }
     }
 }
 
 /// Sent first when the server can't resume from the cursor (there was none, the server doesn't know
-/// it, or it is too far behind): replace the conversation with it. Its id repeats the latest event's.
+/// it, or it is too far behind): replace the conversation and the Desk with it. Its id repeats the
+/// latest event's.
 public struct Snapshot: Sendable, Equatable, Decodable {
     public let at: Timestamp
     public let reason: SnapshotReason
@@ -112,11 +119,27 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let turn: LiveTurn?
     /// Messages waiting as Next, in the order they will be answered.
     public let next: [MessageID]
+    /// Everything on the Desk.
+    public let desk: Desk
+    /// Where getting started stands, if the box sent it.
+    public let onboarding: Onboarding?
 
     enum CodingKeys: String, CodingKey {
-        case at, reason, messages, steps, asks, calls, topics, turn, next
+        case at, reason, messages, steps, asks, calls, topics, turn, next, desk, onboarding
         case hasMore = "has_more"
     }
+}
+
+/// The Desk changed: all of it, since it's small.
+public struct DeskChanged: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let desk: Desk
+}
+
+/// Kumo posted a message from work it did in the background, outside any turn. It arrives whole.
+public struct MessagePosted: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let message: Message
 }
 
 /// On a call you carried on speaking before Ari began to answer, so your words joined the message

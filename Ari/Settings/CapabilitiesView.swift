@@ -26,7 +26,9 @@ struct CapabilitiesView: View {
                     } header: {
                         Text("Your life")
                     } footer: {
-                        Text("What Ari can know about. Each one can draw on several services.")
+                        Text(
+                            "What \(LeadName.current) can know about. Each one can draw on several services."
+                        )
                     }
                     .listRowBackground(Color.ariSurface)
                 }
@@ -34,10 +36,11 @@ struct CapabilitiesView: View {
                     Section {
                         ForEach(capabilities.hands) { row($0) }
                     } header: {
-                        Text("Ari's hands")
+                        Text("\(LeadName.current)'s hands")
                     } footer: {
                         Text(
-                            "What Ari can do. Anything that spends, sends or books asks you first.")
+                            "What \(LeadName.current) can do. Anything that spends, sends or books asks you first."
+                        )
                     }
                     .listRowBackground(Color.ariSurface)
                 }

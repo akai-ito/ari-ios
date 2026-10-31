@@ -1,23 +1,30 @@
 import Foundation
 import Observation
 
-/// Ari's live connection to one server: the conversation, kept up to date from the event stream,
-/// and everything you ask of it. SwiftUI watches it directly; the waiting (for the network, the
-/// server, a retry) happens in small lanes that hand their results back here.
+/// Ari's live connection to one server: the conversation with Kumo and the Desk, kept up to date
+/// from the event stream, and everything you ask of them. SwiftUI watches it directly; the waiting
+/// (for the network, the server, a retry) happens in small lanes that hand their results back here.
 ///
-/// - The **event stream** resumes from the last event applied, reconnects with backoff, and treats
-///   45 seconds without even a ping as a lost connection.
+/// - The **event stream** carries the conversation and the Desk on one connection. It resumes from
+///   the last event applied, reconnects with backoff, and treats 45 seconds without even a ping as a
+///   lost connection.
 /// - The **outbox** saves each message on the device first, then sends one at a time, in order,
 ///   once the stream is live, retrying with the same id until the server has it.
 /// - **Stop** has its own lane: never behind the outbox or a reconnect.
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
 /// - **Calls** start and end on their own lane, in order; a call's stream carries the rest.
+/// - **The Desk's answers** (a card, the morning card seen, Done and its undo, a calendar event) are
+///   plain requests: you're watching for them, so they say at once when they fail.
 @MainActor
 @Observable
 public final class Session {
     /// The conversation as Ari shows it.
     public private(set) var conversation: Conversation
+    /// The Desk, once the stream has said what's on it.
+    public private(set) var desk: Desk?
+    /// How getting started stands, once the stream or ``refreshOnboarding()`` has said.
+    public private(set) var onboarding: Onboarding?
     /// How the event stream is doing.
     public private(set) var link: Link = .paused
     /// Something that needs you before Ari can carry on.
@@ -72,7 +79,7 @@ public final class Session {
     /// The device to register for notifications (or forget, with no registration), until the
     /// server has it.
     @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
-    /// Whether the conversation is on screen here, as the server should next hear it.
+    /// Whether Ari is on screen here, as the server should next hear it.
     @ObservationIgnored private var presenceRequest: (device: String, looking: Bool)?
     /// Attachments still to upload, in the order you attached them.
     @ObservationIgnored private var uploadQueue: [PendingAttachment] = []
@@ -187,8 +194,9 @@ public final class Session {
 
     // MARK: - What you do
 
-    /// You tapped Send. Your message shows at once, is saved on the device, and goes as soon as it
-    /// can. Returns its id, or `nil` if there's nothing to send or it's longer than the server takes.
+    /// You tapped Send, in the chat or in Tell Kumo on the Desk. Your message shows at once, is
+    /// saved on the device, and goes as soon as it can. Returns its id, or `nil` if there's nothing
+    /// to send or it's longer than the server takes.
     ///
     /// While an ask waits, any message answers it, a tapped option included.
     ///
@@ -196,15 +204,16 @@ public final class Session {
     ///   - id: Its permanent id and retry key; a new random UUID unless a test chooses one.
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
+    ///   - done: The line of Done it replies to, telling Kumo it got that one wrong.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        attachments: [AttachmentID] = []
+        attachments: [AttachmentID] = [], done: DoneID? = nil
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, attachments: attachments)
+        let message = SendMessage(id: id, text: text, attachments: attachments, done: done)
         conversation.send(id, text: text, attachments: attachments.compactMap(attachment))
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
@@ -251,9 +260,10 @@ public final class Session {
         return bytes
     }
 
-    /// You answered from a notification, with Ari closed or in the background: the message goes
-    /// at once, without waiting for the event stream, and stays in the outbox until the server has
-    /// it, so a failed attempt still goes next time Ari opens. Returns whether the server has it.
+    /// You answered from a notification or Siri, with Ari closed or in the background: the message
+    /// goes at once, without waiting for the event stream, and stays in the outbox until the server
+    /// has it, so a failed attempt still goes next time Ari opens. Returns whether the server has
+    /// it.
     @discardableResult
     public func sendFromNotification(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased())
@@ -266,8 +276,7 @@ public final class Session {
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         do {
-            let result = try await client.send(message)
-            conversation.confirm(result)
+            conversation.confirm(try await client.send(message))
             finish(message)
             return true
         } catch {
@@ -288,9 +297,8 @@ public final class Session {
         wake(.device)
     }
 
-    /// The conversation came on screen here, or left it. The server pushes nothing while any
-    /// device is looking with a live stream; it forgets this when it restarts, so say it again
-    /// after reconnecting.
+    /// Ari came on screen here, or left it. The server pushes nothing while any device is looking
+    /// with a live stream; it forgets this when it restarts, so say it again after reconnecting.
     public func setLooking(_ looking: Bool, device: String) {
         presenceRequest = (device, looking)
         wake(.presence)
@@ -319,7 +327,7 @@ public final class Session {
         wake(.call)
     }
 
-    /// A call's stream to the server: your voice up, and Ari's voice and the call's state down.
+    /// A call's stream to the server: your voice up, and Kumo's voice and the call's state down.
     public func callStream(_ call: CallID) -> CallStream {
         let client = client
         return CallStream(connect: { client.callStream(call) })
@@ -334,7 +342,7 @@ public final class Session {
     }
 
     /// You tapped Stop. The request goes on its own lane, even before the stream is back, and the
-    /// reply keeps what Ari had written. Tapped before the turn is announced, it goes as soon as it
+    /// reply keeps what Kumo had written. Tapped before the turn is announced, it goes as soon as it
     /// is.
     public func stop() {
         if let turn = conversation.turn?.id {
@@ -374,6 +382,73 @@ public final class Session {
                 readingTask?.cancel()
             }
         }
+    }
+
+    // MARK: - The Desk
+
+    /// You answered a card: with one of its options, the times you ticked, or words. It shows the
+    /// box at work on it until the Desk says it's done.
+    public func answer(_ card: CardID, _ answer: CardAnswer) async throws(RequestError) {
+        let result = try await client.answer(card, answer)
+        guard let desk else { return }
+        self.desk = Desk(
+            briefing: desk.briefing, comingUp: desk.comingUp,
+            waiting: desk.waiting.map { $0.id == result.card.id ? result.card : $0 })
+    }
+
+    /// You pulled the Desk down: ask for all of it again.
+    public func refreshDesk() async throws(RequestError) {
+        desk = try await client.desk()
+    }
+
+    /// The morning card has been on screen, so only something new after it makes a "since this
+    /// morning" card.
+    public func readBriefing(_ id: BriefingID) async throws(RequestError) {
+        try await client.readBriefing(id)
+    }
+
+    /// A page of what Kumo did without you, newest first: the latest, or those before an entry.
+    public func done(before entry: DoneID? = nil, limit: Int = 50) async throws(RequestError)
+        -> DonePage
+    {
+        try await client.done(before: entry, limit: limit)
+    }
+
+    /// You undid something Kumo did. Returns the entry, marked undone in its text.
+    @discardableResult
+    public func undo(_ entry: DoneID) async throws(RequestError) -> DoneEntry {
+        try await client.undo(entry)
+    }
+
+    /// The looks Kumo scheduled for itself, soonest first.
+    public func jobs() async throws(RequestError) -> [Job] {
+        try await client.jobs()
+    }
+
+    /// You tapped Add to calendar: the box writes the event into your calendar. Returns it as the
+    /// calendar holds it.
+    @discardableResult
+    public func addEvent(_ event: NewCalendarEvent) async throws(RequestError) -> CalendarItem {
+        try await client.addEvent(event)
+    }
+
+    // MARK: - Getting started
+
+    /// Asks where getting started stands, which the snapshot and `onboarding.changed` also say.
+    public func refreshOnboarding() async throws(RequestError) {
+        onboarding = try await client.onboarding()
+    }
+
+    /// You said a belief is still true, or corrected it. Its answer follows in
+    /// `onboarding.changed`.
+    public func answerBelief(_ belief: BeliefID, answer: BeliefAnswer) async throws(RequestError) {
+        try await client.answerBelief(belief, answer: answer)
+    }
+
+    /// You've seen what Kumo found, so getting started is over. It shows as done here at once;
+    /// `onboarding.changed` says so to every other device.
+    public func finishOnboarding() async throws(RequestError) {
+        onboarding = try await client.finishOnboarding()
     }
 
     // MARK: - The event stream
@@ -449,10 +524,17 @@ public final class Session {
     private func receive(_ event: Event) {
         conversation.apply(event)
         motions?.apply(event)
-        if case .voiceStatus(let status) = event.payload { voiceStatus = status }
         switch event.payload {
-        case .snapshot:
+        case .snapshot(let snapshot):
+            desk = snapshot.desk
+            onboarding = snapshot.onboarding
             wantsSnapshot = false
+        case .deskChanged(let changed):
+            desk = changed.desk
+        case .onboardingChanged(let changed):
+            onboarding = changed.onboarding
+        case .voiceStatus(let status):
+            voiceStatus = status
         case .turnStarted(let started):
             if let request = stopRequest, request.turn == nil {
                 conversation.stop(turn: started.turn)
@@ -499,8 +581,7 @@ public final class Session {
                 continue
             }
             do {
-                let result = try await client.send(message)
-                conversation.confirm(result)
+                conversation.confirm(try await client.send(message))
                 finish(message)
                 failures = 0
             } catch {

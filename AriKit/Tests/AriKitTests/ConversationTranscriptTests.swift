@@ -16,7 +16,10 @@ struct ConversationTranscriptTests {
         #expect(conversation.turn == nil, "the agent is still working")
         #expect(conversation.pendingStop == nil, "a Stop is still pending")
         for entry in conversation.entries {
-            if entry.role == .agent { #expect(entry.outcome != nil, "\(entry.id) never ended") }
+            // A post arrives whole, outside any turn; what a turn writes ends with it.
+            if entry.role == .agent, entry.turn != nil {
+                #expect(entry.outcome != nil, "\(entry.id) never ended")
+            }
             if let streamed = replay.streamed[entry.id] {
                 #expect(
                     Array(entry.text.utf16) == streamed, "\(entry.id) isn't the text that streamed")
@@ -463,7 +466,7 @@ extension ConversationTranscriptTests {
                 case "snapshot":
                     seen = [:]
                     for message in json["messages"]?.array ?? [] { record(message) }
-                case "message.accepted", "message.amended", "message.started":
+                case "message.accepted", "message.amended", "message.started", "message.posted":
                     if let message = json["message"] { record(message) }
                 case "message.delta":
                     if let id = json["message"]?.string, let text = json["text"]?.string {
@@ -487,7 +490,7 @@ extension ConversationTranscriptTests {
             Expected(
                 id: MessageID(id), text: String(decoding: message.text, as: UTF16.self),
                 outcome: message.outcome.map(Outcome.init(rawValue:)),
-                shown: message.role == "user" || message.kind == "reply",
+                shown: message.role == "user" || message.kind == "reply" || message.kind == "post",
                 attachments: message.attachments)
         }
     }

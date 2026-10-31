@@ -63,7 +63,10 @@ final class Rehearsal {
 
     static func connection() throws -> Connection {
         let server = try JSONValue(
-            json: #"{"name":"studio","version":"0.4.0","protocol":"0.4","agent":{"name":"Ari"}}"#
+            json: #"""
+                {"name":"studio","version":"0.4.0","protocol":"0.16","lead":{"name":"Kumo"},
+                 "briefing":{"not_before":"07:30"},"agent":{}}
+                """#
         ).decode(ServerInfo.self)
         return Connection(
             address: try ServerAddress("https://studio.example"), token: token, server: server)
@@ -72,6 +75,10 @@ final class Rehearsal {
     /// Plays every step, then lets Ari settle.
     func play() async throws {
         session.start()
+        if transcript.startsClosed {
+            session.pause()
+            closed = true
+        }
         await settle()
         for step in transcript.steps {
             try await sendEarly(upTo: step.at)
@@ -160,6 +167,7 @@ final class Rehearsal {
 
     /// Does what you did, where the line is something you do.
     private func act(on request: Transcript.Request) {
+        let session = session
         switch request.route {
         case .send:
             guard let id = request.body?["id"]?.string, let text = request.body?["text"]?.string,
@@ -168,13 +176,28 @@ final class Rehearsal {
             sent.insert(MessageID(id))
             if closed {
                 // Answered from a notification, with Ari closed.
-                let session = session
                 Task { await session.sendFromNotification(text, id: MessageID(id)) }
                 return
             }
             let attachments = request.body?["attachments"]?.array?.compactMap(\.string)
                 .map(AttachmentID.init(rawValue:))
-            session.send(text, id: MessageID(id), attachments: attachments ?? [])
+            let done = request.body?["done"]?.string.map(DoneID.init(rawValue:))
+            session.send(text, id: MessageID(id), attachments: attachments ?? [], done: done)
+        case .desk:
+            Task { try? await session.refreshDesk() }
+        case .answerCard(let card):
+            guard let answer = try? request.body?.decode(CardAnswer.self) else { return }
+            Task { try? await session.answer(card, answer) }
+        case .readBriefing(let briefing):
+            Task { try? await session.readBriefing(briefing) }
+        case .onboarding:
+            Task { try? await session.refreshOnboarding() }
+        case .answerBelief(let belief):
+            let answer: BeliefAnswer =
+                request.body?["correction"]?.string.map(BeliefAnswer.correction) ?? .confirmed
+            Task { try? await session.answerBelief(belief, answer: answer) }
+        case .finishOnboarding:
+            Task { try? await session.finishOnboarding() }
         case .upload(let attachment, let name):
             // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
             guard let bytes = try? request.uploadBytes() else { return }
@@ -184,7 +207,6 @@ final class Rehearsal {
                     bytes: bytes))
         case .attachment(let attachment):
             // The photo comes into view.
-            let session = session
             Task { _ = await session.bytes(of: attachment) }
         case .cancelAsk(let ask):
             session.cancel(ask)
@@ -211,7 +233,6 @@ final class Rehearsal {
         case .deleteCallAudio(let call):
             session.deleteAudio(of: call)
         case .earlierMessages(_, let limit):
-            let session = session
             Task { await session.loadEarlier(limit: limit ?? 50) }
         default:
             break

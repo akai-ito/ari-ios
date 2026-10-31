@@ -4,7 +4,7 @@ import UserNotifications
 /// Decrypts each push on the iPhone, so Apple only ever carries ciphertext. A reply shows its first
 /// line; an ask shows the question, with its options (and a typed answer, when it takes one) as the
 /// notification's actions. When anything goes wrong, the push's own plain words show instead:
-/// "Ari replied", "Ari asked you something".
+/// "Kumo replied", "Kumo asked you something".
 final class NotificationService: UNNotificationServiceExtension {
     private var deliver: ((UNNotificationContent) -> Void)?
     private var fallback: UNNotificationContent?

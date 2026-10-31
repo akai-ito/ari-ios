@@ -30,7 +30,8 @@ struct ComposerArea: View, Equatable {
     var body: some View {
         Composer(
             draft: $draft, role: role,
-            prompt: asking.map(Self.takesTypedAnswer) == true ? "Answer Ari" : "Message Ari",
+            prompt: asking.map(Self.takesTypedAnswer) == true
+                ? "Answer \(LeadName.current)" : "Message \(LeadName.current)",
             send: submit, stop: stop, talk: talk, talkReady: talkReady
         ) {
             AttachButton(

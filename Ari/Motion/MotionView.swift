@@ -24,6 +24,9 @@ struct MotionView: View {
                     switch detail.content {
                     case .trip(let trip): TripView(detail: detail, trip: trip)
                     case .training(let training): TrainingView(detail: detail, training: training)
+                    case .pursuit(let pursuit): PursuitView(detail: detail, pursuit: pursuit)
+                    case .occasion(let occasion): OccasionView(detail: detail, occasion: occasion)
+                    case .caseFile(let file): CaseView(detail: detail, file: file)
                     case .unknown, .unreadable: PlainMotionView(detail: detail)
                     }
                 } else if let problem {
@@ -175,8 +178,8 @@ struct PlainMotionView: View {
                 }
                 Text(
                     detail.content == .unreadable
-                        ? "This version of Ari can't show all of it. Update Ari to see it in full."
-                        : "This version of Ari can't show this kind of thing yet. Update Ari to see "
+                        ? "This version of Ito can't show all of it. Update Ito to see it in full."
+                        : "This version of Ito can't show this kind of thing yet. Update Ito to see "
                             + "it in full."
                 )
                 .font(.footnote)
@@ -242,7 +245,7 @@ struct ChangesList: View {
                 .disabled(openInChat == nil)
                 .accessibilityHint(openInChat == nil ? "" : "Shows where in the chat")
             }
-            Text("Ari keeps this. To change it, just tell Ari.")
+            Text("\(LeadName.current) keeps this. To change it, just say so.")
                 .font(.footnote)
                 .foregroundStyle(.ariTertiary)
                 .padding(.top, 4)

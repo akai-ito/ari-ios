@@ -58,6 +58,9 @@ enum MotionSymbol {
         switch kind {
         case .trip: "airplane"
         case .training: "figure.run"
+        case .pursuit: "target"
+        case .occasion: "calendar"
+        case .caseFile: "folder"
         default: "circle.dotted.circle"
         }
     }
@@ -134,11 +137,11 @@ struct StatusChip: View {
 struct MotionLineText {
     /// "Florence", for the pinned line; the thing's title for a kind Ari doesn't know.
     let name: String
-    /// "6–9 Nov", or Ari's summary.
+    /// "6–9 Nov", a pursuit's option furthest along, a case's status, or Ari's summary.
     let detail: String
-    /// The to-dos left, when there's a list.
+    /// The to-dos left, when there's a list: a trip's, or an occasion's prep.
     let left: Int?
-    /// What's on today, such as "Intervals today".
+    /// What's on today, such as "Intervals today", or what's next, such as "Citadel Tue 17 Nov".
     let today: String?
     /// How much is done, from 0 to 1.
     let progress: Double?
@@ -160,6 +163,30 @@ struct MotionLineText {
             left = nil
             today = line.today
             progress = TrainingReading.progress(training, state: state)
+        case .pursuit(let pursuit)?:
+            // "QRT: Awaiting answer · Citadel Tue 17 Nov".
+            let line = PursuitReading.line(pursuit)
+            name = motion.title
+            self.detail = line.detail ?? motion.summary
+            left = nil
+            today = line.soon
+            progress = nil
+        case .occasion(let occasion)?:
+            // "Fri 13 Nov · 1 to do", the count moving as you tick its prep.
+            let line = OccasionReading.line(occasion, state: state)
+            name = motion.title
+            self.detail = line.when
+            left = line.left
+            today = nil
+            progress = OccasionReading.progress(occasion, state: state)
+        case .caseFile(let file)?:
+            // "Waiting on the landlord · since 22 Oct".
+            let line = CaseReading.line(file)
+            name = motion.title
+            self.detail = line.status
+            left = nil
+            today = line.soon
+            progress = nil
         default:
             name = motion.title
             self.detail = motion.summary

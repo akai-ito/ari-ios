@@ -1,12 +1,13 @@
-# <img src="https://raw.githubusercontent.com/akai-ito/.github/main/profile/mark.svg" width="34" alt=""> Ari
+# <img src="https://raw.githubusercontent.com/akai-ito/.github/main/profile/mark.svg" width="34" alt=""> Ito for iPhone
 
-**The iPhone app for Ito: one continuous conversation with your agent, live.**
+**The iPhone app for Ito: a Desk for everything admin, and one continuous conversation with Kumo,
+live.** (The repository and its code still say Ari, the app's earlier name.)
 
 [![CI](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml/badge.svg)](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml)
 
 > [!NOTE]
-> Ari connects to your Ito server and holds the conversation live, in its own look. Still to come:
-> opening instantly from the phone's cache, a light mode, and an iPad layout. The
+> Ito connects to your Ito server and holds the Desk and the conversation live, in its own look.
+> Still to come: opening instantly from the phone's cache, a light mode, and an iPad layout. The
 > [map](https://github.com/akai-ito/.github/blob/main/map.md) has the design.
 
 ## What it will be
@@ -50,33 +51,45 @@
   place on Apple's map (a still picture in the chat, a live map with Directions when you open it),
   short answers to tap, pictures it found (credited on tap), and a line that opens a thing in
   motion.
-- **Ari's trail.** Between your message and Ari's answer, what it did along the way, in plain words
-  that change tense as it finishes, with its short notes as quiet grey lines. `Timeline` merges
-  messages and steps, groups similar steps, and folds each run once the turn is over; tap a step
-  for its specifics.
-- **Where you are.** The title under Ari is the topic Ari marked for what's on screen, or its day,
+- **Kumo's trail.** Between your message and Kumo's answer, what it did along the way, in plain
+  words that change tense as it finishes, with its short notes as quiet grey lines. `Timeline`
+  merges messages and steps, groups similar steps, and folds each run once the turn is over; tap a
+  step for its specifics.
+- **Where you are.** The title under Kumo is the topic Kumo marked for what's on screen, or its day,
   changing as you scroll; tap it for every topic and day, to jump to. Your long messages fold after
   eight lines.
-- **Asks that wait for you.** When Ari needs something (which one you meant, your go-ahead), it
+- **Asks that wait for you.** When Kumo needs something (which one you meant, your go-ahead), it
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
   send answers it, from a notification too. An approval shows what it would do, and any pictures
   it would make public, such as a report's screenshots.
-- **In motion.** What you're actually doing, kept current as you talk: a trip, a training block.
+- **The Desk.** Where Ito opens, and home for everything admin, so mail never floods the chat: the
+  morning card (at the first calm moment, folding once read), what's coming up (opening in Apple's
+  own event view), what's waiting on you (drafts to open in Mail, invites, times to check against
+  your work calendar, questions Kumo wasn't sure about), and everything Kumo did, which you can
+  correct. Tell Kumo talks into the chat, with the reply on the Desk.
+- **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
+  questions while Kumo reads three months of mail (or "still true?" for what it already knows), the
+  morning and notifications, then what's in motion.
+- **In motion.** What you're actually doing, kept current as you talk: a trip, a training block, a
+  pursuit such as a job search, an occasion such as a dentist appointment, or a case such as the
+  boiler.
   It's pinned above the composer and opens full screen; In motion is its own tab. A trip has its
   days, a map whose pins show their place, its places by kind (each with a page of its own, where
   you say whether it's an idea, in the plan or not for you), and travel; what Ari changed is behind
   a button at the top.
-- **What Ari knows.** The Library shows Ari's memory: In mind, shelves of pages (each with its glyph
+- **What Kumo knows.** You shows Kumo's memory: In mind, shelves of pages (each with its glyph
   in Ari's dots; people by circle), and the journal, all in the device's search.
-- **Talk.** A call with Ari through CallKit: your voice goes to your server, and Ari's comes back
+- **Talk.** A call with Kumo through CallKit: your voice goes to your server, and Kumo's comes back
   with captions as each line is heard.
-- **Capabilities.** What Ari can reach, switched on in Settings, and connected through the
-  provider's own page where it can ("Connect GitHub"), so keys never pass through the phone.
-- **Three places, and Settings.** Chat, In motion and Library in the iOS 26 tab bar. Settings opens
-  from the corner: the server, notifications, Ari's voice and model, capabilities, and the app icon.
-- **The look.** A cool slate dark with soft white text and no accent colour. Ari's answers are in
+- **Capabilities.** What Kumo can reach, switched on in Settings, and connected through the
+  provider's own page where it can ("Connect GitHub", "Connect Outlook"), or with guided steps where
+  it can't (an iCloud or Gmail app password), so keys go to your box and never come back.
+- **Four places, and Settings.** Desk, Chat, In motion and You in the iOS 26 tab bar. Settings opens
+  from the corner: the server, Kumo's name, the morning time, notifications, Kumo's voice and model,
+  capabilities, and the app icon.
+- **The look.** A cool slate dark with soft white text and no accent colour. Kumo's answers are in
   New York, Apple's serif, the only serif in the conversation; you write in SF Pro, in a thin
-  outline. Ari's presence is a small pebble of bone-coloured dots whose eyes follow what it's
+  outline. Kumo's presence is a small pebble of bone-coloured dots whose eyes follow what it's
   doing, and look at you when you tap it.
 
 ## Building Ari
@@ -96,13 +109,15 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
 `ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
 `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_TOPICS` opens the topics sheet, `ARI_PLACE`
-opens a tab (`ARI_MOTION` then opens a thing in motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`,
-`ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going further in), `ARI_SHELF` opens a shelf in the
-Library (`ARI_CALENDAR` shows the Journal's calendar), `ARI_SETTINGS` opens Settings and
+opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk; `ARI_MOTION` then opens a thing in
+motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going
+further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
+`ARI_SETTINGS` opens Settings and
 `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
-and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip.
+and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
+*times* and *briefing* put cards and a morning card on the Desk.
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy

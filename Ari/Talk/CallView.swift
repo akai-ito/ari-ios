@@ -59,7 +59,7 @@ struct CallView: View {
             .accessibilityLabel("Back to the chat")
             Spacer()
             VStack(spacing: 2) {
-                Text("Ari").font(.headline).foregroundStyle(.ariText)
+                Text(LeadName.current).font(.headline).foregroundStyle(.ariText)
                 if let connected = call.connectedAt {
                     Text(timerInterval: connected...Date.distantFuture, countsDown: false)
                         .font(.caption.monospacedDigit())
@@ -300,7 +300,9 @@ struct OnCallBar: View {
         Button(action: open) {
             HStack(spacing: 8) {
                 Image(systemName: "phone.fill").font(.system(size: 12))
-                Text(call.phase == .speaking ? "Ari is speaking" : "On a call with Ari")
+                Text(
+                    call.phase == .speaking
+                        ? "\(LeadName.current) is speaking" : "On a call with \(LeadName.current)")
                 Spacer()
                 if let connected = call.connectedAt {
                     Text(timerInterval: connected...Date.distantFuture, countsDown: false)

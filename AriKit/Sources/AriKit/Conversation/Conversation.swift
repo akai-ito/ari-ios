@@ -124,9 +124,12 @@ extension Conversation {
             case next
         }
 
-        /// Whether the conversation shows it: your messages and the agent's replies. A note becomes the
-        /// live status's detail instead, and a role or kind this version of Ari doesn't know stays hidden.
-        public var isShown: Bool { role == .user || (role == .agent && kind == .reply) }
+        /// Whether the conversation shows it: your messages, the agent's replies and Kumo's posts. A
+        /// note becomes the live status's detail instead, and a role or kind this version of Ari
+        /// doesn't know stays hidden.
+        public var isShown: Bool {
+            role == .user || (role == .agent && (kind == .reply || kind == .post))
+        }
 
         init(_ message: Message) {
             id = message.id
@@ -205,6 +208,9 @@ extension Conversation {
             return
         case .messageAccepted(let accepted):
             accept(accepted.message)
+        case .messagePosted(let posted):
+            // Kumo's work in the background posts it whole, outside any turn.
+            accept(posted.message)
         case .messageAmended(let amended):
             // Your carried-on words joined it: the message as it is now replaces the one you had.
             if positions[amended.message.id] != nil { accept(amended.message) }
@@ -238,6 +244,9 @@ extension Conversation {
             record(started.topic)
         // In motion follows these, not the conversation.
         case .motionStarted, .motionChanged, .motionFinished, .motionState, .motionRemoved:
+            break
+        // The Desk and getting started are the session's.
+        case .deskChanged, .onboardingChanged:
             break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.

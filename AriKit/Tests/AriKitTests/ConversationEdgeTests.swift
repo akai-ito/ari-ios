@@ -322,7 +322,7 @@ private enum Fixture {
          "steps":[],"asks":[],"calls":[],"topics":[],
          "turn":{"id":"t_1","inputs":["u_1"],"read":["u_3"],"retry_of":"t_0",
                  "status":{"kind":"writing","label":"Writing"}},
-         "next":["u_2"]}
+         "next":["u_2"],"desk":{"coming_up":[],"waiting":[]}}
         """#
 
     /// A snapshot of an idle conversation holding one message of yours.
@@ -330,7 +330,8 @@ private enum Fixture {
         #"""
         {"id":"e_20","type":"snapshot","at":"2026-10-12T08:42:00.000Z","reason":"cursor_unknown","has_more":false,
          "messages":[{"id":"\#(id)","role":"user","text":"Answer lost on the way","at":"2026-10-12T08:41:50.000Z"}],
-         "steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[]}
+         "steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[],
+         "desk":{"coming_up":[],"waiting":[]}}
         """#
     }
 

@@ -11,12 +11,15 @@ struct SettingsView: View {
         self.model = model
         self.session = session
         let client = model.client()
+        _client = State(initialValue: client)
         _capabilities = State(initialValue: client.map(Capabilities.init(client:)))
         _models = State(initialValue: client.map(Models.init(client:)))
     }
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSwitch = false
+    /// For Kumo's settings, made once with Settings.
+    @State private var client: ItoClient?
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
     @State private var models: Models?
@@ -28,6 +31,8 @@ struct SettingsView: View {
         NavigationStack(path: $path) {
             Form {
                 server
+                KumoSettings(model: model, client: client)
+                MorningSettings(model: model, client: client)
                 capabilitiesSection
                 memoryBackup
                 notifications
@@ -76,7 +81,7 @@ struct SettingsView: View {
                     model.connectAgain()
                 }
             } message: {
-                Text("Ari forgets this server's token. Your conversation stays on the server.")
+                Text("Ito forgets this server's token. Your conversations stay on the server.")
             }
         }
         .tint(.ariText)
@@ -129,7 +134,7 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text(
-                    "What Ari can know about and do. Passwords go to your server, never back to Ari."
+                    "What \(LeadName.current) can know about and do. Passwords go to your server, never back to Ito."
                 )
             }
             .listRowBackground(Color.ariSurface)
@@ -157,8 +162,8 @@ struct SettingsView: View {
             } footer: {
                 Text(
                     backedUp
-                        ? "What Ari knows is pushed to your private repository as it changes."
-                        : "What Ari knows lives only on your server. Run ito memory remote on it to "
+                        ? "What \(LeadName.current) knows is pushed to your private repository as it changes."
+                        : "What \(LeadName.current) knows lives only on your server. Run ito memory remote on it to "
                             + "back it up to a private repository.")
             }
             .listRowBackground(Color.ariSurface)
@@ -216,7 +221,7 @@ struct SettingsView: View {
                         + "they start.")
             } else {
                 Text(
-                    "Ari tells you when it's done or needs you, and only while you're not "
+                    "\(LeadName.current) tells you when it's done or needs you, and only while you're not "
                         + "looking. Questions are time-sensitive, so they can reach you during "
                         + "Focus; choose in iOS Settings.")
             }
@@ -267,7 +272,8 @@ private struct TalkSettings: View {
             .disabled(voices == nil)
             if let voices, let voiceprint = voices.voiceprint {
                 LabeledContent(
-                    "Your voice", value: voiceprint == .learnt ? "Ari knows it" : "Learning")
+                    "Your voice",
+                    value: voiceprint == .learnt ? "\(LeadName.current) knows it" : "Learning")
                 Button("Relearn my voice") { confirmsRelearning = true }
                     .disabled(voices.relearning)
                     .confirmationDialog(
@@ -277,7 +283,7 @@ private struct TalkSettings: View {
                         Button("Relearn") { relearn(voices) }
                     } message: {
                         Text(
-                            "Ari forgets how you sound and learns again from the next couple of "
+                            "\(LeadName.current) forgets how you sound and learns again from the next couple of "
                                 + "minutes you talk on a call. Until then, any voice can hold "
                                 + "a turn open.")
                     }
@@ -291,7 +297,7 @@ private struct TalkSettings: View {
                 Text(reason)
             } else if voices?.voiceprint == .learning {
                 Text(
-                    "Ari learns your voice from your first couple of minutes on calls, so "
+                    "\(LeadName.current) learns your voice from your first couple of minutes on calls, so "
                         + "only you hold a turn open.")
             }
         }
