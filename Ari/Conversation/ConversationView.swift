@@ -168,8 +168,9 @@ struct ConversationView: View {
         // A new row while following: settle at the end, at once. Following every change in
         // height, with an animation, fed itself in a long conversation (each scroll measured
         // more rows, changing the height again) and froze the screen.
-        .onChange(of: rows.last?.id) { _, _ in
+        .onChange(of: rows.last?.id, initial: true) { _, last in
             guard following else { return }
+            if let last { header.show(whereabouts: cache.whereabouts[last]) }
             withoutAnimation { position.scrollTo(id: Self.end, anchor: .bottom) }
         }
         // Older rows shown above yours: your place stays where it was.
@@ -189,9 +190,15 @@ struct ConversationView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            HeaderView(poses: header.poses, name: name, status: header.status) {
-                showsTopics = true
-            }
+            HeaderView(
+                header: header, name: name, openTopics: { showsTopics = true },
+                nudge: { header.nudge { pose(revealing: reveal.isRevealing) } })
+        }
+        // The header follows what's at the top of the screen. Written to the header alone, which
+        // only the header reads, so scrolling never redraws the conversation.
+        .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.3) { ids in
+            guard let top = cache.topmost(of: ids) else { return }
+            header.show(whereabouts: cache.whereabouts[top])
         }
         // Near the top, older history comes in, page after page, for as long as you stay there.
         .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -202,7 +209,7 @@ struct ConversationView: View {
         }
         .sheet(isPresented: $showsTopics) {
             TopicsSheet(
-                marks: TopicsSheet.marks(in: rows),
+                marks: TopicsSheet.marks(in: rows), current: header.whereabouts?.topic,
                 hasEarlier: session.conversation.hasEarlierMessages,
                 loadEarlier: { await session.loadEarlier() }
             ) { id in

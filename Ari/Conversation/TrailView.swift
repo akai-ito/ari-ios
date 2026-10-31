@@ -13,6 +13,8 @@ struct TrailView: View {
     @Binding var opened: Set<String>
     /// You tapped one of an ask's options.
     var answer: (Ask, Ask.Option) -> Void = { _, _ in }
+    /// A note's Markdown, read once for each text it has rather than on every frame.
+    var document: (MessageID, String) -> ReplyDocument = { ReplyDocument(markdown: $1) }
 
     var body: some View {
         let rows = rows
@@ -85,7 +87,7 @@ struct TrailView: View {
         switch row {
         case .note(let entry):
             let text = entry.text
-            let document = ReplyDocument(markdown: text)
+            let document = document(entry.id, text)
             Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
                 ReplyView(document: document, position: position, tone: .note)
             }
@@ -507,7 +509,8 @@ private struct Caption: View {
     }
 }
 
-private struct Chevron: View {
+/// A small chevron that turns as something opens.
+struct Chevron: View {
     let isOpen: Bool
 
     var body: some View {

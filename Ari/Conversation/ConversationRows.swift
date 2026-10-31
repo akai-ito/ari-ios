@@ -23,6 +23,12 @@ struct ConversationRow: Identifiable {
     let kind: Kind
 }
 
+/// Where you are in the conversation: the subject Ari last marked, and the day.
+struct Whereabouts: Equatable {
+    let topic: String?
+    let day: Date?
+}
+
 /// What the conversation screen keeps between frames. A class, so filling it in while drawing
 /// doesn't ask SwiftUI to draw again.
 final class RowsCache {
@@ -36,7 +42,34 @@ final class RowsCache {
 
     var key: Key?
     var rows: [ConversationRow] = []
+    /// Each row's place in the conversation, and the subject and day it's under.
+    var index: [String: Int] = [:]
+    var whereabouts: [String: Whereabouts] = [:]
     private var documents: [MessageID: (text: String, document: ReplyDocument)] = [:]
+
+    /// Keeps `rows`, and works out where each sits.
+    func keep(_ rows: [ConversationRow], for key: Key) {
+        self.key = key
+        self.rows = rows
+        index = [:]
+        whereabouts = [:]
+        var topic: String?
+        var day: Date?
+        for (position, row) in rows.enumerated() {
+            switch row.kind {
+            case .day(let date): day = date
+            case .topic(let marked): topic = marked.label
+            default: break
+            }
+            index[row.id] = position
+            whereabouts[row.id] = Whereabouts(topic: topic, day: day)
+        }
+    }
+
+    /// The topmost of the rows on screen.
+    func topmost(of ids: [String]) -> String? {
+        ids.min { (index[$0] ?? .max) < (index[$1] ?? .max) }
+    }
 
     /// A reply's Markdown, read once for each text it has.
     func document(_ id: MessageID, _ text: String) -> ReplyDocument {

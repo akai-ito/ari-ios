@@ -10,13 +10,18 @@ struct ReplyView: View {
     let position: Double
     var tone = Tone.reply
 
-    /// A reply is Ari's answer, in its white serif. A note is what it says along the way, a little
-    /// quieter: grey italic serif.
+    /// A reply is Ari's answer, in its white serif: the only serif in the conversation. A note is
+    /// what it says along the way, a whisper on the trail: small upright grey sans, the size of the
+    /// steps around it, so it never competes with the answer.
     enum Tone {
         case reply, note
 
         var color: Color { self == .reply ? .ariText : .ariSecondary }
-        var italic: Bool { self == .note }
+        var body: Font { self == .reply ? .ariBody : .footnote }
+        var strong: Font { self == .reply ? .ariStrong : .footnote.weight(.semibold) }
+        var heading: Font { self == .reply ? .ariHeading : .footnote.weight(.semibold) }
+        var lineSpacing: CGFloat { self == .reply ? Rhythm.ariLineSpacing : 2 }
+        var paragraphGap: CGFloat { self == .reply ? Rhythm.ariParagraphGap : 6 }
     }
 
     /// Characters over which the leading edge fades in.
@@ -48,7 +53,7 @@ struct ReplyView: View {
     private func gap(before index: Int) -> CGFloat {
         let block = document.blocks[index]
         let previous = document.blocks[index - 1]
-        return block.depth > 0 && previous.depth > 0 ? Rhythm.listItemGap : Rhythm.ariParagraphGap
+        return block.depth > 0 && previous.depth > 0 ? Rhythm.listItemGap : tone.paragraphGap
     }
 
     /// The runs as text, each character as visible as the reveal allows.
@@ -58,7 +63,7 @@ struct ReplyView: View {
         var result = AttributedString()
         for run in runs {
             var attributes = AttributeContainer()
-            attributes.font = font(for: run.style, base: base, italic: tone.italic)
+            attributes.font = font(for: run.style, base: base, strong: tone.strong)
             if run.style.contains(.strikethrough) { attributes.strikethroughStyle = .single }
             if let link = run.link {
                 attributes.link = link
@@ -99,11 +104,11 @@ struct ReplyView: View {
         return result
     }
 
-    private static func font(for style: ReplyDocument.Style, base: Font, italic: Bool) -> Font {
+    private static func font(for style: ReplyDocument.Style, base: Font, strong: Font) -> Font {
         if style.contains(.code) { return .code }
         if style.contains(.stamp) { return .caption }
-        var font = style.contains(.strong) ? Font.ariStrong : base
-        if style.contains(.emphasis) != italic { font = font.italic() }
+        var font = style.contains(.strong) ? strong : base
+        if style.contains(.emphasis) { font = font.italic() }
         return font
     }
 }
@@ -130,10 +135,11 @@ private struct BlockView: View {
     private var content: some View {
         switch block.kind {
         case .paragraph:
-            item(Text(ReplyView.text(block.runs, position: position, base: .ariBody, tone: tone)))
+            item(Text(ReplyView.text(block.runs, position: position, base: tone.body, tone: tone)))
         case .heading:
             item(
-                Text(ReplyView.text(block.runs, position: position, base: .ariHeading, tone: tone)))
+                Text(ReplyView.text(block.runs, position: position, base: tone.heading, tone: tone))
+            )
         case .code where shape != nil:
             // Drawn once it's all here; a quiet card while Ari writes it; its text if it never
             // reads.
@@ -157,19 +163,19 @@ private struct BlockView: View {
 
     @ViewBuilder
     private func item(_ text: Text) -> some View {
-        let text = text.lineSpacing(Rhythm.ariLineSpacing).foregroundStyle(tone.color)
+        let text = text.lineSpacing(tone.lineSpacing).foregroundStyle(tone.color)
         if let marker = block.marker {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 switch marker {
                 case "☐", "☑":
                     // A task list's item, done or not.
                     Image(systemName: marker == "☑" ? "checkmark.square" : "square")
-                        .font(.ariBody)
+                        .font(tone.body)
                         .foregroundStyle(.ariTertiary)
                         .accessibilityLabel(marker == "☑" ? "Done" : "Not done")
                 default:
                     Text(marker)
-                        .font(.ariBody.monospacedDigit())
+                        .font(tone.body.monospacedDigit())
                         .foregroundStyle(.ariTertiary)
                 }
                 text

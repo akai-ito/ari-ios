@@ -18,40 +18,54 @@ enum StatusText: Equatable {
     }
 }
 
-/// The floating header: the character, "Ari" and one line of status, over the conversation, which
-/// scrolls under it and fades out.
+/// The floating header: the character, where you are, and one line of status, over the
+/// conversation, which scrolls under it and fades out. Where you are is the subject Ari marked for
+/// what's at the top of the screen, or its day when there's none, changing as you scroll; tap it
+/// for all the topics. The character is Ari, so it needs no name. Tap it and it notices you.
 struct HeaderView: View {
-    let poses: PoseHistory
+    /// Read here rather than by the conversation, so the header redrawing as you scroll, or as a
+    /// status changes, doesn't redraw the whole conversation.
+    let header: HeaderState
+    /// For VoiceOver, and the title before there's anything said.
     let name: String
-    let status: StatusText?
-    /// Opens the conversation's topics, from Ari's name.
+    /// Opens the conversation's topics and days.
     var openTopics: (() -> Void)?
-
-    @Environment(Memory.self) private var memory: Memory?
-    @State private var showsInMind = Self.opensInMind
-
-    private static var opensInMind: Bool {
-        #if DEBUG
-            DebugScript.opensInMind
-        #else
-            false
-        #endif
-    }
+    /// You tapped the character.
+    var nudge: (() -> Void)?
 
     var body: some View {
+        let whereabouts = header.whereabouts
+        let day = whereabouts?.day.map { DayLabel.describe($0, time: false) }
+        let title = whereabouts?.topic ?? day ?? name
+        // Resting under a subject, the line beneath says which day it's on; working, the status.
+        let status = header.status ?? (whereabouts?.topic == nil ? nil : day.map(StatusText.quiet))
         VStack(spacing: 2) {
-            PresenceView(history: poses)
+            PresenceView(history: header.poses)
                 .padding(.bottom, 6)
-                // Tapping Ari shows what's in its mind.
                 .contentShape(Rectangle())
-                .onTapGesture { if memory != nil { showsInMind = true } }
-                .accessibilityAddTraits(.isButton)
-            Text(name)
-                .font(.ariName)
-                .foregroundStyle(.ariText)
-                // Ari's name opens the conversation's topics and days.
+                .onTapGesture { nudge?() }
+                .sensoryFeedback(
+                    .impact(weight: .light, intensity: 0.6),
+                    trigger: header.poses.current == .noticed)
+            Button {
+                openTopics?()
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(title)
+                        .font(.ariName)
+                        .foregroundStyle(.ariText)
+                        .lineLimit(1)
+                        .contentTransition(.opacity)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.ariTertiary)
+                }
+                .padding(.horizontal, 60)
                 .contentShape(Rectangle())
-                .onTapGesture { openTopics?() }
+            }
+            .buttonStyle(.plain)
+            .disabled(openTopics == nil)
+            .animation(.easeInOut(duration: 0.3), value: title)
             StatusLine(status: status)
         }
         .frame(maxWidth: .infinity)
@@ -72,16 +86,13 @@ struct HeaderView: View {
             .ignoresSafeArea(edges: .top)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([name, status?.spoken].compactMap(\.self).joined(separator: ", "))
-        .accessibilityHint(memory == nil ? "" : "Shows what Ari has in mind")
-        .accessibilityAction { if memory != nil { showsInMind = true } }
-        .accessibilityAction(named: "Topics") { openTopics?() }
-        .sheet(isPresented: $showsInMind) {
-            if let memory {
-                InMindSheet(memory: memory)
-                    .presentationDetents([.fraction(0.82), .large])
-            }
-        }
+        .accessibilityLabel(
+            [name, title == name ? nil : title, status?.spoken].compactMap(\.self).joined(
+                separator: ", ")
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(openTopics == nil ? "" : "Shows the topics")
+        .accessibilityAction { openTopics?() }
     }
 }
 

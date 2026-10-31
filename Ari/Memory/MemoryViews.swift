@@ -172,56 +172,6 @@ extension View {
     }
 }
 
-/// Tapping Ari's presence: the three pages that go into every reply, as they are right now.
-struct InMindSheet: View {
-    let memory: Memory
-
-    /// A page opened from a name in the words.
-    @State private var opened: PageAddress?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text(
-                        "These go into every reply. Everything else, Ari looks up when it needs it."
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.ariTertiary)
-                    ForEach(memory.inMind) { page in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(page.title).font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.ariText)
-                                Spacer()
-                                Text("Updated \(LibraryHome.ago(page.changedAt))").font(.caption)
-                                    .foregroundStyle(.ariTertiary)
-                            }
-                            ReplyView(
-                                document: PageLink.reading(page),
-                                position: .infinity)
-                        }
-                    }
-                    if memory.inMind.isEmpty {
-                        Text("Nothing in mind yet. Ari fills these in as it gets to know you.")
-                            .font(.ariBody)
-                            .foregroundStyle(.ariTertiary)
-                    }
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 6)
-                .padding(.bottom, 30)
-            }
-            .background(.ariBackground)
-            .navigationTitle("In mind")
-            .navigationBarTitleDisplayMode(.inline)
-            .opensPageLinks { opened = $0 }
-            .navigationDestination(item: $opened) { PageView(memory: memory, address: $0) }
-        }
-        .task { await memory.refresh() }
-    }
-}
-
 /// What one memory update changed: the page's present as it now reads, and what moved to
 /// *Earlier*. Fetched when you open the step, since the trail never carries a page's words.
 struct PageChangeView: View {

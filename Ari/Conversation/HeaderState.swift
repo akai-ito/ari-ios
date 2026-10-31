@@ -14,6 +14,8 @@ final class HeaderState {
     private(set) var linkDown = false
     /// A turn was just stopped: "Stopped" shows for a moment.
     private(set) var stopped = false
+    /// The subject and the day of what's at the top of the screen, for the title.
+    private(set) var whereabouts: Whereabouts?
 
     @ObservationIgnored private var statusSince = Date.distantPast
     @ObservationIgnored private var poseSince = Date.distantPast
@@ -57,6 +59,26 @@ final class HeaderState {
                 poses.set(now)
                 poseSince = .now
             }
+        }
+    }
+
+    /// You scrolled to somewhere under another subject or day.
+    func show(whereabouts next: Whereabouts?) {
+        guard let next, next != whereabouts else { return }
+        whereabouts = next
+    }
+
+    /// You tapped Ari while it rests: it wakes, looks at you with a wiggle, and settles back into
+    /// whatever `latest` says it should be doing.
+    func nudge(then latest: @escaping () -> Pose) {
+        guard poses.current == .resting else { return }
+        poses.set(.noticed)
+        poseSince = .now
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard poses.current == .noticed else { return }
+            poses.set(latest())
+            poseSince = .now
         }
     }
 

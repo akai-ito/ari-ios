@@ -80,8 +80,9 @@ struct TopicLabel: View {
     }
 }
 
-/// The conversation's days and their topics, newest first, to jump between: from a topic's label,
-/// or Ari's name at the top. Older history comes in as you ask for it.
+/// The conversation's days and their topics, newest first, to jump between: from the title at the
+/// top, or a topic's label. Each day is a short rail, like the trail; the subject you're reading is
+/// lit. Older history comes in as you ask for it.
 struct TopicsSheet: View {
     struct Mark: Identifiable, Equatable {
         let id: String
@@ -90,6 +91,8 @@ struct TopicsSheet: View {
     }
 
     let marks: [Mark]
+    /// The subject at the top of the screen, lit in the list.
+    var current: String?
     let hasEarlier: Bool
     let loadEarlier: () async -> Void
     let jump: (String) -> Void
@@ -122,29 +125,40 @@ struct TopicsSheet: View {
     }
 
     var body: some View {
+        let days = days
+        // The newest place the subject you're reading was marked.
+        let lit = marks.last { $0.isTopic && $0.label == current }?.id
         NavigationStack {
-            List {
-                ForEach(days, id: \.day.id) { day in
-                    Section {
-                        ForEach(day.topics) { topic in
-                            Button(topic.label) { jump(topic.id) }
-                                .foregroundStyle(.ariText)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    ForEach(days, id: \.day.id) { day in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button {
+                                jump(day.day.id)
+                            } label: {
+                                Text(day.day.label)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.ariTertiary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 6)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Goes to this day")
+                            ForEach(Array(day.topics.enumerated()), id: \.element.id) {
+                                index, topic in
+                                row(
+                                    topic, lit: topic.id == lit, last: index == day.topics.count - 1
+                                )
+                            }
                         }
-                    } header: {
-                        Button {
-                            jump(day.day.id)
-                        } label: {
-                            Text(day.day.label)
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.ariSecondary)
-                                .textCase(nil)
-                        }
-                        .buttonStyle(.plain)
                     }
-                    .listRowBackground(Color.ariSurface)
-                }
-                if hasEarlier {
-                    Section {
+                    if days.isEmpty {
+                        Text("Topics appear as you talk: Ari marks where the subject changes.")
+                            .font(.subheadline)
+                            .foregroundStyle(.ariTertiary)
+                    }
+                    if hasEarlier {
                         Button {
                             loading = true
                             Task {
@@ -152,22 +166,56 @@ struct TopicsSheet: View {
                                 loading = false
                             }
                         } label: {
-                            HStack {
-                                Text("Earlier days").foregroundStyle(.ariSecondary)
-                                Spacer()
-                                if loading { ProgressView() }
+                            HStack(spacing: 8) {
+                                Text("Earlier days")
+                                if loading { ProgressView().controlSize(.small) }
                             }
+                            .font(.subheadline)
+                            .foregroundStyle(.ariSecondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .overlay(Capsule().strokeBorder(.ariLine))
                         }
+                        .buttonStyle(.plain)
                         .disabled(loading)
                     }
-                    .listRowBackground(Color.ariSurface)
                 }
+                .padding(.horizontal, 22)
+                .padding(.top, 4)
+                .padding(.bottom, 30)
             }
-            .scrollContentBackground(.hidden)
             .background(.ariBackground)
             .navigationTitle("Topics")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    /// A topic on its day's rail: the label in Ari's serif, its dot lit if it's where you are.
+    private func row(_ topic: Mark, lit: Bool, last: Bool) -> some View {
+        Button {
+            jump(topic.id)
+        } label: {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(spacing: 0) {
+                    Circle()
+                        .fill(lit ? Color.ariBone : .ariDusk)
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 8)
+                    if !last {
+                        Rectangle().fill(.ariLine).frame(width: 1).frame(maxHeight: .infinity)
+                    }
+                }
+                .frame(width: 8)
+                Text(topic.label)
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(lit ? Color.ariText : .ariSecondary)
+                    .padding(.bottom, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(lit ? .isSelected : [])
     }
 }
 
@@ -189,15 +237,13 @@ struct YourMessage<Attachments: View, Footer: View>: View {
             attachments
             // A message may be only photos.
             if !text.isEmpty {
-                Text(Self.linked(text))
-                    .foregroundStyle(.ariText)
+                YourWords(text: text)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(
                             .ariLine, lineWidth: 1)
                     )
-                    .textSelection(.enabled)
             }
             footer
             if let shown {
@@ -217,7 +263,77 @@ struct YourMessage<Attachments: View, Footer: View>: View {
     }
 }
 
-extension YourMessage {
+/// Your words in a message. A long one, such as a few minutes spoken, folds after eight lines with
+/// a soft fade and Show all, so it doesn't fill the screen; Ari's replies never fold.
+private struct YourWords: View {
+    let text: String
+
+    static let foldedLines = 8
+    /// Shorter than this can't run past eight lines on a phone, so it's never measured.
+    static let mightFold = 320
+
+    @State private var unfolded = false
+    /// Whether the words run past eight lines, once measured.
+    @State private var overflows = false
+
+    var body: some View {
+        let folds = text.count >= Self.mightFold
+        VStack(alignment: .trailing, spacing: 6) {
+            Text(Self.linked(text))
+                .foregroundStyle(.ariText)
+                .textSelection(.enabled)
+                .lineLimit(folds && !unfolded ? Self.foldedLines : nil)
+                .frame(maxWidth: folds ? .infinity : nil, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .mask {
+                    // The last lines fade out while folded.
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: overflows && !unfolded ? 0.7 : 1),
+                            .init(
+                                color: .black.opacity(overflows && !unfolded ? 0.1 : 1), location: 1
+                            ),
+                        ], startPoint: .top, endPoint: .bottom)
+                }
+                .background(alignment: .topLeading) {
+                    if folds && !unfolded && !overflows {
+                        // The words in full, unseen, to tell whether eight lines cut them short.
+                        Text(text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .hidden()
+                            .onGeometryChange(for: CGFloat.self, of: \.size.height) { full in
+                                overflows = full > Self.height(ofLines: Self.foldedLines) + 4
+                            }
+                    }
+                }
+            if overflows {
+                Button {
+                    withAnimation(.smooth(duration: 0.35)) { unfolded.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(unfolded ? "Show less" : "Show all")
+                        Chevron(isOpen: unfolded)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        // As wide as the words need when short, so a short message keeps its snug outline.
+        .frame(maxWidth: folds ? .infinity : nil, alignment: .trailing)
+    }
+
+    /// How tall `lines` lines of body text are.
+    private static func height(ofLines lines: Int) -> CGFloat {
+        UIFont.preferredFont(forTextStyle: .body).lineHeight * CGFloat(lines)
+    }
+}
+
+extension YourWords {
     /// Your words, with any web address in them made a link, as Ari's are.
     static func linked(_ text: String) -> AttributedString {
         var result = AttributedString(text)

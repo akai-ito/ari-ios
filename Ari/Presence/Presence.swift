@@ -21,6 +21,8 @@ enum Pose: Equatable {
     case asking
     /// The connection is down: Ari can't hear the server, so the character doesn't pretend to work.
     case offline
+    /// You tapped Ari while it rested: it wakes and looks at you with a little wiggle.
+    case noticed
 
     init(kind: StatusKind) {
         switch kind {
@@ -242,6 +244,8 @@ struct PresenceView: View {
         // Down toward you and the composer, with a slow, patient sway.
         case .asking: CGPoint(x: 0.9 * sin(t * 0.55), y: 3.6 + 0.25 * sin(t * 0.9))
         case .offline: CGPoint(x: 0, y: 1.6)
+        // Straight at you, with a quick happy wiggle that settles.
+        case .noticed: CGPoint(x: 1.8 * sin(since * 15) * max(0, 1 - since / 0.75), y: 3.0)
         }
     }
 
@@ -253,6 +257,8 @@ struct PresenceView: View {
         case .tidying: 0.8
         // Open and attentive: it's your turn.
         case .asking: 1.08
+        // Wide, pleased to see you.
+        case .noticed: 1.15
         case .offline: 0.5
         case .stopping:
             since < 0.1
