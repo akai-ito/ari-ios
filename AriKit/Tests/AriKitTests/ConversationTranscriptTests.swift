@@ -32,26 +32,26 @@ struct ConversationTranscriptTests {
     func send() throws {
         var replay = Replay(try Fixtures.transcript("03-send"))
         let mine: MessageID = "69a52e25-a392-4a73-89f9-21eb36005baf"
-        try replay.play(throughLine: 14, expecting: "POST /v0/messages")
+        try replay.play(throughLine: 13, expecting: "POST /v0/messages")
         #expect(replay.conversation.entries.last?.id == mine)
         #expect(replay.conversation[mine]?.delivery == .sending)
         #expect(replay.conversation[mine]?.at == nil)
         #expect(replay.conversation[mine]?.position == nil)
 
         // Accepted on the stream before the 201 arrives, and placed in the server's order.
-        try replay.play(throughLine: 15, expecting: "message.accepted e_0011_37338")
+        try replay.play(throughLine: 14, expecting: "message.accepted e_0010_63492")
         #expect(replay.conversation[mine]?.delivery == .delivered)
         #expect(replay.conversation[mine]?.at?.rawValue == "2026-10-12T08:41:02.000Z")
         #expect(replay.conversation[mine]?.position != nil)
 
-        try replay.play(throughLine: 19, expecting: "turn.status e_0014_91139")
+        try replay.play(throughLine: 18, expecting: "turn.status e_0013_95540")
         #expect(replay.conversation.turn?.id == "t_0002_71172")
         #expect(replay.conversation.turn?.inputs == [mine])
         let thinking = Status(kind: .thinking, label: "Thinking it through")
         #expect(replay.conversation.turn?.status == thinking)
         #expect(replay.conversation[step: "s_0002_94009"]?.outcome == nil)
 
-        try replay.play(throughLine: 20, expecting: "step.ended e_0015_40289")
+        try replay.play(throughLine: 19, expecting: "step.ended e_0014_91139")
         let step = try #require(replay.conversation[step: "s_0002_94009"])
         #expect(step.outcome == .completed && step.title == "Thought it through")
         #expect(step.durationMs == 1500)
@@ -60,40 +60,40 @@ struct ConversationTranscriptTests {
     @Test("Scenario 4: steps and a note arrive in order, each status replacing the last")
     func agentStirs() throws {
         var replay = Replay(try Fixtures.transcript("04-the-agent-stirs"))
-        try replay.play(throughLine: 20, expecting: "step.updated e_0015_66351")
+        try replay.play(throughLine: 19, expecting: "step.updated e_0014_48522")
         let thinking = try #require(replay.conversation[step: "s_0002_61308"])
         #expect(thinking.heading == "Sketching a calm Saturday" && thinking.outcome == nil)
 
-        try replay.play(throughLine: 24, expecting: "message.delta e_0019_57705")
+        try replay.play(throughLine: 23, expecting: "message.delta e_0018_15772")
         let note = try #require(replay.conversation.noteInProgress)
         #expect(note.text == "I'll check which cafés " && !note.isShown)
         #expect(replay.conversation.turn?.status?.detail == "Sketching a calm Saturday")
 
-        try replay.play(throughLine: 26, expecting: "message.ended e_0021_18999")
+        try replay.play(throughLine: 25, expecting: "message.ended e_0020_06983")
         #expect(replay.conversation.noteInProgress == nil)
 
-        try replay.play(throughLine: 27, expecting: "step.started e_0022_71152")
+        try replay.play(throughLine: 26, expecting: "step.started e_0021_18999")
         let search = try #require(replay.conversation[step: "s_0003_50731"])
         #expect(search.kind == .webSearch && search.query == "riverside cafés open at 9am")
         #expect(search.title == "Searching the web for riverside cafés open at 9am")
-        try replay.play(throughLine: 29, expecting: "step.ended e_0024_04337")
+        try replay.play(throughLine: 28, expecting: "step.ended e_0023_06854")
         #expect(
             replay.conversation[step: "s_0003_50731"]?.title
                 == "Searched the web for riverside cafés open at 9am")
 
-        try replay.play(throughLine: 32, expecting: "step.ended e_0027_27516")
+        try replay.play(throughLine: 31, expecting: "step.ended e_0026_77306")
         let read = try #require(replay.conversation[step: "s_0004_53063"])
         #expect(read.kind == .command && read.command == "cat notes/saturday.md")
         #expect(read.actions?.map(\.type) == [.read])
         #expect(read.actions?.first?.path == "notes/saturday.md")
         #expect(read.exitCode == 0 && read.output?.isEmpty == false)
 
-        try replay.play(throughLine: 36, expecting: "turn.status e_0031_58403")
+        try replay.play(throughLine: 35, expecting: "turn.status e_0030_27212")
         let fitting = Status(
             kind: .thinking, label: "Thinking it through", detail: "Fitting the day around the run")
         #expect(replay.conversation.turn?.status == fitting)
         // Writing comes with no detail, and the old one mustn't linger.
-        try replay.play(throughLine: 38, expecting: "turn.status e_0033_68954")
+        try replay.play(throughLine: 37, expecting: "turn.status e_0032_25074")
         #expect(replay.conversation.turn?.status == Status(kind: .writing, label: "Writing"))
 
         // The note sits between the first thought and the search, where it was written.
@@ -111,37 +111,37 @@ struct ConversationTranscriptTests {
     func stop() throws {
         var replay = Replay(try Fixtures.transcript("07-stop"))
         let reply: MessageID = "m_0002_81610"
-        try replay.play(throughLine: 33, expecting: "POST /v0/turns/t_0002_40331/stop")
+        try replay.play(throughLine: 32, expecting: "POST /v0/turns/t_0002_40331/stop")
         #expect(replay.conversation.pendingStop == "t_0002_40331")
 
         // The 202 says the turn is stopping.
-        try replay.play(throughLine: 35, expecting: "turn.status e_0028_68770")
+        try replay.play(throughLine: 34, expecting: "turn.status e_0027_65057")
         #expect(replay.conversation.turn?.status?.kind == .stopping)
         // Sent while stopping, so it waits as Next.
         let next: MessageID = "21d803b8-d67b-47dc-91c6-b540fb9b4972"
-        try replay.play(throughLine: 39, expecting: "message.queued e_0030_45737")
+        try replay.play(throughLine: 38, expecting: "message.queued e_0029_21466")
         #expect(replay.conversation[next]?.mark == .next)
 
         // The reply ends stopped with everything Ari had written; then the turn ends.
-        try replay.play(throughLine: 41, expecting: "turn.ended e_0032_69133")
+        try replay.play(throughLine: 40, expecting: "turn.ended e_0031_84439")
         #expect(replay.conversation[reply]?.outcome == .stopped)
         #expect(replay.conversation[reply]?.length == 266)
         #expect(replay.conversation.pendingStop == nil)
         #expect(replay.conversation.lastEndedTurn?.outcome == .stopped)
         // Next starts the following turn, and Stopped is gone.
-        try replay.play(throughLine: 43, expecting: "turn.started e_0034_76467")
+        try replay.play(throughLine: 41, expecting: "turn.started e_0032_69133")
         #expect(replay.conversation[next]?.mark == nil)
         #expect(replay.conversation.lastEndedTurn == nil)
 
         // Stop just after the second reply began: the first is final, the second keeps what
         // little it had.
-        try replay.play(throughLine: 76, expecting: "turn.ended e_0063_73830")
+        try replay.play(throughLine: 73, expecting: "turn.ended e_0060_44071")
         #expect(replay.conversation["m_0004_08797"]?.outcome == .completed)
         #expect(replay.conversation["m_0005_12106"]?.outcome == .stopped)
         #expect(replay.conversation["m_0005_12106"]?.length == 35)
 
         // Stop while a search runs: the step ends stopped, keeping its present-tense title.
-        try replay.play(throughLine: 88, expecting: "turn.ended e_0071_43042")
+        try replay.play(throughLine: 84, expecting: "turn.ended e_0067_16351")
         let search = try #require(replay.conversation[step: "s_0004_54646"])
         #expect(search.outcome == .stopped)
         #expect(search.title == "Searching the web for cafés near Battersea Park open at 9")
@@ -153,14 +153,14 @@ struct ConversationTranscriptTests {
         #expect(replay.conversation.entries.count == 4)
         #expect(replay.conversation.hasEarlierMessages)
         let before = replay.conversation.steps.count
-        try replay.play(throughLine: 55, expecting: "200")
+        try replay.play(throughLine: 50, expecting: "200")
         #expect(replay.conversation.entries.count == 8)
         #expect(replay.conversation.hasEarlierMessages)
         #expect(replay.conversation.steps.count == before + 2)
-        try replay.play(throughLine: 57, expecting: "200")
+        try replay.play(throughLine: 52, expecting: "200")
         #expect(replay.conversation.entries.count == 10)
         #expect(!replay.conversation.hasEarlierMessages)
-        #expect(replay.conversation.cursor == "e_0050_56486")
+        #expect(replay.conversation.cursor == "e_0045_34314")
         let positions = replay.conversation.steps.map(\.position)
         #expect(positions == positions.sorted() && positions.count == before + 3)
     }
@@ -170,24 +170,24 @@ struct ConversationTranscriptTests {
         var replay = Replay(try Fixtures.transcript("10-send-while-it-s-busy"))
         let adjust: MessageID = "1b82d2aa-dba7-4c69-916c-d9fb4a0b94ec"
         // Accepted while the reply streams, so the reply stays above it.
-        try replay.play(throughLine: 31, expecting: "message.accepted e_0025_51367")
+        try replay.play(throughLine: 30, expecting: "message.accepted e_0024_28708")
         #expect(replay.conversation.entries.map(\.id).suffix(2) == ["m_0002_50552", adjust])
 
-        try replay.play(throughLine: 41, expecting: "turn.status e_0034_02624")
+        try replay.play(throughLine: 40, expecting: "turn.status e_0033_01023")
         #expect(replay.conversation[adjust]?.mark == .read)
         #expect(replay.conversation.turn?.status?.label == "Adjusting to your message")
         // The turn ends, and Read went with it.
-        try replay.play(throughLine: 51, expecting: "turn.ended e_0044_36612")
+        try replay.play(throughLine: 50, expecting: "turn.ended e_0043_61190")
         #expect(replay.conversation[adjust]?.mark == nil)
 
         let waiting: MessageID = "c64bf93c-0d54-4a21-8efa-f6ec351b62ef"
-        try replay.play(throughLine: 63, expecting: "message.queued e_0051_28451")
+        try replay.play(throughLine: 61, expecting: "message.queued e_0049_78207")
         #expect(replay.conversation[waiting]?.mark == .next)
         #expect(replay.conversation[step: "s_0003_28118"]?.kind == .compacting)
         // The turn it waits behind ends, but its own hasn't started yet.
-        try replay.play(throughLine: 75, expecting: "turn.ended e_0063_72271")
+        try replay.play(throughLine: 73, expecting: "turn.ended e_0061_56015")
         #expect(replay.conversation[waiting]?.mark == .next)
-        try replay.play(throughLine: 77, expecting: "turn.started e_0065_54792")
+        try replay.play(throughLine: 74, expecting: "turn.started e_0062_61462")
         #expect(replay.conversation[waiting]?.mark == nil)
         #expect(replay.conversation.turn?.inputs == [waiting])
     }
@@ -197,35 +197,35 @@ struct ConversationTranscriptTests {
         var replay = Replay(try Fixtures.transcript("12-send-while-offline"))
         let first: MessageID = "76c3ac95-83e0-45e9-a821-a12c08d956e9"
         let second: MessageID = "0c1566bf-a262-4595-b7a6-dd608ba8c3b0"
-        try replay.play(throughLine: 18, expecting: "POST /v0/messages")
+        try replay.play(throughLine: 17, expecting: "POST /v0/messages")
         #expect(replay.conversation[first]?.delivery == .sending)
         // Accepted on the stream, though the 201 is lost.
-        try replay.play(throughLine: 20, expecting: "201 lost")
+        try replay.play(throughLine: 19, expecting: "201 lost")
         #expect(replay.conversation[first]?.delivery == .delivered)
         // The resend's 200, then the second message.
-        try replay.play(throughLine: 26, expecting: "POST /v0/messages")
+        try replay.play(throughLine: 25, expecting: "POST /v0/messages")
         #expect(replay.conversation.entries.filter { $0.id == first }.count == 1)
         #expect(replay.conversation.entries.last?.id == second)
         #expect(replay.conversation[second]?.delivery == .sending)
-        try replay.play(throughLine: 29, expecting: "message.read e_0016_60120")
+        try replay.play(throughLine: 28, expecting: "message.read e_0015_68521")
         #expect(replay.conversation[second]?.mark == .read)
     }
 
     @Test("Scenario 14: a restart keeps the cut-off reply; a restore matches the server")
     func restartAndRestore() throws {
         var replay = Replay(try Fixtures.transcript("14-the-server-restarts-or-is-restored"))
-        try replay.play(throughLine: 34, expecting: "turn.ended e_0026_19662")
+        try replay.play(throughLine: 33, expecting: "turn.ended e_0025_12269")
         let reply = try #require(replay.conversation["m_0002_05742"])
         #expect(reply.outcome == .interrupted)
         #expect(reply.length == 162 && reply.text.hasSuffix("your book.\n"))
         #expect(replay.conversation.lastEndedTurn?.outcome == .interrupted)
 
         // Restored from a backup, the snapshot is all there is, its steps included.
-        try replay.play(throughLine: 39, expecting: "snapshot e_0010_39645")
+        try replay.play(throughLine: 37, expecting: "snapshot e_0009_45546")
         let ids: [MessageID] = ["bafdbba2-d851-4593-bc68-fdb68d9ab705", "m_0001_43076"]
         #expect(replay.conversation.entries.map(\.id) == ids)
         #expect(replay.conversation.steps.count == 1)
-        #expect(replay.conversation.cursor == "e_0010_39645")
+        #expect(replay.conversation.cursor == "e_0009_45546")
         #expect(replay.conversation.lastEndedTurn == nil)
     }
 
@@ -238,17 +238,17 @@ struct ConversationTranscriptTests {
         let error = ServerError(
             code: .modelTimeout, message: "The model didn't respond for 60 seconds.",
             detail: "No progress from the engine for 60 seconds while it was writing.")
-        try replay.play(throughLine: 30, expecting: "turn.ended e_0024_98002")
+        try replay.play(throughLine: 29, expecting: "turn.ended e_0023_62373")
         #expect(replay.conversation["m_0002_07750"]?.outcome == .failed)
         #expect(replay.conversation["m_0002_07750"]?.error == error)
         let ended = try #require(replay.conversation.lastEndedTurn)
         #expect(ended.id == failedTurn && ended.outcome == .failed && ended.error == error)
         #expect(!replay.conversation.retriedTurns.contains(failedTurn))
 
-        try replay.play(throughLine: 32, expecting: "POST /v0/turns/t_0002_56862/retry")
+        try replay.play(throughLine: 30, expecting: "POST /v0/turns/t_0002_56862/retry")
         #expect(replay.conversation.retriedTurns.contains(failedTurn))
         // The new attempt starts, and Couldn't finish is gone.
-        try replay.play(throughLine: 33, expecting: "turn.started e_0026_42534")
+        try replay.play(throughLine: 31, expecting: "turn.started e_0024_98002")
         #expect(replay.conversation.turn?.retryOf == failedTurn)
         #expect(replay.conversation.lastEndedTurn == nil)
 
@@ -266,7 +266,7 @@ struct ConversationTranscriptTests {
     func workingThroughATask() throws {
         var replay = Replay(try Fixtures.transcript("16-working-through-a-task"))
         let plan: StepID = "s_0003_54216"
-        try replay.play(throughLine: 26, expecting: "step.updated e_0021_96422")
+        try replay.play(throughLine: 25, expecting: "step.updated e_0020_74721")
         #expect(
             replay.conversation[step: plan]?.items?.map(\.state) == [.done, .inProgress, .pending])
 
@@ -316,18 +316,18 @@ struct ConversationTranscriptTests {
         let ask: AskID = "a_0001_32034"
         let clapham: MessageID = "5ce13252-2fa3-4462-a97b-c341b244f5f5"
         // Asking ends the turn; the ask waits.
-        try replay.play(throughLine: 22, expecting: "turn.ended e_0017_48814")
+        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_01740")
         #expect(replay.conversation.turn == nil)
         let waiting = try #require(replay.conversation.waitingAsk)
         #expect(waiting.id == ask && waiting.kind == .question && !waiting.options.isEmpty)
         #expect(waiting.question == "Which Juno did you mean?")
 
         // You tap Clapham: the ask settles before the server says so.
-        try replay.play(throughLine: 23, expecting: "POST /v0/messages")
+        try replay.play(throughLine: 22, expecting: "POST /v0/messages")
         #expect(replay.conversation.waitingAsk == nil)
         #expect(replay.conversation.settling[ask] == .answering(clapham))
 
-        try replay.play(throughLine: 25, expecting: "ask.ended e_0019_13308")
+        try replay.play(throughLine: 24, expecting: "ask.ended e_0018_21843")
         #expect(replay.conversation[ask: ask]?.outcome == .answered)
         #expect(replay.conversation[ask: ask]?.answer == clapham)
         #expect(replay.conversation.settling.isEmpty)
@@ -348,15 +348,15 @@ struct ConversationTranscriptTests {
     func waiting() throws {
         var replay = Replay(try Fixtures.transcript("22-waiting"))
         let ask: AskID = "a_0001_05580"
-        try replay.play(throughLine: 22, expecting: "turn.ended e_0017_56323")
+        try replay.play(throughLine: 21, expecting: "turn.ended e_0016_10629")
         #expect(replay.conversation.waitingAsk?.id == ask)
-        try replay.play(throughLine: 27, expecting: "200")
+        try replay.play(throughLine: 26, expecting: "200")
         #expect(replay.conversation.waitingAsk?.id == ask)
 
-        try replay.play(throughLine: 28, expecting: "POST /v0/asks/a_0001_05580/cancel")
+        try replay.play(throughLine: 27, expecting: "POST /v0/asks/a_0001_05580/cancel")
         #expect(replay.conversation.settling[ask] == .cancelling)
         #expect(replay.conversation.waitingAsk == nil)
-        try replay.play(throughLine: 29, expecting: "ask.ended e_0018_56310")
+        try replay.play(throughLine: 28, expecting: "ask.ended e_0017_61169")
         #expect(replay.conversation[ask: ask]?.outcome == .cancelled)
         #expect(replay.conversation.settling.isEmpty)
     }
@@ -365,9 +365,9 @@ struct ConversationTranscriptTests {
     func yourOwnWay() throws {
         var replay = Replay(try Fixtures.transcript("23-your-own-way-then-stop"))
         let typed: MessageID = "40364441-f13e-436f-9303-730eb0ad286a"
-        try replay.play(throughLine: 25, expecting: "ask.ended e_0019_45452")
+        try replay.play(throughLine: 24, expecting: "ask.ended e_0018_83796")
         #expect(replay.conversation[ask: "a_0001_57535"]?.answer == typed)
-        try replay.play(throughLine: 32, expecting: "turn.ended e_0025_36078")
+        try replay.play(throughLine: 31, expecting: "turn.ended e_0024_07382")
         #expect(replay.conversation.waitingAsk?.question == "Same time, Saturday at 7:30?")
         try replay.play()
         #expect(replay.conversation[ask: "a_0002_64299"]?.outcome == .cancelled)

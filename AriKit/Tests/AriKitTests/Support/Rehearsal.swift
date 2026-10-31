@@ -190,6 +190,14 @@ final class Rehearsal {
             Task { try? await session.answer(card, answer) }
         case .readBriefing(let briefing):
             Task { try? await session.readBriefing(briefing) }
+        case .onboarding:
+            Task { try? await session.refreshOnboarding() }
+        case .answerBelief(let belief):
+            let answer: BeliefAnswer =
+                request.body?["correction"]?.string.map(BeliefAnswer.correction) ?? .confirmed
+            Task { try? await session.answerBelief(belief, answer: answer) }
+        case .finishOnboarding:
+            Task { try? await session.finishOnboarding() }
         case .upload(let attachment, let name):
             // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
             guard let bytes = try? request.uploadBytes() else { return }

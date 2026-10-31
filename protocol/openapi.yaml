@@ -62,12 +62,10 @@ tags:
     description: Find out what a server speaks and who it is.
   - name: Conversation
     description: Follow everything on one event stream.
-  - name: Spaces
-    description: Kumo's spaces, each with its own conversation, Done list and scheduled looks.
   - name: Onboarding
-    description: Getting started, with Kumo's proposal of your spaces.
+    description: Getting started, with what Kumo found and the beliefs it checks with you.
   - name: Desk
-    description: Home, with the briefing, Coming up, Waiting on you, Tell Kumo and the calendar.
+    description: Home, with the briefing, Coming up, Waiting on you, Done, Kumo's scheduled looks and the calendar.
   - name: Attachments
     description: Upload the photos and files you attach to messages, and fetch them again.
   - name: Turns
@@ -172,7 +170,7 @@ paths:
     get:
       tags: [Conversation]
       operationId: streamEvents
-      summary: Follow every space and the Desk
+      summary: Follow the conversation and the Desk
       description: |
         One long-lived `text/event-stream` response that carries every event, in order. Each
         Server-Sent Event has an `id:` line (the event's id) and a `data:` line (the event as JSON,
@@ -182,7 +180,7 @@ paths:
         Send the id of the last event you applied as `Last-Event-ID` to resume: you receive every
         later event exactly once. When the server can't resume from it (there was none, it doesn't
         know it, or you are too far behind), the stream starts with a `snapshot` instead; replace
-        your view of every space and of the Desk with it. Conversation events name their space.
+        your view of the conversation and of the Desk with it.
 
         A turn runs to its end whether or not anyone is connected.
       parameters:
@@ -215,10 +213,11 @@ paths:
       operationId: getOnboarding
       summary: Read how getting started is going
       description: |
-        Where getting started stands: the catch-up's progress while Kumo reads, then its proposal of
-        spaces, beliefs to confirm and bookings it added. `onboarding.changed` carries every change.
-        The short talk is an ordinary conversation in the space `onboarding`, sent with
-        `POST /v0/spaces/onboarding/messages`, and the snapshot holds it until getting started is done.
+        Where getting started stands: the catch-up's progress while Kumo reads, then what it found:
+        beliefs to confirm, bookings it added and what it put in motion. `onboarding.changed`
+        carries every change, and the snapshot holds it until getting started is done. The short
+        talk is the conversation's first messages: Kumo asks in ordinary messages, and you answer
+        with `POST /v0/messages`.
       responses:
         "200":
           description: The state.
@@ -228,38 +227,24 @@ paths:
             application/json:
               schema: { $ref: "events.schema.json#/$defs/Onboarding" }
         "401": { $ref: "#/components/responses/TokenRejected" }
-  /v0/onboarding/accept:
+  /v0/onboarding/done:
     post:
       tags: [Onboarding]
-      operationId: acceptSpaces
-      summary: Accept your spaces
+      operationId: finishOnboarding
+      summary: Finish getting started
       description: |
-        Accepts the proposed spaces you kept, with their names as you left them; the rest are dropped.
-        Every app hears `space.added` for each, then `onboarding.changed` with `done`. From then on Tell
-        Kumo works.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AcceptSpaces" }
-            example: { spaces: [{ id: home, name: Home & admin }, { id: career, name: Career }] }
+        Marks getting started done once the app has shown what Kumo found. Every app hears
+        `onboarding.changed` with `done`, and the snapshot leaves `onboarding` out from then on.
+        Finishing again changes nothing.
       responses:
         "200":
-          description: The spaces, in order.
+          description: Done.
           headers:
             Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/SpaceList" }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
+              schema: { $ref: "events.schema.json#/$defs/Onboarding" }
         "401": { $ref: "#/components/responses/TokenRejected" }
-        "409":
-          description: Getting started is already done, or not ready yet.
-          headers:
-            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorResult" }
   /v0/onboarding/beliefs/{belief}:
     post:
       tags: [Onboarding]
@@ -287,83 +272,17 @@ paths:
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/TokenRejected" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /v0/spaces:
-    get:
-      tags: [Spaces]
-      operationId: listSpaces
-      summary: List the spaces
-      description: Every space, in the order of the row of marks. The four Kumo starts with are made on a fresh box.
-      responses:
-        "200":
-          description: The spaces.
-          headers:
-            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SpaceList" }
-        "401": { $ref: "#/components/responses/TokenRejected" }
-  /v0/spaces/{space}:
-    patch:
-      tags: [Spaces]
-      operationId: renameSpace
-      summary: Rename a space
-      description: Every app hears `space.changed`. Kumo's manner there stays the same.
-      parameters:
-        - $ref: "#/components/parameters/Space"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SpaceRename" }
-            example: { name: Work }
-      responses:
-        "200":
-          description: The space, renamed.
-          headers:
-            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SpaceResult" }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
-        "401": { $ref: "#/components/responses/TokenRejected" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /v0/spaces/{space}/read:
-    put:
-      tags: [Spaces]
-      operationId: readSpace
-      summary: Mark a space read
-      description: |
-        Tells the box you've read the space up to a message, so its `unread` count drops to the
-        messages from Kumo after it. Every app hears `space.changed`.
-      parameters:
-        - $ref: "#/components/parameters/Space"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SpaceRead" }
-      responses:
-        "200":
-          description: The space, with its new count.
-          headers:
-            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SpaceResult" }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
-        "401": { $ref: "#/components/responses/TokenRejected" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /v0/spaces/{space}/messages:
+  /v0/messages:
     post:
-      tags: [Spaces]
-      operationId: sendSpaceMessage
-      summary: Send a message in a space
+      tags: [Conversation]
+      operationId: sendMessage
+      summary: Send a message
       description: |
-        Answers as soon as the message is on the server's disk, without waiting for Kumo. What
-        happens next arrives on the event stream, each event naming the space: `turn.started` when
-        it starts a turn, `message.read` when Kumo takes it into the running turn, or
-        `message.queued` when it waits as Next. Send waiting messages one at a time, in order, each
-        answered before the next.
+        Answers as soon as the message is on the server's disk, without waiting for the agent.
+        What happens next arrives on the event stream: `turn.started` when it starts a turn,
+        `message.read` when the agent takes it into the running turn, or `message.queued` when it
+        waits as Next. Send waiting messages one at a time, in order, each answered before the
+        next.
 
         Sending the same id again returns the same message and changes nothing.
 
@@ -373,11 +292,8 @@ paths:
         refused with `attachment_missing`: upload its attachments again under the same ids, then
         send the same message again.
 
-        While an ask waits in the space, the message answers it: `message.accepted` for the message
-        comes first, then `ask.ended`. To reply to an entry in the space's Done list, name it in
-        `done`.
-      parameters:
-        - $ref: "#/components/parameters/Space"
+        While an ask waits, the message answers it: `message.accepted` for the message comes first,
+        then `ask.ended`. To reply to an entry in the Done list, name it in `done`.
       requestBody:
         required: true
         content:
@@ -416,22 +332,20 @@ paths:
                   message: A photo or file in this message isn't on the server.
                   detail: Uploads no message names are deleted after a day. Upload this message's attachments again, then send it again.
         "401": { $ref: "#/components/responses/TokenRejected" }
-        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/IdConflict" }
         "413": { $ref: "#/components/responses/TooLarge" }
         "429": { $ref: "#/components/responses/SlowDown" }
         "503": { $ref: "#/components/responses/Unavailable" }
     get:
-      tags: [Spaces]
-      operationId: listSpaceMessages
-      summary: Read older messages in a space
+      tags: [Conversation]
+      operationId: listMessages
+      summary: Read older messages
       description: |
-        The messages just before a given one in the space, oldest first, with Kumo's steps among
-        them. The newest messages come from the event stream's `snapshot`, so `before` is always
+        The messages just before a given one, oldest first, with the agent's steps among them.
+        The newest messages come from the event stream's `snapshot`, so `before` is always
         required. A `404` means the server doesn't know that message (it was restored from a
         backup): reconnect to the event stream for a snapshot.
       parameters:
-        - $ref: "#/components/parameters/Space"
         - name: before
           in: query
           required: true
@@ -458,16 +372,15 @@ paths:
         "401": { $ref: "#/components/responses/TokenRejected" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/SlowDown" }
-  /v0/spaces/{space}/done:
+  /v0/done:
     get:
-      tags: [Spaces]
+      tags: [Desk]
       operationId: listDone
-      summary: Read what Kumo did in a space
+      summary: Read what Kumo did
       description: |
-        The space's Done list, newest first: what Kumo did without you, and the mail it read and
+        The Done list, newest first: what Kumo did without you, and the mail it read and
         left alone (`quiet`), each with its reason. Page back with `before`.
       parameters:
-        - $ref: "#/components/parameters/Space"
         - name: before
           in: query
           required: false
@@ -487,16 +400,14 @@ paths:
               schema: { $ref: "#/components/schemas/DonePage" }
         "401": { $ref: "#/components/responses/TokenRejected" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /v0/spaces/{space}/jobs:
+  /v0/jobs:
     get:
-      tags: [Spaces]
+      tags: [Desk]
       operationId: listJobs
-      summary: List Kumo's scheduled looks in a space
+      summary: List Kumo's scheduled looks
       description: |
-        The follow-ups, check-ins and standing jobs Kumo scheduled in the space, soonest first. To
-        stop one, tell Kumo in the space.
-      parameters:
-        - $ref: "#/components/parameters/Space"
+        The follow-ups, check-ins and standing jobs Kumo scheduled, soonest first, with those that
+        wait on an event last. To stop one, tell Kumo.
       responses:
         "200":
           description: The jobs.
@@ -506,10 +417,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/JobList" }
         "401": { $ref: "#/components/responses/TokenRejected" }
-        "404": { $ref: "#/components/responses/NotFound" }
   /v0/done/{entry}/undo:
     post:
-      tags: [Spaces]
+      tags: [Desk]
       operationId: undoDone
       summary: Take back something Kumo did
       description: |
@@ -537,8 +447,8 @@ paths:
       operationId: getDesk
       summary: Read the Desk
       description: |
-        Home: the briefing, Coming up, Waiting on you and the spaces. The snapshot carries it too,
-        and `desk.changed` carries the whole Desk whenever it changes.
+        Home: the briefing, Coming up and Waiting on you. The snapshot carries it too, and
+        `desk.changed` carries the whole Desk whenever it changes.
       responses:
         "200":
           description: The Desk.
@@ -548,43 +458,6 @@ paths:
             application/json:
               schema: { $ref: "events.schema.json#/$defs/Desk" }
         "401": { $ref: "#/components/responses/TokenRejected" }
-  /v0/desk/messages:
-    post:
-      tags: [Desk]
-      operationId: tellKumo
-      summary: Tell Kumo
-      description: |
-        Says something to Kumo without choosing a space. The box files it into the space it
-        belongs in, then accepts it there exactly as `POST /v0/spaces/{space}/messages` would, with
-        `filed: true` on the message. It answers once the message is filed, with the space, so the
-        app can say "in Career". Siri, calls and the share sheet come in this way.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SendMessage" }
-            example:
-              id: 0c9e8f61-2b8d-4a57-9d3e-7a1f6e5b4c32
-              text: Remind me to get Janki flowers for Saturday.
-      responses:
-        "201":
-          description: Filed and accepted.
-          headers:
-            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/FiledMessage" }
-        "200":
-          description: Already filed and accepted earlier; nothing changed.
-          headers:
-            Ito-Protocol: { $ref: "#/components/headers/ItoProtocol" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/FiledMessage" }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
-        "401": { $ref: "#/components/responses/TokenRejected" }
-        "409": { $ref: "#/components/responses/IdConflict" }
-        "503": { $ref: "#/components/responses/Unavailable" }
   /v0/desk/briefing/{briefing}/read:
     post:
       tags: [Desk]
@@ -1313,15 +1186,9 @@ paths:
       description: |
         Starts a call under the id the app chose, so starting it again is safe. While it's on, the
         agent speaks: short replies, no lists, the details in the chat, and notes as spoken lines.
-        Starting a call while another is on ends the earlier one first. A call from inside a
-        space names it; one from the Desk joins the space its first words are filed into.
+        Starting a call while another is on ends the earlier one first.
       parameters:
         - $ref: "#/components/parameters/Call"
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/StartCall" }
       responses:
         "201":
           description: The call started.
@@ -1512,12 +1379,6 @@ components:
         type: integer
         minimum: 0
   parameters:
-    Space:
-      name: space
-      in: path
-      required: true
-      description: The space's id, from its `Space`.
-      schema: { $ref: "events.schema.json#/$defs/SpaceId" }
     Motion:
       name: motion
       in: path
@@ -2060,31 +1921,6 @@ components:
           items:
             type: string
             pattern: ^\d+\.\d+$
-    SpaceList:
-      type: object
-      required: [spaces]
-      properties:
-        spaces: { type: array, items: { $ref: "events.schema.json#/$defs/Space" } }
-    SpaceResult:
-      type: object
-      required: [space]
-      properties:
-        space: { $ref: "events.schema.json#/$defs/Space" }
-    AcceptSpaces:
-      type: object
-      required: [spaces]
-      additionalProperties: false
-      properties:
-        spaces:
-          type: array
-          minItems: 1
-          items:
-            type: object
-            required: [id, name]
-            additionalProperties: false
-            properties:
-              id: { $ref: "events.schema.json#/$defs/SpaceId" }
-              name: { type: string, minLength: 1, maxLength: 40, pattern: \S }
     BeliefAnswer:
       description: One of `answer` or `correction`.
       type: object
@@ -2094,28 +1930,6 @@ components:
       properties:
         answer: { const: "true" }
         correction: { type: string, minLength: 1, maxLength: 4000 }
-    SpaceRename:
-      type: object
-      required: [name]
-      additionalProperties: false
-      properties:
-        name: { type: string, minLength: 1, maxLength: 40, pattern: \S }
-    SpaceRead:
-      type: object
-      required: [message]
-      additionalProperties: false
-      properties:
-        message:
-          description: The latest message you've seen in the space.
-          $ref: "events.schema.json#/$defs/MessageId"
-    FiledMessage:
-      type: object
-      required: [space, message]
-      properties:
-        space:
-          description: The space Kumo filed it into.
-          $ref: "events.schema.json#/$defs/SpaceId"
-        message: { $ref: "events.schema.json#/$defs/Message" }
     DonePage:
       type: object
       required: [entries, has_more]
@@ -2194,13 +2008,6 @@ components:
           description: The earliest local time the morning briefing may come, such as `07:30`.
           type: string
           pattern: ^([01]\d|2[0-3]):[0-5]\d$
-    StartCall:
-      type: object
-      additionalProperties: false
-      properties:
-        space:
-          description: The space to call in. Leave it out from the Desk, and the call joins the space its first words are filed into.
-          $ref: "events.schema.json#/$defs/SpaceId"
     ServerInfo:
       type: object
       required: [name, version, protocol, lead, agent, briefing, setup, capabilities]

@@ -31,9 +31,7 @@ struct SpecCoverageTests {
             let definition = try #require(spec.eventDefinition(type: type), "no schema for \(type)")
             let minimal = spec.keepingRequired(logged.json, schema: definition)
             let event = try minimal.decode(Event.self)
-            // The pinned transcripts' space events are types Ari doesn't know: see OneConversation.
-            let known = OneConversation.spaceEvents.contains(type) ? nil : type
-            #expect(event.payload.type == known, "\(transcript.name).jsonl line \(logged.line)")
+            #expect(event.payload.type == type, "\(transcript.name).jsonl line \(logged.line)")
         }
     }
 
@@ -89,7 +87,7 @@ private struct Spec {
 
     init() throws {
         definitions = try #require(
-            OneConversation.schema(Fixtures.eventsSchema())["$defs"]?.object)
+            Fixtures.eventsSchema()["$defs"]?.object)
     }
 
     func definition(at reference: String) throws -> JSONValue {

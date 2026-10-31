@@ -7,7 +7,7 @@ struct TimelineTests {
     @Test("while the turn runs, each step shows, and the running one shows its specifics")
     func live() throws {
         var replay = Replay(try Fixtures.transcript("04-the-agent-stirs"))
-        try replay.play(throughLine: 31)
+        try replay.play(throughLine: 30)
         let timeline = caughtUp(replay.conversation)
         // The first turn only thought, without a heading, so it left no trail.
         #expect(timeline.items.map(\.kind) == ["message", "message", "message", "trail"])
@@ -42,7 +42,7 @@ struct TimelineTests {
     @Test("a step waits until the note before it is fully on screen")
     func waitsForTheNote() throws {
         var replay = Replay(try Fixtures.transcript("04-the-agent-stirs"))
-        try replay.play(throughLine: 27)
+        try replay.play(throughLine: 26)
         let conversation = replay.conversation
         let note = try #require(conversation["m_0002_90390"])
         let now = try #require(note.endedAt?.date)
@@ -73,7 +73,7 @@ struct TimelineTests {
     @Test("a working turn: the plan runs alongside the other steps, then everything folds")
     func workingTurn() throws {
         var replay = Replay(try Fixtures.transcript("16-working-through-a-task"))
-        try replay.play(throughLine: 34)
+        try replay.play(throughLine: 33)
         let live = try #require(trails(caughtUp(replay.conversation)).last?.parts.first?.run)
         #expect(
             live.lines.map(\.title) == [
@@ -123,7 +123,7 @@ struct TimelineTests {
     @Test("what Ari asks sits on the trail, and the trail stays open while it waits")
     func asks() throws {
         var replay = Replay(try Fixtures.transcript("19-ari-asks-before-acting"))
-        try replay.play(throughLine: 22)
+        try replay.play(throughLine: 21)
         let waiting = try #require(trails(caughtUp(replay.conversation)).last)
         guard case .ask(let ask) = waiting.parts.last else {
             throw TranscriptError("the ask isn't on the trail")

@@ -12,10 +12,8 @@ struct ProtocolDecodingTests {
             let place = "\(transcript.name).jsonl line \(logged.line)"
             #expect(logged.event.type == logged.json["type"]?.string, "\(place)")
             #expect(logged.event.id?.rawValue == logged.json["id"]?.string, "\(place)")
-            // The pinned transcripts' space events are types Ari doesn't know: see OneConversation.
-            let type =
-                OneConversation.spaceEvents.contains(logged.event.type) ? nil : logged.event.type
-            #expect(logged.event.payload.type == type, "\(place): decoded as another type")
+            #expect(
+                logged.event.payload.type == logged.event.type, "\(place): decoded as another type")
         }
     }
 
@@ -60,8 +58,11 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(JobList.self)
                 case .addEvent:
                     _ = try body.decode(CalendarEventResult.self)
-                case .lead, .briefingSettings, .readBriefing:
-                    // Settings' requests, and a briefing read, which has no answer to read.
+                case .onboarding, .finishOnboarding:
+                    _ = try body.decode(Onboarding.self)
+                case .lead, .briefingSettings, .readBriefing, .answerBelief:
+                    // Settings' requests, a briefing read and a belief's answer, which have no
+                    // answer to read.
                     continue
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
@@ -148,6 +149,10 @@ struct ProtocolDecodingTests {
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             case .answerCard:
                 #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
+            case .answerBelief:
+                let answer: BeliefAnswer =
+                    body["correction"]?.string.map(BeliefAnswer.correction) ?? .confirmed
+                #expect(try JSONValue(encoding: answer) == body, "\(place)")
             case .briefingSettings, .lead:
                 // Settings' requests.
                 continue

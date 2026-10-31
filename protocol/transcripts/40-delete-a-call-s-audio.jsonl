@@ -1,10 +1,10 @@
 {"transcript":"40-delete-a-call-s-audio","start":"2026-10-26T19:00:00.000Z","scenario":40,"title":"Delete a call's audio","summary":"After a journalling walk you delete the call's recordings from its block. The words stay in the conversation, and every app learns the audio is gone.","guarantees":["G23"],"app":{}}
 {"at":0,"app":{"method":"GET","path":"/v0/events"}}
 {"at":0,"server":{"status":200,"headers":{"Content-Type":"text/event-stream"}}}
-{"at":0,"event":{"type":"snapshot","at":"2026-10-26T19:00:00.000Z","reason":"no_cursor","spaces":[{"space":{"id":"home","name":"Home & admin","kind":"home","effort":"low","order":0,"unread":0},"messages":[],"has_more":false,"steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[]},{"space":{"id":"body","name":"Body","kind":"body","effort":"low","order":1,"unread":0},"messages":[],"has_more":false,"steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[]},{"space":{"id":"heart","name":"Love & friends","kind":"heart","effort":"medium","order":2,"unread":0},"messages":[],"has_more":false,"steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[]},{"space":{"id":"career","name":"Career","kind":"career","effort":"max","order":3,"unread":0},"messages":[],"has_more":false,"steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[]}],"desk":{"coming_up":[],"waiting":[]}}}
-{"at":1000,"app":{"method":"PUT","path":"/v0/calls/77429675-c07e-4b87-aa08-044fa314791d","body":{"space":"home"}}}
-{"at":1000,"event":{"id":"e_0001_71071","type":"call.started","at":"2026-10-26T19:00:01.000Z","call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"space":"home"}}}
-{"at":1000,"server":{"status":201,"body":{"call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"space":"home"}}}}
+{"at":0,"event":{"type":"snapshot","at":"2026-10-26T19:00:00.000Z","reason":"no_cursor","messages":[],"has_more":false,"steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[],"desk":{"coming_up":[],"waiting":[]}}}
+{"at":1000,"app":{"method":"PUT","path":"/v0/calls/77429675-c07e-4b87-aa08-044fa314791d"}}
+{"at":1000,"event":{"id":"e_0001_71071","type":"call.started","at":"2026-10-26T19:00:01.000Z","call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1}}}
+{"at":1000,"server":{"status":201,"body":{"call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1}}}}
 {"at":1300,"app":{"method":"GET","path":"/v0/calls/77429675-c07e-4b87-aa08-044fa314791d/stream"}}
 {"at":1300,"server":{"status":101}}
 {"at":1300,"socket":{"from":"server","frame":{"type":"state","state":"listening"}}}
@@ -12,33 +12,32 @@
 {"at":6300,"socket":{"from":"app","audio":"journal-turn.pcm"}}
 {"at":6300,"socket":{"from":"server","frame":{"type":"state","state":"hearing"}}}
 {"at":6300,"socket":{"from":"server","frame":{"type":"state","state":"turn_ended"}}}
-{"at":6300,"event":{"id":"e_0002_67055","type":"message.accepted","at":"2026-10-26T19:00:06.300Z","space":"home","message":{"id":"m_0001_90849","role":"user","text":"Today was a good day. The long run felt easy.","at":"2026-10-26T19:00:06.300Z","position":2,"spoken":{"call":"77429675-c07e-4b87-aa08-044fa314791d","audio":{"id":"f_0001_36049","kind":"audio","name":"turn.wav","media_type":"audio/wav","size":8044}}}}}
+{"at":6300,"event":{"id":"e_0002_67055","type":"message.accepted","at":"2026-10-26T19:00:06.300Z","message":{"id":"m_0001_90849","role":"user","text":"Today was a good day. The long run felt easy.","at":"2026-10-26T19:00:06.300Z","position":2,"spoken":{"call":"77429675-c07e-4b87-aa08-044fa314791d","audio":{"id":"f_0001_36049","kind":"audio","name":"turn.wav","media_type":"audio/wav","size":8044}}}}}
 {"at":6300,"socket":{"from":"server","frame":{"type":"heard","text":"Today was a good day. The long run felt easy.","final":true,"message":"m_0001_90849"}}}
-{"at":6300,"event":{"id":"e_0003_51098","type":"turn.started","at":"2026-10-26T19:00:06.300Z","space":"home","turn":"t_0001_56656","inputs":["m_0001_90849"]}}
+{"at":6300,"event":{"id":"e_0003_51098","type":"turn.started","at":"2026-10-26T19:00:06.300Z","turn":"t_0001_56656","inputs":["m_0001_90849"]}}
 {"at":6300,"socket":{"from":"server","frame":{"type":"state","state":"working"}}}
-{"at":7200,"event":{"id":"e_0004_84276","type":"turn.status","at":"2026-10-26T19:00:07.200Z","space":"home","turn":"t_0001_56656","kind":"writing","label":"Writing"}}
-{"at":7200,"event":{"id":"e_0005_25493","type":"message.started","at":"2026-10-26T19:00:07.200Z","space":"home","message":{"id":"m_0002_64513","role":"agent","kind":"reply","turn":"t_0001_56656","text":"","at":"2026-10-26T19:00:07.200Z","position":5}}}
-{"at":7200,"event":{"id":"e_0006_14612","type":"message.delta","at":"2026-10-26T19:00:07.200Z","space":"home","message":"m_0002_64513","offset":0,"text":"That's a lovely one to end on. I've added it to today's journal."}}
+{"at":7200,"event":{"id":"e_0004_84276","type":"turn.status","at":"2026-10-26T19:00:07.200Z","turn":"t_0001_56656","kind":"writing","label":"Writing"}}
+{"at":7200,"event":{"id":"e_0005_25493","type":"message.started","at":"2026-10-26T19:00:07.200Z","message":{"id":"m_0002_64513","role":"agent","kind":"reply","turn":"t_0001_56656","text":"","at":"2026-10-26T19:00:07.200Z","position":5}}}
+{"at":7200,"event":{"id":"e_0006_14612","type":"message.delta","at":"2026-10-26T19:00:07.200Z","message":"m_0002_64513","offset":0,"text":"That's a lovely one to end on. I've added it to today's journal."}}
 {"at":7200,"socket":{"from":"server","frame":{"type":"state","state":"speaking"}}}
 {"at":7200,"socket":{"from":"server","frame":{"type":"saying","id":"s1","text":"That's a lovely one to end on."}}}
 {"at":7200,"socket":{"from":"server","audio_ms":250}}
 {"at":7200,"socket":{"from":"server","frame":{"type":"said","id":"s1"}}}
-{"at":7200,"event":{"id":"e_0007_57854","type":"message.ended","at":"2026-10-26T19:00:07.200Z","space":"home","message":"m_0002_64513","outcome":"completed","length":64}}
+{"at":7200,"event":{"id":"e_0007_57854","type":"message.ended","at":"2026-10-26T19:00:07.200Z","message":"m_0002_64513","outcome":"completed","length":64}}
 {"at":7200,"socket":{"from":"server","frame":{"type":"saying","id":"s2","text":"I've added it to today's journal."}}}
 {"at":7200,"socket":{"from":"server","audio_ms":250}}
 {"at":7200,"socket":{"from":"server","frame":{"type":"said","id":"s2"}}}
-{"at":7200,"event":{"id":"e_0008_02468","type":"turn.ended","at":"2026-10-26T19:00:07.200Z","turn":"t_0001_56656","outcome":"completed","space":"home"}}
-{"at":7200,"event":{"id":"e_0009_54098","type":"space.changed","at":"2026-10-26T19:00:07.200Z","space":{"id":"home","name":"Home & admin","kind":"home","effort":"low","order":0,"unread":1,"last":{"text":"That's a lovely one to end on. I've added it to today's journal.","at":"2026-10-26T19:00:07.200Z"}}}}
+{"at":7200,"event":{"id":"e_0008_02468","type":"turn.ended","at":"2026-10-26T19:00:07.200Z","turn":"t_0001_56656","outcome":"completed"}}
 {"at":10200,"socket":{"from":"app","frame":{"type":"played","id":"s1"}}}
 {"at":12700,"socket":{"from":"app","frame":{"type":"played","id":"s2"}}}
 {"at":12700,"socket":{"from":"server","frame":{"type":"state","state":"listening"}}}
 {"at":192700,"socket":{"from":"app","frame":{"type":"end"}}}
-{"at":192700,"event":{"id":"e_0010_64795","type":"call.ended","at":"2026-10-26T19:03:12.700Z","call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"space":"home","ended_at":"2026-10-26T19:03:12.700Z","duration_ms":191700}}}
+{"at":192700,"event":{"id":"e_0009_54098","type":"call.ended","at":"2026-10-26T19:03:12.700Z","call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"ended_at":"2026-10-26T19:03:12.700Z","duration_ms":191700}}}
 {"at":192700,"socket":{"from":"server","closed":1000,"reason":"The call ended."}}
 {"at":1392700,"app":{"method":"DELETE","path":"/v0/calls/77429675-c07e-4b87-aa08-044fa314791d/audio"}}
-{"at":1392700,"event":{"id":"e_0011_64773","type":"call.audio_deleted","at":"2026-10-26T19:23:12.700Z","call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"space":"home","ended_at":"2026-10-26T19:03:12.700Z","duration_ms":191700,"audio_deleted":true}}}
-{"at":1392700,"server":{"status":200,"body":{"call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"space":"home","ended_at":"2026-10-26T19:03:12.700Z","duration_ms":191700,"audio_deleted":true}}}}
+{"at":1392700,"event":{"id":"e_0010_64795","type":"call.audio_deleted","at":"2026-10-26T19:23:12.700Z","call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"ended_at":"2026-10-26T19:03:12.700Z","duration_ms":191700,"audio_deleted":true}}}
+{"at":1392700,"server":{"status":200,"body":{"call":{"id":"77429675-c07e-4b87-aa08-044fa314791d","started_at":"2026-10-26T19:00:01.000Z","position":1,"ended_at":"2026-10-26T19:03:12.700Z","duration_ms":191700,"audio_deleted":true}}}}
 {"at":1393200,"world":"app_closed"}
 {"at":1453200,"world":"app_opened"}
-{"at":1453200,"app":{"method":"GET","path":"/v0/events","headers":{"Last-Event-ID":"e_0011_64773"}}}
+{"at":1453200,"app":{"method":"GET","path":"/v0/events","headers":{"Last-Event-ID":"e_0010_64795"}}}
 {"at":1453200,"server":{"status":200,"headers":{"Content-Type":"text/event-stream"}}}

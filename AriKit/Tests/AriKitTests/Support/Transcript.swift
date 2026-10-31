@@ -3,8 +3,7 @@ import Foundation
 import Testing
 
 /// A golden transcript from ito-core: a header, the server's log when the scenario starts (`given`),
-/// then every step in time order. protocol/transcripts/README.md describes the format. Each line is
-/// read through ``OneConversation`` until the server's one-conversation contract is pinned.
+/// then every step in time order. protocol/transcripts/README.md describes the format.
 struct Transcript: Sendable, CustomTestStringConvertible {
     /// The file's name without its extension, such as "07-stop".
     let name: String
@@ -179,13 +178,10 @@ struct Transcript: Sendable, CustomTestStringConvertible {
 
         var given: [LoggedEvent] = []
         var steps: [Step] = []
-        var oneConversation = OneConversation()
         for (index, text) in lines.enumerated().dropFirst() {
             let line = index + 1
             try Self.reading(url, line: line) {
-                guard let json = oneConversation.adapt(try JSONValue(json: String(text))) else {
-                    return
-                }
+                let json = try JSONValue(json: String(text))
                 if let event = json["given"] {
                     let logged = LoggedEvent(
                         line: line, json: event, event: try event.decode(Event.self))
@@ -284,6 +280,9 @@ enum Route: Equatable {
     case addEvent
     case lead
     case briefingSettings
+    case onboarding
+    case answerBelief(BeliefID)
+    case finishOnboarding
     case stop(TurnID)
     case retry(TurnID)
     case cancelAsk(AskID)
@@ -349,6 +348,11 @@ enum Route: Equatable {
         case ("POST", 3) where parts == ["v0", "calendar", "events"]: self = .addEvent
         case ("PUT", 2) where parts == ["v0", "lead"]: self = .lead
         case ("PUT", 2) where parts == ["v0", "briefing"]: self = .briefingSettings
+        case ("GET", 2) where parts == ["v0", "onboarding"]: self = .onboarding
+        case ("POST", 4)
+        where parts[0] == "v0" && parts[1] == "onboarding" && parts[2] == "beliefs":
+            self = .answerBelief(BeliefID(parts[3]))
+        case ("POST", 3) where parts == ["v0", "onboarding", "done"]: self = .finishOnboarding
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "stop":
             self = .stop(TurnID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "retry":

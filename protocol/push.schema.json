@@ -67,7 +67,7 @@
       }
     },
     "NotificationKind": {
-      "description": "Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or a `reminder` for an ask still waiting after three hours, sent once. `post`: Kumo posted into a space from background work. `card`: something started waiting on you on the Desk. `briefing`: the morning briefing is ready.",
+      "description": "Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or a `reminder` for an ask still waiting after three hours, sent once. `post`: Kumo posted into the conversation from background work. `card`: something started waiting on you on the Desk. `briefing`: the morning briefing is ready.",
       "enum": ["reply", "failed", "ask", "reminder", "post", "card", "briefing"]
     },
     "Notification": {
@@ -110,10 +110,6 @@
               "type": "boolean"
             }
           }
-        },
-        "space": {
-          "$ref": "events.schema.json#/$defs/SpaceId",
-          "description": "The space to open on a tap, for `reply`, `failed`, `ask`, `reminder` and `post`."
         },
         "card": {
           "$ref": "events.schema.json#/$defs/CardId",

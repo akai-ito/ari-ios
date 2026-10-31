@@ -5,6 +5,7 @@ import { isImage, readDimensions } from "#attachments/media.ts";
 import { createCell } from "#cell.ts";
 import { toFailedText, toFirstLine, toReminderText } from "#notifications/text.ts";
 import { mergePatch } from "#motion/changes.ts";
+import { toLevel } from "#notifications/manners.ts";
 import { withoutBlocks } from "#replies/blocks.ts";
 import type {
   Ask,
@@ -16,7 +17,7 @@ import type {
   Call,
   Card,
   Desk,
-  Space,
+  Onboarding,
   Topic,
   Error as ErrorBody,
   LiveTurn,
@@ -66,7 +67,7 @@ type SendOptions = {
   readonly done?: string;
 };
 
-type NewCard = Omit<Card, "id" | "at" | "space"> & { readonly space?: string };
+type NewCard = Omit<Card, "id" | "at">;
 
 type NewCalendarItem = Omit<CalendarItem, "id">;
 
@@ -144,12 +145,7 @@ export type Transcript = {
   readonly showPairingCode: (code: string) => void;
   readonly pair: (code: string, deviceName: string, token: string) => void;
   readonly listMessages: (before: string, limit: number) => void;
-  readonly inSpace: (space: string) => void;
-  readonly space: (id: string) => Space;
-  readonly readSpace: () => void;
-  readonly tellKumo: (text: string, space: string, options?: SendOptions) => string;
   readonly post: (text: string) => string;
-  readonly addSpace: (space: Omit<Space, "unread" | "order">) => Space;
   readonly desk: () => Desk;
   readonly getDesk: () => void;
   readonly calendarItem: (item: NewCalendarItem) => CalendarItem;
@@ -159,6 +155,11 @@ export type Transcript = {
   readonly addCard: (card: NewCard) => Card;
   readonly answerCard: (card: string, answer: Fields) => void;
   readonly settleCard: (card: string, replacement?: Partial<Card>) => void;
+  readonly onboarding: (state: Onboarding) => void;
+  readonly belief: () => string;
+  readonly eventUid: () => string;
+  readonly answerBelief: (belief: string, answer: Fields) => void;
+  readonly finishOnboarding: () => void;
   readonly startCall: () => string;
   readonly endCall: (call: string) => void;
   readonly deleteCallAudio: (call: string) => void;
@@ -188,7 +189,7 @@ export type Transcript = {
   readonly toJsonl: () => string;
 };
 
-type IdPrefix = "e" | "m" | "t" | "s" | "a" | "c" | "f" | "p" | "k" | "d" | "j" | "b" | "v";
+type IdPrefix = "e" | "m" | "t" | "s" | "a" | "c" | "f" | "p" | "k" | "d" | "j" | "b" | "v" | "n";
 
 type CallState = "listening" | "hearing" | "turn_ended" | "working" | "speaking";
 
@@ -222,7 +223,6 @@ type Projection = {
   readonly asks: ReadonlyMap<string, Ask>;
   readonly calls: ReadonlyMap<string, Call>;
   readonly topics: ReadonlyMap<string, Topic>;
-  readonly spaceOf: ReadonlyMap<string, string>;
 };
 
 type SnapshotReason = "no_cursor" | "cursor_unknown" | "too_far_behind";
@@ -235,32 +235,6 @@ const defaultPieceLength = 28;
 const defaultPieceIntervalMs = 120;
 const messagesPerSnapshot = 50;
 const reminderAfterMs = 3 * 60 * 60 * 1000;
-const firstSpace = "home";
-const startingSpaces: readonly Space[] = [
-  { id: "home", name: "Home & admin", kind: "home", effort: "low", order: 0, unread: 0 },
-  { id: "body", name: "Body", kind: "body", effort: "low", order: 1, unread: 0 },
-  { id: "heart", name: "Love & friends", kind: "heart", effort: "medium", order: 2, unread: 0 },
-  { id: "career", name: "Career", kind: "career", effort: "max", order: 3, unread: 0 },
-];
-const conversationTypes: ReadonlySet<string> = new Set([
-  "message.accepted",
-  "message.amended",
-  "message.queued",
-  "message.read",
-  "turn.started",
-  "turn.status",
-  "step.started",
-  "step.updated",
-  "step.ended",
-  "message.started",
-  "message.delta",
-  "message.ended",
-  "message.posted",
-  "ask.started",
-  "ask.ended",
-  "turn.ended",
-  "topic.started",
-]);
 const mediaTypes: Readonly<Record<string, string>> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -285,20 +259,7 @@ const toUuid = (seed: string): string => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
 
-const placeOf = (event: Event): string | undefined => {
-  const entity = (event.message ?? event.step ?? event.ask ?? event.topic) as { readonly id?: string } | undefined;
-  return typeof entity === "object" && typeof entity.id === "string" ? entity.id : undefined;
-};
-
 const projectEvent = (projection: Projection, event: Event): Projection => {
-  const placed = placeOf(event);
-  const projected = projectEntity(projection, event);
-  return placed !== undefined && typeof event.space === "string"
-    ? { ...projected, spaceOf: new Map(projected.spaceOf).set(placed, event.space) }
-    : projected;
-};
-
-const projectEntity = (projection: Projection, event: Event): Projection => {
   const { order, byId } = projection;
   switch (event.type) {
     case "message.accepted":
@@ -387,18 +348,7 @@ const project = (log: readonly Event[]): Projection =>
     asks: new Map(),
     calls: new Map(),
     topics: new Map(),
-    spaceOf: new Map(),
   });
-
-const inSpaceOf = <Entry extends { readonly id: string }>(
-  entries: ReadonlyMap<string, Entry>,
-  spaceOf: ReadonlyMap<string, string>,
-  space: string,
-): ReadonlyMap<string, Entry> => new Map([...entries].filter(([id]) => spaceOf.get(id) === space));
-
-const isCounted = (message: Message): boolean =>
-  message.role === "agent" &&
-  (message.kind === "post" || (message.kind === "reply" && message.outcome !== undefined && message.text !== ""));
 
 const positionBefore = (order: readonly string[], byId: ReadonlyMap<string, Message>, index: number): number =>
   index > 0 ? (byId.get(order[index - 1] ?? "")?.position ?? 0) : 0;
@@ -439,7 +389,7 @@ const splitIntoPieces = (text: string, pieces?: number): readonly string[] =>
   pieces === 1 ? [text] : toPieces(text, pieces ? Math.ceil(text.length / pieces) : defaultPieceLength);
 
 const idsIn = (value: unknown): readonly string[] => {
-  if (typeof value === "string") return /^[emstacfpkdjbv]_\d{4}_/.test(value) ? [value] : [];
+  if (typeof value === "string") return /^[emstacfpkdjbvn]_\d{4}_/.test(value) ? [value] : [];
   if (Array.isArray(value)) return value.flatMap(idsIn);
   return value && typeof value === "object" ? Object.values(value).flatMap(idsIn) : [];
 };
@@ -462,6 +412,7 @@ const toCounters = (log: readonly Event[]): Counters => {
     j: highest("j"),
     b: highest("b"),
     v: highest("v"),
+    n: highest("n"),
   };
 };
 
@@ -472,7 +423,7 @@ export const createTranscript = (header: Header): Transcript => {
   const log = createCell<readonly Event[]>([]);
   const ids = createCell<Ids>({
     boot: 1,
-    counters: { e: 0, m: 0, t: 0, s: 0, a: 0, c: 0, f: 0, p: 0, k: 0, d: 0, j: 0, b: 0, v: 0 },
+    counters: { e: 0, m: 0, t: 0, s: 0, a: 0, c: 0, f: 0, p: 0, k: 0, d: 0, j: 0, b: 0, v: 0, n: 0 },
     issued: new Set(),
   });
   const callModel = createCell<CallModel | undefined>(undefined);
@@ -496,11 +447,9 @@ export const createTranscript = (header: Header): Transcript => {
   const device = createCell<Device | undefined>(undefined);
   const attachments = createCell<ReadonlyMap<string, Attachment>>(new Map());
   const pairingCodes = createCell<ReadonlySet<string>>(new Set());
-  const spaces = createCell<ReadonlyMap<string, Space>>(new Map(startingSpaces.map((space) => [space.id, space])));
-  const current = createCell(firstSpace);
-  const readUpTo = createCell<ReadonlyMap<string, number>>(new Map());
-  const turnSpace = createCell(firstSpace);
   const deskState = createCell<Desk>({ coming_up: [], waiting: [] });
+  const onboardingState = createCell<Onboarding>({ state: "done" });
+  const lastSounded = createCell<number | undefined>(undefined);
 
   const timestamp = (): string => new Date(now.get()).toISOString();
 
@@ -541,8 +490,7 @@ export const createTranscript = (header: Header): Transcript => {
   };
 
   const emit = (type: string, fields: Fields): void => {
-    const placed = conversationTypes.has(type) && !("space" in fields) ? { space: current.get() } : {};
-    const event: Event = { id: newId("e"), type, at: timestamp(), ...placed, ...fields };
+    const event: Event = { id: newId("e"), type, at: timestamp(), ...fields };
     project(log.update((current) => [...current, event]));
     if (start.get() === undefined) {
       addLine({ given: event });
@@ -604,46 +552,27 @@ export const createTranscript = (header: Header): Transcript => {
     });
   };
 
-  const conversationOf = (space: Space): Fields => {
-    const { order, byId, steps, asks, calls, topics, spaceOf } = project(log.get());
-    const own = order.filter((id) => spaceOf.get(id) === space.id);
-    const messages = own.slice(-messagesPerSnapshot).flatMap((id) => byId.get(id) ?? []);
-    const first = messages[0]?.position;
-    const ownCalls = new Map([...calls].filter(([, call]) => call.space === space.id));
-    const isRunning = turn.get() !== undefined && turnSpace.get() === space.id;
-    return {
-      space: countedSpace(space),
-      messages,
-      has_more: own.length > messagesPerSnapshot,
-      steps: first === undefined ? [] : between(inSpaceOf(steps, spaceOf, space.id), first),
-      asks: first === undefined ? [] : between(inSpaceOf(asks, spaceOf, space.id), first),
-      calls: callsFrom(ownCalls, positionBefore(own, byId, own.length - messagesPerSnapshot) + 1),
-      topics: between(
-        inSpaceOf(topics, spaceOf, space.id),
-        positionBefore(own, byId, own.length - messagesPerSnapshot) + 1,
-      ),
-      turn: isRunning ? (turn.get() ?? null) : null,
-      next: isRunning ? next.get() : [],
-    };
-  };
-
-  const orderedSpaces = (): readonly Space[] =>
-    spaces
-      .get()
-      .values()
-      .toArray()
-      .toSorted((left, right) => left.order - right.order);
-
   const snapshot = (reason: SnapshotReason): void => {
+    const { order, byId, steps, asks, calls, topics } = project(log.get());
     const latest = latestEventId();
+    const messages = order.slice(-messagesPerSnapshot).flatMap((id) => byId.get(id) ?? []);
+    const first = messages[0]?.position;
     addStep({
       event: {
         ...(latest && { id: latest }),
         type: "snapshot",
         at: timestamp(),
         reason,
-        spaces: orderedSpaces().map((space) => conversationOf(space)),
+        messages,
+        has_more: order.length > messagesPerSnapshot,
+        steps: first === undefined ? [] : between(steps, first),
+        asks: first === undefined ? [] : between(asks, first),
+        calls: callsFrom(calls, positionBefore(order, byId, order.length - messagesPerSnapshot) + 1),
+        topics: between(topics, positionBefore(order, byId, order.length - messagesPerSnapshot) + 1),
+        turn: turn.get() ?? null,
+        next: next.get(),
         desk: deskState.get(),
+        ...(onboardingState.get().state !== "done" && { onboarding: onboardingState.get() }),
       },
     });
     cursor.set(latest);
@@ -687,9 +616,17 @@ export const createTranscript = (header: Header): Transcript => {
     return running;
   };
 
-  const push = (level: "passive" | "active" | "time-sensitive", notification: Notification): void => {
+  const push = (wanted: "passive" | "active" | "time-sensitive", notification: Notification): void => {
     const current = device.get();
     if (!current || start.get() === undefined || (current.isLooking && isConnected.get())) return;
+    const level = toLevel({
+      wanted,
+      now: now.get(),
+      lastSounded: lastSounded.get(),
+      localHour: new Date(now.get()).getUTCHours(),
+      isBusy: false,
+    });
+    if (level !== "passive") lastSounded.set(now.get());
     addStep({ push: { device: current.id, level, notification } });
   };
 
@@ -711,7 +648,6 @@ export const createTranscript = (header: Header): Transcript => {
     const id = newId("t");
     const retry = options.retryOf ? { retry_of: options.retryOf } : {};
     turn.set({ id, inputs: [...inputs], read: [], ...retry, status: null });
-    turnSpace.set(current.get());
     next.update((current) => current.filter((message) => !inputs.includes(message)));
     emit("turn.started", { turn: id, inputs, ...retry });
     return id;
@@ -836,7 +772,7 @@ export const createTranscript = (header: Header): Transcript => {
     endAllSteps(outcome);
     const held = waiting.get();
     if (held !== undefined && approvals.get().has(held)) endAsk(held, "cancelled");
-    emit("turn.ended", { turn: running.id, outcome, ...(error && { error }), space: turnSpace.get() });
+    emit("turn.ended", { turn: running.id, outcome, ...(error && { error }) });
     turn.set(undefined);
     const { byId, asks } = project(log.get());
     const hasAsked = asks.values().some((asked) => asked.turn === running.id);
@@ -851,13 +787,11 @@ export const createTranscript = (header: Header): Transcript => {
         text: toFirstLine(withoutBlocks(lastReply.text)),
         turn: running.id,
         message: lastReply.id,
-        space: turnSpace.get(),
       });
     }
     if (outcome === "failed" && error) {
-      push("active", { kind: "failed", text: toFailedText(error.message), turn: running.id, space: turnSpace.get() });
+      push("active", { kind: "failed", text: toFailedText(error.message), turn: running.id });
     }
-    recount(turnSpace.get());
     return running.id;
   };
 
@@ -918,7 +852,6 @@ export const createTranscript = (header: Header): Transcript => {
     const at = timestamp();
     const motion: Motion = {
       ...given,
-      space: given.space,
       started_at: before?.started_at ?? at,
       changed_at: at,
       ...(given.status === "done" && { done_at: before?.done_at ?? at }),
@@ -974,12 +907,12 @@ export const createTranscript = (header: Header): Transcript => {
 
   const startCall = (): string => {
     const id = newUserId();
-    request("PUT", `/v0/calls/${id}`, { body: { space: current.get() } });
+    request("PUT", `/v0/calls/${id}`);
     const open = project(log.get())
       .calls.values()
       .find((call) => !call.ended_at);
     if (open) endCallNow(open.id);
-    const call: Call = { id, started_at: timestamp(), position: nextPosition(), space: current.get() };
+    const call: Call = { id, started_at: timestamp(), position: nextPosition() };
     emit("call.started", { call });
     response(201, { call });
     return id;
@@ -1204,7 +1137,7 @@ export const createTranscript = (header: Header): Transcript => {
   const send = (text: string, options: SendOptions = {}): string => {
     const id = options.id ?? newUserId();
     const attached = options.attachments ?? [];
-    request("POST", `/v0/spaces/${current.get()}/messages`, {
+    request("POST", "/v0/messages", {
       body: {
         id,
         text,
@@ -1279,7 +1212,6 @@ export const createTranscript = (header: Header): Transcript => {
         options: options.map((option) => option.label),
         allows_text: asked.allows_text,
       },
-      space: current.get(),
     });
     return asked.id;
   };
@@ -1303,7 +1235,7 @@ export const createTranscript = (header: Header): Transcript => {
     waiting.set(asked.id);
     askedAt.set(now.get());
     isReminded.set(false);
-    approvals.update((held) => new Set([...held, asked.id]));
+    approvals.update((current) => new Set([...current, asked.id]));
     push("time-sensitive", {
       kind: "ask",
       text: asked.question,
@@ -1312,7 +1244,6 @@ export const createTranscript = (header: Header): Transcript => {
         options: options.map((option) => option.label),
         allows_text: asked.allows_text,
       },
-      space: current.get(),
     });
     setStatus("waiting", "Waiting for your approval");
     return asked.id;
@@ -1434,7 +1365,6 @@ export const createTranscript = (header: Header): Transcript => {
         options: asked.options.map((option) => option.label),
         allows_text: asked.allows_text,
       },
-      space: project(log.get()).spaceOf.get(id) ?? current.get(),
     });
   };
 
@@ -1465,15 +1395,8 @@ export const createTranscript = (header: Header): Transcript => {
   };
 
   const listMessages = (before: string, limit: number): void => {
-    request("GET", `/v0/spaces/${current.get()}/messages?before=${before}&limit=${limit}`);
-    const everything = project(log.get());
-    const { byId, spaceOf } = everything;
-    const space = current.get();
-    const order = everything.order.filter((id) => spaceOf.get(id) === space);
-    const steps = inSpaceOf(everything.steps, spaceOf, space);
-    const asks = inSpaceOf(everything.asks, spaceOf, space);
-    const topics = inSpaceOf(everything.topics, spaceOf, space);
-    const calls = new Map([...everything.calls].filter(([, call]) => call.space === space));
+    request("GET", `/v0/messages?before=${before}&limit=${limit}`);
+    const { order, byId, steps, asks, calls, topics } = project(log.get());
     const index = order.indexOf(before);
     if (index === -1) throw new Error(`no message ${before}`);
     const first = Math.max(0, index - limit);
@@ -1490,83 +1413,13 @@ export const createTranscript = (header: Header): Transcript => {
     });
   };
 
-  const spaceById = (id: string): Space => {
-    const found = spaces.get().get(id);
-    if (!found) throw new Error(`unknown space ${id}`);
-    return found;
-  };
-
-  const changeSpace = (id: string, change: (space: Space) => Space): Space => {
-    const before = spaceById(id);
-    const after = change(before);
-    if (JSON.stringify(after) === JSON.stringify(before)) return before;
-    spaces.update((all) => new Map([...all, [id, after]]));
-    emit("space.changed", { space: after });
-    return after;
-  };
-
-  const countedSpace = (space: Space): Space => {
-    const { order, byId, spaceOf } = project(log.get());
-    const counted = order
-      .filter((message) => spaceOf.get(message) === space.id)
-      .flatMap((message) => byId.get(message) ?? [])
-      .filter((message) => isCounted(message));
-    const latest = counted.at(-1);
-    const after = readUpTo.get().get(space.id) ?? 0;
-    return {
-      id: space.id,
-      name: space.name,
-      kind: space.kind,
-      effort: space.effort,
-      order: space.order,
-      unread: counted.filter((message) => message.position > after).length,
-      ...(latest && { last: { text: toFirstLine(withoutBlocks(latest.text)), at: latest.at } }),
-    };
-  };
-
-  const recount = (id: string): Space => changeSpace(id, (space) => countedSpace(space));
-
-  const inSpace = (id: string): void => {
-    spaceById(id);
-    current.set(id);
-  };
-
-  const readSpace = (): void => {
-    const id = current.get();
-    const { order, byId, spaceOf } = project(log.get());
-    const latest = order.findLast((message) => spaceOf.get(message) === id);
-    if (latest === undefined) throw new Error(`nothing to read in ${id}`);
-    request("PUT", `/v0/spaces/${id}/read`, { body: { message: latest } });
-    readUpTo.update((all) => new Map([...all, [id, byId.get(latest)?.position ?? 0]]));
-    response(200, { space: recount(id) });
-  };
-
-  const tellKumo = (text: string, space: string, options: SendOptions = {}): string => {
-    const id = options.id ?? newUserId();
-    request("POST", "/v0/desk/messages", { body: { id, text } });
-    inSpace(space);
-    emit("message.accepted", {
-      message: { id, role: "user", text, at: timestamp(), position: nextPosition(), filed: true },
-    });
-    response(201, { space, message: messageById(id) });
-    return id;
-  };
-
   const post = (text: string): string => {
     const id = newId("m");
     emit("message.posted", {
       message: { id, role: "agent", kind: "post", text, at: timestamp(), position: nextPosition() },
     });
-    push("active", { kind: "post", text: toFirstLine(withoutBlocks(text)), message: id, space: current.get() });
-    recount(current.get());
+    push("active", { kind: "post", text: toFirstLine(withoutBlocks(text)), message: id });
     return id;
-  };
-
-  const addSpace = (given: Omit<Space, "unread" | "order">): Space => {
-    const space: Space = { ...given, order: spaces.get().size, unread: 0 };
-    spaces.update((all) => new Map([...all, [space.id, space]]));
-    emit("space.added", { space });
-    return space;
   };
 
   const changeDesk = (change: (desk: Desk) => Desk): void => {
@@ -1603,7 +1456,7 @@ export const createTranscript = (header: Header): Transcript => {
   };
 
   const addCard = (given: NewCard): Card => {
-    const card: Card = { id: newId("k"), at: timestamp(), ...given, space: given.space ?? current.get() };
+    const card: Card = { id: newId("k"), at: timestamp(), ...given };
     changeDesk((desk) => ({ ...desk, waiting: [...desk.waiting, card] }));
     push("active", { kind: "card", text: card.title, card: card.id });
     return card;
@@ -1635,6 +1488,39 @@ export const createTranscript = (header: Header): Transcript => {
     }));
   };
 
+  const onboarding = (state: Onboarding): void => {
+    onboardingState.set(state);
+    emit("onboarding.changed", { onboarding: state });
+  };
+
+  const belief = (): string => newId("n");
+
+  const eventUid = (): string => newId("v");
+
+  const answerBelief = (id: string, answer: Fields): void => {
+    request("POST", `/v0/onboarding/beliefs/${id}`, { body: answer });
+    response(202, undefined);
+    const current = onboardingState.get();
+    const proposal = current.proposal;
+    if (!proposal) throw new Error("no proposal to answer");
+    onboarding({
+      ...current,
+      proposal: {
+        ...proposal,
+        beliefs: proposal.beliefs.map((held) =>
+          held.id === id ? { ...held, answer: answer.answer === "true" ? "true" : "corrected" } : held,
+        ),
+      },
+    });
+  };
+
+  const finishOnboarding = (): void => {
+    request("POST", "/v0/onboarding/done");
+    const finished: Onboarding = { state: "done" };
+    onboarding(finished);
+    response(200, finished);
+  };
+
   const restart = (): void => {
     disconnect("server_restarted");
     const registered = device.get();
@@ -1656,7 +1542,6 @@ export const createTranscript = (header: Header): Transcript => {
     next.set([]);
     writing.set(undefined);
     runningSteps.set(new Map());
-    spaces.set(new Map(orderedSpaces().map((space) => [space.id, countedSpace(space)])));
     wait(3000);
   };
 
@@ -1746,12 +1631,7 @@ export const createTranscript = (header: Header): Transcript => {
     showPairingCode,
     pair,
     listMessages,
-    inSpace,
-    space: spaceById,
-    readSpace,
-    tellKumo,
     post,
-    addSpace,
     desk: () => deskState.get(),
     getDesk,
     calendarItem,
@@ -1761,6 +1641,11 @@ export const createTranscript = (header: Header): Transcript => {
     addCard,
     answerCard,
     settleCard,
+    onboarding,
+    belief,
+    eventUid,
+    answerBelief,
+    finishOnboarding,
     restart,
     restore,
     toJsonl,
