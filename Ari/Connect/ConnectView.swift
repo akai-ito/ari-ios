@@ -39,7 +39,7 @@ struct ConnectView: View {
             Spacer()
             PresenceView(history: poses, size: 64)
             VStack(spacing: 6) {
-                Text("Ari")
+                Text("Ito")
                     .font(.system(.largeTitle, design: .serif))
                     .foregroundStyle(.ariText)
                 Text(reached ?? "Connect to your Ito server")
@@ -97,7 +97,7 @@ struct ConnectView: View {
                     .buttonStyle(.plain)
             }
             Spacer()
-            Text("Ari speaks protocol \(ProtocolVersion.supported.description)")
+            Text("Ito speaks protocol \(ProtocolVersion.supported.description)")
                 .font(.caption)
                 .foregroundStyle(.ariTertiary)
         }
@@ -184,16 +184,16 @@ struct ConnectView: View {
         case .address(.notAnAddress):
             "That doesn't look like an address. Try one like studio.your-tailnet.ts.net:8787."
         case .address(.insecure):
-            "Ari only connects over HTTPS, except to this device."
+            "Ito only connects over HTTPS, except to this device."
         case .unreachable:
             "Nothing answered at that address. Is the server running, and on your tailnet?"
         case .notIto:
             "Something answered, but it isn't an Ito server."
         case .protocolMismatch(let mismatch):
             switch mismatch.update {
-            case .ari: "This server speaks a newer protocol than this Ari. Update Ari."
+            case .ari: "This server speaks a newer protocol than this Ito. Update Ito."
             case .server:
-                "This server speaks an older protocol than Ari. Update Ito on your server."
+                "This server speaks an older protocol than Ito. Update Ito on your server."
             }
         case .pairingCodeRejected(let refusal):
             [refusal?.message, refusal?.detail].compactMap(\.self).joined(separator: " ").nonEmpty

@@ -5,8 +5,8 @@ import Observation
 /// Action button, Control Centre or the Lock Screen. Ari's controls build it too, to name it;
 /// it runs in the app.
 struct CallAriIntent: AppIntent {
-    static let title: LocalizedStringResource = "Talk to Ari"
-    static let description = IntentDescription("Start a call with Ari, to talk hands-free.")
+    static let title: LocalizedStringResource = "Talk to Kumo"
+    static let description = IntentDescription("Start a call with Kumo, to talk hands-free.")
     static let supportedModes: IntentModes = .foreground
 
     @MainActor

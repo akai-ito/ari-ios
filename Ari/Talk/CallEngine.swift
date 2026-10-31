@@ -130,7 +130,7 @@ final class CallEngine {
                 loops.append(Task { await self.run() })
             } catch {
                 Self.log.error("No microphone: \(error, privacy: .public)")
-                problem = "Ari couldn't use the microphone."
+                problem = "Ito couldn't use the microphone."
                 ended(problem)
             }
         case .ended:
@@ -333,7 +333,7 @@ final class CallEngine {
     private func restartEngine(because reason: String) {
         guard phase != .ended, phase != .connecting else { return }
         guard engineStarts < 8 else {
-            problem = "Ari can't get any sound from the microphone."
+            problem = "Ito can't get any sound from the microphone."
             ended(problem)
             return
         }
@@ -342,7 +342,7 @@ final class CallEngine {
             try startEngine()
         } catch {
             Self.log.error("Engine didn't restart: \(error, privacy: .public)")
-            problem = "Ari couldn't use the microphone."
+            problem = "Ito couldn't use the microphone."
             ended(problem)
         }
     }
@@ -418,7 +418,7 @@ final class CallEngine {
             if silentChecks <= 2 {
                 restartEngine(because: "no sound from the microphone")
             } else {
-                problem = "Ari can't get any sound from the microphone."
+                problem = "Ito can't get any sound from the microphone."
                 ended(problem)
             }
         } else {

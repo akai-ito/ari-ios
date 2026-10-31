@@ -15,7 +15,7 @@ struct LibraryView: View {
                 if let memory {
                     LibraryHome(memory: memory)
                 } else {
-                    Text("Connect to your server to see what Ari knows.")
+                    Text("Connect to your server to see what \(LeadName.current) knows.")
                         .font(.ariBody)
                         .foregroundStyle(.ariTertiary)
                         .multilineTextAlignment(.center)
@@ -88,7 +88,7 @@ struct PageView: View {
                     )
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)
-                    Text("Ari keeps this page. To change it, just tell Ari.")
+                    Text("\(LeadName.current) keeps this page. To change it, just say so.")
                         .font(.caption)
                         .foregroundStyle(.ariTertiary)
                         .padding(.top, 8)

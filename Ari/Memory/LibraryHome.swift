@@ -18,7 +18,7 @@ struct LibraryHome: View {
                     ProgressView().frame(maxWidth: .infinity)
                 case .loaded where memory.inMind.isEmpty && memory.shelves.isEmpty:
                     Text(
-                        "Nothing yet. As you talk, Ari keeps what matters here, and you can see all of it."
+                        "Nothing yet. As you talk, \(LeadName.current) keeps what matters here, and you can see all of it."
                     )
                     .font(.ariBody)
                     .foregroundStyle(.ariTertiary)
@@ -65,7 +65,7 @@ struct LibraryHome: View {
         let changes = Self.latestNotes(memory.recent)
         if !changes.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Lately, Ari learnt").font(.ariHeading).foregroundStyle(.ariText)
+                Text("Lately, \(LeadName.current) learnt").font(.ariHeading).foregroundStyle(.ariText)
                 VStack(spacing: 0) {
                     ForEach(changes) { change in
                         NavigationLink(value: change.address) {

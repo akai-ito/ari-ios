@@ -9,6 +9,8 @@ final class ScrollingTests: XCTestCase {
     override func setUp() async throws {
         continueAfterFailure = false
         app = XCUIApplication(bundleIdentifier: "io.github.akai-ito.ari")
+        // Ito opens on the Desk; these drive the chat.
+        app.launchEnvironment["ARI_PLACE"] = "chat"
         app.launch()
         XCTAssertTrue(app.buttons["Send"].waitForExistence(timeout: 30))
     }
@@ -22,7 +24,7 @@ final class ScrollingTests: XCTestCase {
         composer.typeText("Write something long please")
         app.buttons["Send"].tap()
         sleep(6)
-        let pill = app.staticTexts["Ari is writing"]
+        let pill = app.staticTexts["Kumo is writing"]
         XCTAssertFalse(pill.exists, "not following from the start")
         app.swipeDown(velocity: .fast)
         app.swipeDown(velocity: .fast)

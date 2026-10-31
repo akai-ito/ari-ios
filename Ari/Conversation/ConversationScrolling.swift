@@ -189,8 +189,8 @@ extension ConversationView {
     func pillText(working: Bool) -> String? {
         // Reading far back, the end of what's shown isn't the end of the conversation.
         guard !following, distanceFromEnd != .atEnd || lastShown != nil else { return nil }
-        if working { return "Ari is writing" }
-        if repliedWhileAway { return "Ari has replied" }
+        if working { return "\(LeadName.current) is writing" }
+        if repliedWhileAway { return "\(LeadName.current) has replied" }
         return distanceFromEnd == .far || lastShown != nil ? "Latest" : nil
     }
 }

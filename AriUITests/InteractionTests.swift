@@ -11,6 +11,8 @@ final class InteractionTests: XCTestCase {
     override func setUp() async throws {
         continueAfterFailure = false
         app = XCUIApplication(bundleIdentifier: "io.github.akai-ito.ari")
+        // Ito opens on the Desk; these drive the chat.
+        app.launchEnvironment["ARI_PLACE"] = "chat"
         app.launch()
         XCTAssertTrue(composer.waitForExistence(timeout: 15), "the composer never appeared")
         // Let any turn left from an earlier test finish, so this one starts clean.
@@ -43,7 +45,7 @@ final class InteractionTests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["Hello from the interaction tests"].waitForExistence(timeout: 5))
         XCTAssertEqual(
-            (composer.value as? String) ?? "", "Message Ari", "the composer kept the draft")
+            (composer.value as? String) ?? "", "Message Kumo", "the composer kept the draft")
         XCTAssertFalse(app.staticTexts["Couldn't send"].exists)
         XCTAssertTrue(
             waitUntil {

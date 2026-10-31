@@ -154,7 +154,7 @@ struct TopicsSheet: View {
                         }
                     }
                     if days.isEmpty {
-                        Text("Topics appear as you talk: Ari marks where the subject changes.")
+                        Text("Topics appear as you talk: \(LeadName.current) marks where the subject changes.")
                             .font(.subheadline)
                             .foregroundStyle(.ariTertiary)
                     }
@@ -499,7 +499,7 @@ struct NotificationOffer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("This one may take a minute. Want a nudge when I'm done, even if Ari is closed?")
+            Text("This one may take a minute. Want a nudge when I'm done, even if Ito is closed?")
                 .font(.ariBody)
                 .foregroundStyle(.ariText)
                 .lineSpacing(Rhythm.ariLineSpacing)
@@ -562,7 +562,7 @@ struct ProblemNotice: View {
             case .protocolMismatch(let mismatch):
                 Text(
                     mismatch.update == .ari
-                        ? "Your server now speaks a newer protocol. Update Ari."
+                        ? "Your server now speaks a newer protocol. Update Ito."
                         : "Your server speaks an older protocol. Update Ito on your server."
                 )
                 .foregroundStyle(.ariSecondary)

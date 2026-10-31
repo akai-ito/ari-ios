@@ -6,11 +6,11 @@ import UIKit
 /// A reply within ten seconds comes back through Siri; a slower one arrives as a notification,
 /// as any reply does while you're away. Shortcuts can send it too.
 struct AskAriIntent: AppIntent {
-    static let title: LocalizedStringResource = "Ask Ari"
+    static let title: LocalizedStringResource = "Ask Ito"
     static let description = IntentDescription(
-        "Send Ari a message. A quick reply is read back; a longer one comes as a notification.")
+        "Send Kumo a message. A quick reply is read back; a longer one comes as a notification.")
 
-    @Parameter(title: "Message", requestValueDialog: "What should I send Ari?")
+    @Parameter(title: "Message", requestValueDialog: "What should I tell Kumo?")
     var message: String
 
     @Dependency private var model: AppModel
@@ -42,7 +42,7 @@ struct AskAriIntent: AppIntent {
         if let answer = await Self.answer(to: id, in: session) {
             return .result(dialog: IntentDialog(stringLiteral: answer))
         }
-        return .result(dialog: "Ari's on it. The reply will come as a notification.")
+        return .result(dialog: "\(LeadName.current)'s on it. The reply will come as a notification.")
     }
 
     /// What Ari said back, as Siri should say it, once the turn has ended: the reply up to its
@@ -54,7 +54,7 @@ struct AskAriIntent: AppIntent {
             let conversation = session.conversation
             if conversation.turn == nil, let sent = conversation[id]?.position {
                 if let ask = conversation.waitingAsk, ask.position > sent {
-                    return ask.question + " Answer it in Ari."
+                    return ask.question + " Answer it in Ito."
                 }
                 if let reply = conversation.entries.last(where: {
                     $0.role == .agent && $0.kind == .reply && $0.endedAt != nil
@@ -84,8 +84,8 @@ enum AskAriError: Error, CustomLocalizedStringResourceConvertible {
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
-        case .notConnected: "Ari isn't connected to your server yet. Open Ari to connect."
-        case .notSent: "Ari couldn't reach your server just now. It'll send it when it can."
+        case .notConnected: "Ito isn't connected to your server yet. Open Ito to connect."
+        case .notSent: "Ito couldn't reach your server just now. It'll send it when it can."
         }
     }
 }

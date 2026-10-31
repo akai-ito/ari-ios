@@ -1,3 +1,4 @@
+import AriKit
 import SwiftUI
 
 /// Which action the composer's round button is.
@@ -10,8 +11,8 @@ enum ComposerRole { case send, stop, idle }
 struct Composer<Leading: View, Above: View>: View {
     @Binding var draft: String
     let role: Role
-    /// What the empty field says: "Message Ari", or "Answer Ari" while Ari waits for you.
-    var prompt = "Message Ari"
+    /// What the empty field says: "Message Kumo", or "Answer Kumo" while Kumo waits for you.
+    var prompt = "Message \(LeadName.current)"
     let send: () -> Void
     let stop: () -> Void
     /// Starts a call, where Ari can take one.
@@ -22,7 +23,7 @@ struct Composer<Leading: View, Above: View>: View {
     let above: Above
 
     init(
-        draft: Binding<String>, role: ComposerRole, prompt: String = "Message Ari",
+        draft: Binding<String>, role: ComposerRole, prompt: String = "Message \(LeadName.current)",
         send: @escaping () -> Void, stop: @escaping () -> Void,
         talk: (() -> Void)? = nil, talkReady: Bool = true,
         @ViewBuilder leading: () -> Leading = { EmptyView() },

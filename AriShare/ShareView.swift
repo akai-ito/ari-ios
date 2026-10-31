@@ -30,7 +30,7 @@ struct ShareView: View {
                 }
                 TextField(
                     "", text: $model.note,
-                    prompt: Text("Add a note for Ari").foregroundStyle(.ariTertiary),
+                    prompt: Text("Add a note for \(LeadName.current)").foregroundStyle(.ariTertiary),
                     axis: .vertical
                 )
                 .lineLimit(1...5)
@@ -53,7 +53,7 @@ struct ShareView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(.ariBackground)
             .animation(.easeInOut(duration: 0.25), value: model.state)
-            .navigationTitle("Share with Ari")
+            .navigationTitle("Share with \(LeadName.current)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -74,14 +74,14 @@ struct ShareView: View {
 
     private var statusLine: String? {
         guard model.isConnected else {
-            return "Open Ari and connect it to your server first."
+            return "Open Ito and connect it to your server first."
         }
         switch model.state {
         case .reading: return nil
         case .ready: return nil
         case .sending: return "Sending…"
-        case .sent: return "Sent to Ari."
-        case .waiting: return "Ari will send this the next time it opens."
+        case .sent: return "Sent to \(LeadName.current)."
+        case .waiting: return "Ito will send this the next time it opens."
         case .problem(let words): return words
         }
     }
