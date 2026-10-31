@@ -69,12 +69,16 @@ struct PinnedLine: View {
         Button(action: open) {
             HStack(spacing: 10) {
                 SymbolDisc(symbol: MotionSymbol.name(for: motion.kind))
-                // Whole where it fits; otherwise the dates go first, then what's left, never the name.
+                // Whole where it fits; otherwise the dates go first, then what's left, and a name too
+                // long even alone is cut short. ViewThatFits takes its last choice when none fit, so
+                // that one must never be wider than the room: a fixed-size name too long for the
+                // screen widened the whole bottom of the chat, pushing Send off it.
                 ViewThatFits(in: .horizontal) {
                     parts(line, when: true, now: true)
                     parts(line, when: false, now: true)
                     parts(line, when: true, now: false)
                     parts(line, when: false, now: false)
+                    parts(line, when: false, now: false, fixed: false)
                 }
                 .font(.subheadline)
                 Spacer(minLength: 4)
@@ -114,10 +118,15 @@ struct PinnedLine: View {
 
 extension PinnedLine {
     /// The line's words: the name always, then the dates (`when`) and what's left or on today
-    /// (`now`) where there's room, and how many more are pinned.
-    fileprivate func parts(_ line: MotionLineText, when: Bool, now: Bool) -> some View {
+    /// (`now`) where there's room, and how many more are pinned. Not `fixed`, the name gives way,
+    /// cut short at its end.
+    fileprivate func parts(_ line: MotionLineText, when: Bool, now: Bool, fixed: Bool = true)
+        -> some View
+    {
         HStack(spacing: 5) {
             Text(line.name).fontWeight(.semibold).foregroundStyle(.ariText)
+                .truncationMode(.tail)
+                .layoutPriority(-1)
             if when {
                 Dot()
                 Text(line.detail).foregroundStyle(.ariSecondary)
@@ -136,7 +145,7 @@ extension PinnedLine {
             }
         }
         .lineLimit(1)
-        .fixedSize()
+        .fixedSize(horizontal: fixed, vertical: false)
     }
 }
 

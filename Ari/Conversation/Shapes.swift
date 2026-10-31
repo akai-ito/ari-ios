@@ -201,20 +201,30 @@ private struct ChoicesView: View {
 private struct ImagesView: View {
     let images: ReplyShape.Images
 
+    /// Pictures that couldn't be loaded: they leave the reply rather than stay as empty boxes.
+    @State private var failed: Set<AttachmentID> = []
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 10) {
-                ForEach(images.images, id: \.attachment) { photo in
-                    FoundPhoto(photo: photo, longest: 900)
+        let shown = images.images.filter { !failed.contains($0.attachment) }
+        if !shown.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 10) {
+                    ForEach(shown, id: \.attachment) { photo in
+                        FoundPhoto(photo: photo, longest: 900) {
+                            withAnimation(.smooth(duration: 0.3)) {
+                                _ = failed.insert(photo.attachment)
+                            }
+                        }
                         .aspectRatio(4 / 3, contentMode: .fit)
                         .clipShape(.rect(cornerRadius: 16, style: .continuous))
                         .containerRelativeFrame(.horizontal) { width, _ in
-                            images.images.count > 1 ? width * 0.86 : width
+                            shown.count > 1 ? width * 0.86 : width
                         }
+                    }
                 }
+                .scrollTargetLayout()
             }
-            .scrollTargetLayout()
+            .scrollTargetBehavior(.viewAligned)
         }
-        .scrollTargetBehavior(.viewAligned)
     }
 }
