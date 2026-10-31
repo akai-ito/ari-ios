@@ -9,9 +9,10 @@ import Foundation
 public struct WaitingOn: Sendable, Equatable, Decodable {
     /// Such as "Poppy", "them" or "the landlord".
     public let who: String
-    public let since: Timestamp
+    /// The day it started waiting.
+    public let since: LocalTime
 
-    public init(who: String, since: Timestamp) {
+    public init(who: String, since: LocalTime) {
         self.who = who
         self.since = since
     }
@@ -20,9 +21,9 @@ public struct WaitingOn: Sendable, Equatable, Decodable {
 /// What happens next, and when if it's set, such as "Second round" on Tuesday 17 November.
 public struct NextStep: Sendable, Equatable, Decodable {
     public let text: String
-    public let at: Timestamp?
+    public let at: LocalTime?
 
-    public init(text: String, at: Timestamp? = nil) {
+    public init(text: String, at: LocalTime? = nil) {
         self.text = text
         self.at = at
     }
@@ -118,11 +119,11 @@ public struct Pursuit: Sendable, Equatable, Decodable {
     public struct Person: Sendable, Equatable, Decodable {
         public let name: String
         /// Such as "Recruiter" or "Hiring manager".
-        public let role: String
+        public let role: String?
         /// Their page in Kumo's memory.
         public let page: PageAddress?
 
-        public init(name: String, role: String, page: PageAddress? = nil) {
+        public init(name: String, role: String? = nil, page: PageAddress? = nil) {
             self.name = name
             self.role = role
             self.page = page
@@ -132,8 +133,8 @@ public struct Pursuit: Sendable, Equatable, Decodable {
 
 /// A dated event with people and prep: an appointment, a birthday, a dinner, a wedding.
 public struct Occasion: Sendable, Equatable, Decodable {
-    public let start: Timestamp
-    public let end: Timestamp?
+    public let start: LocalTime
+    public let end: LocalTime?
     /// Whether it takes whole days, such as a birthday, so no time shows. Its days are read in the
     /// device's calendar from `start` and `end`.
     public let allDay: Bool
@@ -148,7 +149,7 @@ public struct Occasion: Sendable, Equatable, Decodable {
     public let checkIn: Bool
 
     public init(
-        start: Timestamp, end: Timestamp? = nil, allDay: Bool = false, place: String? = nil,
+        start: LocalTime, end: LocalTime? = nil, allDay: Bool = false, place: String? = nil,
         people: [Person] = [], prep: [Prep] = [], checkIn: Bool = false
     ) {
         self.start = start
@@ -169,8 +170,8 @@ public struct Occasion: Sendable, Equatable, Decodable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        start = try c.decode(Timestamp.self, forKey: .start)
-        end = try c.decodeIfPresent(Timestamp.self, forKey: .end)
+        start = try c.decode(LocalTime.self, forKey: .start)
+        end = try c.decodeIfPresent(LocalTime.self, forKey: .end)
         allDay = try c.decodeIfPresent(Bool.self, forKey: .allDay) ?? false
         place = try c.decodeIfPresent(String.self, forKey: .place)
         people = try c.decodeIfPresent([Person].self, forKey: .people) ?? []
@@ -250,11 +251,14 @@ public struct CaseFile: Sendable, Equatable, Decodable {
     }
 
     /// One thing that happened, such as "Emailed the landlord with the error code".
-    public struct Entry: Sendable, Equatable, Decodable {
-        public let at: Timestamp
+    public struct Entry: Sendable, Equatable, Decodable, Identifiable {
+        public let id: String
+        /// The day it happened.
+        public let at: LocalTime
         public let text: String
 
-        public init(at: Timestamp, text: String) {
+        public init(id: String, at: LocalTime, text: String) {
+            self.id = id
             self.at = at
             self.text = text
         }

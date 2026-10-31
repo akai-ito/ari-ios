@@ -123,11 +123,12 @@ private struct CaseTimeline: View {
             waitingOn: .init(who: "the landlord", since: .day(-8, at: 10)),
             timeline: [
                 .init(
-                    at: .day(-9, at: 19), text: "The boiler showed fault F28; you reset it twice"),
+                    id: "fault", at: .day(-9, at: 19),
+                    text: "The boiler showed fault F28; you reset it twice"),
                 .init(
-                    at: .day(-8, at: 10),
+                    id: "emailed", at: .day(-8, at: 10),
                     text: "Emailed the landlord the fault code and your video"),
-                .init(at: .day(-4, at: 9), text: "Chased: no reply yet"),
+                .init(id: "chased", at: .day(-4, at: 9), text: "Chased: no reply yet"),
             ],
             next: .init(
                 text: "Chase the letting agency if there's still no reply", at: .day(2, at: 9)))

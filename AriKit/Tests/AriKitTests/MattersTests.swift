@@ -29,7 +29,7 @@ struct MattersTests {
         #expect(qrt.role == "Senior AI Engineer" && qrt.org == nil)
         #expect(qrt.stages == ["Screened", "Interviews", "Awaiting answer", "Offer"])
         #expect(qrt.people.first?.page == "memory:people/poppy")
-        #expect(qrt.next == NextStep(text: "Technical", at: Timestamp("2026-10-29T14:00:00Z")))
+        #expect(qrt.next == NextStep(text: "Technical", at: LocalTime("2026-10-29T14:00")))
         let citadel = pursuit.options[1]
         #expect(citadel.waitingOn?.who == "them" && citadel.next == nil)
         // Stages, people and the rest can be left out.
@@ -41,8 +41,8 @@ struct MattersTests {
     func occasionDecodes() throws {
         let detail = try JSONValue(json: Self.dentist).decode(MotionDetail.self)
         let occasion = try #require(Self.occasion(detail))
-        #expect(occasion.start.rawValue == "2026-11-13T09:30:00Z")
-        #expect(occasion.end?.rawValue == "2026-11-13T10:15:00Z")
+        #expect(occasion.start.rawValue == "2026-11-13T09:30")
+        #expect(occasion.end?.rawValue == "2026-11-13T10:15")
         #expect(occasion.place == "Bright Smile Dental, 14 Upper Street")
         #expect(occasion.people == [Occasion.Person(name: "Dr Shah")])
         #expect(occasion.prep.map(\.done) == [false, true])
@@ -52,7 +52,7 @@ struct MattersTests {
 
     @Test("an occasion needs only its start")
     func bareOccasion() throws {
-        let occasion = try JSONValue(json: #"{"start":"2026-11-14T00:00:00Z"}"#).decode(
+        let occasion = try JSONValue(json: #"{"start":"2026-11-14T00:00"}"#).decode(
             Occasion.self)
         #expect(occasion.end == nil && occasion.place == nil && occasion.people.isEmpty)
         #expect(occasion.prep.isEmpty && !occasion.checkIn)
@@ -65,9 +65,23 @@ struct MattersTests {
         #expect(detail.motion.kind == .caseFile)
         let file = try #require(Self.caseFile(detail))
         #expect(file.status == "Waiting on the landlord")
-        #expect(file.waitingOn?.since.rawValue == "2026-10-22T10:00:00Z")
+        #expect(file.waitingOn?.since.rawValue == "2026-10-22")
         #expect(file.timeline.count == 3)
         #expect(file.next?.text == "Chase the agency")
+    }
+
+    @Test("the server's own samples decode: local times, days, a firm in `org`, a time zone")
+    func serverSamples() throws {
+        let pursuit = try JSONValue(json: Self.serverJobSearch).decode(Pursuit.self)
+        let qrt = try #require(pursuit.options.first)
+        #expect(qrt.name == "Senior AI Engineer" && qrt.org == "QRT")
+        #expect(qrt.next?.at?.rawValue == "2026-11-04T14:00" && qrt.next?.at?.isDay == false)
+        #expect(qrt.waitingOn?.since.rawValue == "2026-10-30" && qrt.waitingOn?.since.isDay == true)
+        #expect(qrt.people.first?.role == "recruiter")
+        #expect(pursuit.options.last?.people.isEmpty == true)
+        let dinner = try JSONValue(json: Self.serverDinner).decode(Occasion.self)
+        #expect(dinner.start.rawValue == "2026-11-14T19:30" && dinner.place == "Brat, Shoreditch")
+        #expect(dinner.prep.map(\.id) == ["book-table", "buy-present"] && dinner.checkIn)
     }
 
     @Test("the three new kinds are known, and the old ones still are")
@@ -134,7 +148,7 @@ struct MattersTests {
         let later = Pursuit.Option(
             id: "c", name: "Citadel", stage: "Interviews",
             people: [.init(name: "Katia", role: "Recruiter")],
-            next: .init(text: "Second round", at: Timestamp("2026-11-17T14:00:00Z")))
+            next: .init(text: "Second round", at: LocalTime("2026-11-17T14:00")))
         #expect(
             PursuitReading.line(of: later, now: thursday, calendar: london, locale: english)
                 == "Second round · Tue 17 Nov · Katia")
@@ -178,32 +192,32 @@ struct MattersTests {
         func when(_ occasion: Occasion) -> String {
             OccasionReading.when(occasion, now: thursday, calendar: london, locale: english)
         }
-        let start = Timestamp("2026-11-13T09:30:00Z")!
+        let start = LocalTime("2026-11-13T09:30")!
         #expect(
-            when(Occasion(start: start, end: Timestamp("2026-11-13T10:15:00Z")))
+            when(Occasion(start: start, end: LocalTime("2026-11-13T10:15")))
                 == "Friday 13 November · 09:30–10:15")
         #expect(when(Occasion(start: start)) == "Friday 13 November · 09:30")
         #expect(
             when(
                 Occasion(
-                    start: Timestamp("2026-11-13T18:00:00Z")!,
-                    end: Timestamp("2026-11-15T12:00:00Z")))
+                    start: LocalTime("2026-11-13T18:00")!,
+                    end: LocalTime("2026-11-15T12:00")))
                 == "Fri 13 Nov, 18:00 – Sun 15 Nov, 12:00")
-        let birthday = Timestamp("2026-11-14T00:00:00Z")!
+        let birthday = LocalTime("2026-11-14T00:00")!
         #expect(when(Occasion(start: birthday, allDay: true)) == "Saturday 14 November")
         // A whole-day end is the midnight after the last day.
         #expect(
-            when(Occasion(start: birthday, end: Timestamp("2026-11-15T00:00:00Z"), allDay: true))
+            when(Occasion(start: birthday, end: LocalTime("2026-11-15T00:00"), allDay: true))
                 == "Saturday 14 November")
         #expect(
-            when(Occasion(start: birthday, end: Timestamp("2026-11-16T00:00:00Z"), allDay: true))
+            when(Occasion(start: birthday, end: LocalTime("2026-11-16T00:00"), allDay: true))
                 == "Sat 14 – Sun 15 November")
         #expect(
-            when(Occasion(start: Timestamp("2027-01-05T10:00:00Z")!))
+            when(Occasion(start: LocalTime("2027-01-05T10:00")!))
                 == "Tuesday, 5 January 2027 · 10:00")
         #expect(
             OccasionReading.line(
-                Occasion(start: Timestamp("2026-10-30T00:00:00Z")!, allDay: true), state: [:],
+                Occasion(start: LocalTime("2026-10-30T00:00")!, allDay: true), state: [:],
                 now: thursday, calendar: london, locale: english
             ).when == "Tomorrow")
         #expect(OccasionReading.people(Occasion(start: birthday)) == nil)
@@ -231,47 +245,50 @@ struct MattersTests {
                 == "since 22 Oct")
         #expect(CaseReading.line(CaseFile(problem: "", status: "Sorted")).soon == nil)
         // Entries at the same time keep Kumo's order.
-        let at = Timestamp("2026-10-22T10:00:00Z")!
+        let at = LocalTime("2026-10-22T10:00")!
         let same = CaseFile(
-            problem: "", status: "", timeline: [.init(at: at, text: "a"), .init(at: at, text: "b")])
+            problem: "", status: "",
+            timeline: [.init(id: "a", at: at, text: "a"), .init(id: "b", at: at, text: "b")])
         #expect(CaseReading.timeline(same).map(\.text) == ["a", "b"])
     }
 
     // MARK: - Times
 
-    @Test("times read as today, tomorrow, a weekday, then a date, in the device's time zone")
+    @Test("times read as today, tomorrow, a weekday, then a date, on the device's calendar")
     func times() {
         func when(_ text: String, first: Bool = true, calendar: Calendar? = nil) -> String {
             MatterReading.when(
-                Timestamp(text)!, first: first, now: thursday, calendar: calendar ?? london,
+                LocalTime(text)!, first: first, now: thursday, calendar: calendar ?? london,
                 locale: english)
         }
-        #expect(when("2026-10-29T14:00:00Z") == "Today 14:00")
-        #expect(when("2026-10-29T14:00:00Z", first: false) == "today 14:00")
-        #expect(when("2026-10-30T09:30:00Z") == "Tomorrow 09:30")
-        #expect(when("2026-10-28T18:00:00Z") == "Yesterday 18:00")
-        #expect(when("2026-11-02T09:00:00Z") == "Mon 09:00")
-        #expect(when("2026-10-31T00:00:00Z") == "Sat")
-        #expect(when("2026-11-17T14:00:00Z") == "Tue 17 Nov")
-        #expect(when("2026-10-15T09:00:00Z") == "Thu 15 Oct")
-        #expect(when("2027-02-01T09:00:00Z") == "1 Feb 2027")
-        // 23:30 in London is half past midnight on Friday in Amsterdam.
+        #expect(when("2026-10-29T14:00") == "Today 14:00")
+        #expect(when("2026-10-29T14:00", first: false) == "today 14:00")
+        #expect(when("2026-10-30T09:30") == "Tomorrow 09:30")
+        #expect(when("2026-10-28T18:00") == "Yesterday 18:00")
+        #expect(when("2026-11-02T09:00") == "Mon 09:00")
+        #expect(when("2026-10-31T00:00") == "Sat")
+        #expect(when("2026-11-17T14:00") == "Tue 17 Nov")
+        #expect(when("2026-10-15T09:00") == "Thu 15 Oct")
+        #expect(when("2027-02-01T09:00") == "1 Feb 2027")
+        // A local time reads the same in any time zone: 23:30 is 23:30 in Amsterdam too.
         var amsterdam = Calendar(identifier: .gregorian)
         amsterdam.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
-        #expect(when("2026-10-29T23:30:00Z", calendar: amsterdam) == "Tomorrow 00:30")
+        #expect(when("2026-10-29T23:30", calendar: amsterdam) == "Today 23:30")
+        // A day has no time to show.
+        #expect(when("2026-10-30") == "Tomorrow")
 
-        let since = Timestamp("2026-10-15T09:00:00Z")!
+        let since = LocalTime("2026-10-15T09:00")!
         #expect(
             MatterReading.waiting(
                 .init(who: "Poppy", since: since), now: thursday, calendar: london, locale: english)
                 == "Waiting on Poppy since 15 Oct")
         #expect(
             MatterReading.waiting(
-                .init(who: "QRT", since: Timestamp("2026-10-29T07:00:00Z")!), now: thursday,
+                .init(who: "QRT", since: LocalTime("2026-10-29T07:00")!), now: thursday,
                 calendar: london, locale: english) == "Waiting on QRT since today")
         #expect(
             MatterReading.day(
-                Timestamp("2025-12-01T09:00:00Z")!, now: thursday, calendar: london,
+                LocalTime("2025-12-01T09:00")!, now: thursday, calendar: london,
                 locale: english) == "1 Dec 2025")
         #expect(
             MatterReading.next(.init(text: "Send the CV"), now: thursday, calendar: london)
@@ -323,6 +340,26 @@ struct MattersTests {
     }
 
     /// Divy's job search.
+    /// The server's own samples, from ito-core's tests of things in motion.
+    static let serverJobSearch = """
+        {"after":"A senior AI role in London that ships to real users, by January.",
+         "play":["No firms that only want dashboards","Never below £140k base"],
+         "options":[
+          {"id":"qrt","name":"Senior AI Engineer","org":"QRT","stage":"Screened",
+           "people":[{"name":"Poppy","role":"recruiter","page":"memory:people/poppy"}],
+           "next":{"text":"First round with the team lead","at":"2026-11-04T14:00"},
+           "waiting_on":{"who":"Poppy","since":"2026-10-30"}},
+          {"id":"helsing","name":"ML Engineer","org":"Helsing","stage":"Applied","people":[]}]}
+        """
+
+    static let serverDinner = """
+        {"start":"2026-11-14T19:30","timezone":"Europe/London","where":"Brat, Shoreditch",
+         "people":[{"name":"Poppy"}],
+         "prep":[{"id":"book-table","text":"Book a table for four","done":false},
+          {"id":"buy-present","text":"Buy Poppy's present","done":false}],
+         "check_in":true}
+        """
+
     static let jobSearch = """
         {"motion":{"id":"job-search","kind":"pursuit","title":"Job search",
           "summary":"QRT technical today · Citadel waiting","status":"active","pinned":true,
@@ -338,11 +375,11 @@ struct MattersTests {
            {"id":"qrt","name":"QRT","role":"Senior AI Engineer","stage":"Interviews",
             "stages":["Screened","Interviews","Awaiting answer","Offer"],
             "people":[{"name":"Poppy","role":"Recruiter","page":"memory:people/poppy"}],
-            "next":{"text":"Technical","at":"2026-10-29T14:00:00Z"}},
+            "next":{"text":"Technical","at":"2026-10-29T14:00"}},
            {"id":"citadel","name":"Citadel","role":"AI Engineering, FI","stage":"Screened",
             "stages":["Screened","Interviews","Awaiting answer","Offer"],
             "people":[{"name":"Katia","role":"Recruiter"}],
-            "waiting_on":{"who":"them","since":"2026-10-15T09:00:00Z"}},
+            "waiting_on":{"who":"them","since":"2026-10-15"}},
            {"id":"optiver","name":"Optiver","role":"Software Engineer","stage":"test done",
             "stages":["Test done","Interviews","Awaiting answer","Offer"],
             "note":"The online test went well"}]},
@@ -356,7 +393,7 @@ struct MattersTests {
           "summary":"Fri 13 Nov, 09:30","status":"active","pinned":false,"version":2,
           "started_at":"2026-10-20T08:00:00.000Z","changed_at":"2026-10-28T18:20:00.000Z",
           "position":3},
-         "content":{"start":"2026-11-13T09:30:00Z","end":"2026-11-13T10:15:00Z",
+         "content":{"start":"2026-11-13T09:30","end":"2026-11-13T10:15",
           "where":"Bright Smile Dental, 14 Upper Street","people":[{"name":"Dr Shah"}],
           "prep":[{"id":"forms","text":"Fill in the new-patient form"},
            {"id":"insurance","text":"Bring your Bupa card","done":true}],
@@ -374,12 +411,12 @@ struct MattersTests {
           "position":7},
          "content":{"problem":"The boiler cuts out after ten minutes, so there's no hot water.",
           "status":"Waiting on the landlord",
-          "waiting_on":{"who":"the landlord","since":"2026-10-22T10:00:00Z"},
+          "waiting_on":{"who":"the landlord","since":"2026-10-22"},
           "timeline":[
-           {"at":"2026-10-21T19:00:00Z","text":"The boiler showed fault F28; reset it twice"},
-           {"at":"2026-10-22T10:00:00Z","text":"Emailed the landlord the fault code and a video"},
-           {"at":"2026-10-26T09:00:00Z","text":"Chased: no reply yet"}],
-          "next":{"text":"Chase the agency","at":"2026-11-02T09:00:00Z"}},
+           {"id":"t1","at":"2026-10-21","text":"The boiler showed fault F28; reset it twice"},
+           {"id":"t2","at":"2026-10-22","text":"Emailed the landlord the fault code and a video"},
+           {"id":"t3","at":"2026-10-26","text":"Chased: no reply yet"}],
+          "next":{"text":"Chase the agency","at":"2026-11-02T09:00"}},
          "state":{},"changes":[]}
         """
 }

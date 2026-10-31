@@ -41,7 +41,7 @@ public enum OccasionReading {
         _ occasion: Occasion, now: Date = .now, calendar: Calendar = .current,
         locale: Locale = .current
     ) -> String {
-        let start = occasion.start.date
+        let start = occasion.start.date(in: calendar)
         let sameYear = calendar.isDate(start, equalTo: now, toGranularity: .year)
         let year = sameYear ? "" : " y"
         func text(_ template: String, _ date: Date) -> String {
@@ -49,7 +49,7 @@ public enum OccasionReading {
         }
         if occasion.allDay {
             // A whole-day end is the midnight after its last day, as in a calendar.
-            let last = occasion.end.map { $0.date.addingTimeInterval(-1) } ?? start
+            let last = occasion.end.map { $0.date(in: calendar).addingTimeInterval(-1) } ?? start
             guard last > start, !calendar.isDate(last, inSameDayAs: start) else {
                 return text("EEEE d MMMM" + year, start)
             }
@@ -58,17 +58,17 @@ public enum OccasionReading {
             }
             return "\(text("EEE d MMM", start)) – \(text("EEE d MMM" + year, last))"
         }
-        let clock = { (time: Timestamp) in
+        let clock = { (time: LocalTime) in
             MatterReading.clock(time, calendar: calendar, locale: locale)
         }
-        guard let end = occasion.end, end.date > start else {
+        guard let end = occasion.end, end.date(in: calendar) > start else {
             return "\(text("EEEE d MMMM" + year, start)) · \(clock(occasion.start))"
         }
-        if calendar.isDate(start, inSameDayAs: end.date) {
+        if calendar.isDate(start, inSameDayAs: end.date(in: calendar)) {
             return "\(text("EEEE d MMMM" + year, start)) · \(clock(occasion.start))–\(clock(end))"
         }
         return "\(text("EEE d MMM", start)), \(clock(occasion.start)) – "
-            + "\(text("EEE d MMM" + year, end.date)), \(clock(end))"
+            + "\(text("EEE d MMM" + year, end.date(in: calendar))), \(clock(end))"
     }
 
     /// Who's there besides you: "With Dr Shah", "With Janki and Poppy"; `nil` for no one.
