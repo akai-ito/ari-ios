@@ -65,7 +65,8 @@ struct LibraryHome: View {
         let changes = Self.latestNotes(memory.recent)
         if !changes.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Lately, \(LeadName.current) learnt").font(.ariHeading).foregroundStyle(.ariText)
+                Text("Lately, \(LeadName.current) learnt").font(.ariHeading).foregroundStyle(
+                    .ariText)
                 VStack(spacing: 0) {
                     ForEach(changes) { change in
                         NavigationLink(value: change.address) {

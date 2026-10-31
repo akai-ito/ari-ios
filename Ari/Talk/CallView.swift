@@ -300,7 +300,9 @@ struct OnCallBar: View {
         Button(action: open) {
             HStack(spacing: 8) {
                 Image(systemName: "phone.fill").font(.system(size: 12))
-                Text(call.phase == .speaking ? "\(LeadName.current) is speaking" : "On a call with \(LeadName.current)")
+                Text(
+                    call.phase == .speaking
+                        ? "\(LeadName.current) is speaking" : "On a call with \(LeadName.current)")
                 Spacer()
                 if let connected = call.connectedAt {
                     Text(timerInterval: connected...Date.distantFuture, countsDown: false)

@@ -75,9 +75,11 @@ struct ModelPickerView: View {
                 .accessibilityAddTraits(model.id == list.chosen.model ? .isSelected : [])
             }
             if models.chosenModel == nil {
-                Text("\(LeadName.current) is set to \(list.chosen.model), which your server no longer offers.")
-                    .font(.footnote)
-                    .foregroundStyle(.ariSecondary)
+                Text(
+                    "\(LeadName.current) is set to \(list.chosen.model), which your server no longer offers."
+                )
+                .font(.footnote)
+                .foregroundStyle(.ariSecondary)
             }
         } header: {
             Text("Model")

@@ -20,7 +20,9 @@ struct VoicePickerView: View {
             if !voices.canTalk {
                 Section {
                 } footer: {
-                    Text(voices.reason ?? "\(LeadName.current)'s voice isn't ready on your server yet.")
+                    Text(
+                        voices.reason
+                            ?? "\(LeadName.current)'s voice isn't ready on your server yet.")
                 }
             }
             ForEach([VoiceAccent.american, .british], id: \.self) { accent in

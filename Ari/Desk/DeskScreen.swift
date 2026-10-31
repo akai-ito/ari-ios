@@ -43,8 +43,11 @@ struct DeskScreen: View {
                 if let cards = session.desk?.waiting, !cards.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         DeskSectionLabel("Waiting on you", trailing: "\(cards.count)")
-                        WaitingList(cards: cards, context: context(for:)) { openedCard = $0 } answer: {
-                            card, answer in try await session.answer(card.id, answer)
+                        WaitingList(cards: cards, context: context(for:)) {
+                            openedCard = $0
+                        } answer: {
+                            card, answer in
+                            try await session.answer(card.id, answer)
                         }
                     }
                 }
@@ -194,7 +197,8 @@ private struct ReplyCard: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.ariSurface))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.ariLine.opacity(0.7))
+            RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(
+                .ariLine.opacity(0.7))
         )
         .padding(.horizontal, 14)
         .padding(.top, 8)

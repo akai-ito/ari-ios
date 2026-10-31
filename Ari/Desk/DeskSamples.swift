@@ -10,7 +10,8 @@
         static let morning = Briefing(
             id: "b-morning", kind: .morning, at: at(7, 40),
             lines: [
-                BriefingLine(text: "Poppy sent the Teams link for this afternoon; it's on the event."),
+                BriefingLine(
+                    text: "Poppy sent the Teams link for this afternoon; it's on the event."),
                 BriefingLine(
                     text:
                         "Hotel Orto confirmed Florence, but you land 22:10 and check-in closes "
@@ -111,7 +112,8 @@
         static let revolutQuestion = DeskCard(
             id: "revolut", kind: .question, at: at(9, 20),
             title: "Binned “Your account update” from Revolut",
-            options: [Ask.Option(label: "Right"), Ask.Option(label: "No, keep it")], allowsText: true,
+            options: [Ask.Option(label: "Right"), Ask.Option(label: "No, keep it")],
+            allowsText: true,
             question: QuestionCard(text: "I binned “Your account update” from Revolut. Right?"))
 
         static let outlookOffer = DeskCard(

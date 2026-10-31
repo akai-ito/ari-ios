@@ -90,7 +90,8 @@ private struct OnboardingRevealReady: View {
                     VStack(alignment: .leading, spacing: 12) {
                         DeskSectionLabel("In motion")
                             .onboardingArrival(shown > 1)
-                        ForEach(Array(reveal.matters.enumerated()), id: \.element.id) { index, matter in
+                        ForEach(Array(reveal.matters.enumerated()), id: \.element.id) {
+                            index, matter in
                             OnboardingMatterRow(matter: matter)
                                 .onboardingArrival(shown > mattersStart + index)
                         }

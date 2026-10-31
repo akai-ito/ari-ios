@@ -272,7 +272,8 @@ private struct TalkSettings: View {
             .disabled(voices == nil)
             if let voices, let voiceprint = voices.voiceprint {
                 LabeledContent(
-                    "Your voice", value: voiceprint == .learnt ? "\(LeadName.current) knows it" : "Learning")
+                    "Your voice",
+                    value: voiceprint == .learnt ? "\(LeadName.current) knows it" : "Learning")
                 Button("Relearn my voice") { confirmsRelearning = true }
                     .disabled(voices.relearning)
                     .confirmationDialog(

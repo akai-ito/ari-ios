@@ -56,7 +56,7 @@
             ],
             added: [
                 AddedEvent(title: "QRT technical interview", when: "Thu 5 Nov · 14:00"),
-                AddedEvent(title: "Flight to Florence, BA 2610", when: "Thu 12 Nov · 19:05"),
+                AddedEvent(title: "Flight to Florence", when: "Thu 12 Nov · 19:05"),
                 AddedEvent(title: "Hotel Orto, Florence", when: "12–15 Nov"),
             ])
 

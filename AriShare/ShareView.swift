@@ -30,7 +30,8 @@ struct ShareView: View {
                 }
                 TextField(
                     "", text: $model.note,
-                    prompt: Text("Add a note for \(LeadName.current)").foregroundStyle(.ariTertiary),
+                    prompt: Text("Add a note for \(LeadName.current)").foregroundStyle(
+                        .ariTertiary),
                     axis: .vertical
                 )
                 .lineLimit(1...5)

@@ -154,9 +154,11 @@ struct TopicsSheet: View {
                         }
                     }
                     if days.isEmpty {
-                        Text("Topics appear as you talk: \(LeadName.current) marks where the subject changes.")
-                            .font(.subheadline)
-                            .foregroundStyle(.ariTertiary)
+                        Text(
+                            "Topics appear as you talk: \(LeadName.current) marks where the subject changes."
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.ariTertiary)
                     }
                     if hasEarlier {
                         Button {

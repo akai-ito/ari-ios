@@ -26,7 +26,9 @@ struct CapabilitiesView: View {
                     } header: {
                         Text("Your life")
                     } footer: {
-                        Text("What \(LeadName.current) can know about. Each one can draw on several services.")
+                        Text(
+                            "What \(LeadName.current) can know about. Each one can draw on several services."
+                        )
                     }
                     .listRowBackground(Color.ariSurface)
                 }
@@ -37,7 +39,8 @@ struct CapabilitiesView: View {
                         Text("\(LeadName.current)'s hands")
                     } footer: {
                         Text(
-                            "What \(LeadName.current) can do. Anything that spends, sends or books asks you first.")
+                            "What \(LeadName.current) can do. Anything that spends, sends or books asks you first."
+                        )
                     }
                     .listRowBackground(Color.ariSurface)
                 }

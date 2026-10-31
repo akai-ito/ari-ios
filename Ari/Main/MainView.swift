@@ -124,7 +124,8 @@ struct MainView: View {
             guard let status, let voices else { return }
             voices.apply(status)
             if talk?.call != nil, !voices.canTalk {
-                talk?.end(because: voices.reason ?? "\(LeadName.current)'s voice stopped on your server.")
+                talk?.end(
+                    because: voices.reason ?? "\(LeadName.current)'s voice stopped on your server.")
             }
         }
         .fullScreenCover(

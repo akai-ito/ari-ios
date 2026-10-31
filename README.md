@@ -6,8 +6,8 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
 [![CI](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml/badge.svg)](https://github.com/akai-ito/ari-ios/actions/workflows/ci.yml)
 
 > [!NOTE]
-> Ito connects to your Ito server and holds the Desk and the conversation live, in its own look. Still to come:
-> opening instantly from the phone's cache, a light mode, and an iPad layout. The
+> Ito connects to your Ito server and holds the Desk and the conversation live, in its own look.
+> Still to come: opening instantly from the phone's cache, a light mode, and an iPad layout. The
 > [map](https://github.com/akai-ito/.github/blob/main/map.md) has the design.
 
 ## What it will be
@@ -51,10 +51,10 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   place on Apple's map (a still picture in the chat, a live map with Directions when you open it),
   short answers to tap, pictures it found (credited on tap), and a line that opens a thing in
   motion.
-- **Kumo's trail.** Between your message and Kumo's answer, what it did along the way, in plain words
-  that change tense as it finishes, with its short notes as quiet grey lines. `Timeline` merges
-  messages and steps, groups similar steps, and folds each run once the turn is over; tap a step
-  for its specifics.
+- **Kumo's trail.** Between your message and Kumo's answer, what it did along the way, in plain
+  words that change tense as it finishes, with its short notes as quiet grey lines. `Timeline`
+  merges messages and steps, groups similar steps, and folds each run once the turn is over; tap a
+  step for its specifics.
 - **Where you are.** The title under Kumo is the topic Kumo marked for what's on screen, or its day,
   changing as you scroll; tap it for every topic and day, to jump to. Your long messages fold after
   eight lines.
@@ -71,7 +71,8 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   questions while Kumo reads three months of mail (or "still true?" for what it already knows), the
   morning and notifications, then what's in motion.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block, a
-  pursuit such as a job search, an occasion such as a dentist appointment, a case such as the boiler.
+  pursuit such as a job search, an occasion such as a dentist appointment, or a case such as the
+  boiler.
   It's pinned above the composer and opens full screen; In motion is its own tab. A trip has its
   days, a map whose pins show their place, its places by kind (each with a page of its own, where
   you say whether it's an idea, in the plan or not for you), and travel; what Ari changed is behind
@@ -108,14 +109,15 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
 `ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
 `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_TOPICS` opens the topics sheet, `ARI_PLACE`
-opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk) (`ARI_MOTION` then opens a thing in motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`,
-`ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going further in), `ARI_SHELF` opens a shelf in
-You (`ARI_CALENDAR` shows the Journal's calendar), `ARI_SETTINGS` opens Settings and
+opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk; `ARI_MOTION` then opens a thing in
+motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going
+further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
+`ARI_SETTINGS` opens Settings and
 `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
-and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*, *times* and
-*briefing* put cards and a morning card on the Desk.
+and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
+*times* and *briefing* put cards and a morning card on the Desk.
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy

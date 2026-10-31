@@ -88,9 +88,12 @@ struct OnboardingHost: View {
                 talk: { talk?.start() },
                 answer: { _, text in try await say(text) },
                 skip: { _ in try await say("Let's skip that one.") },
-                confirm: { id in try await session.answerBelief(BeliefID(rawValue: id), answer: .confirmed) },
+                confirm: { id in
+                    try await session.answerBelief(BeliefID(rawValue: id), answer: .confirmed)
+                },
                 correct: { id, text in
-                    try await session.answerBelief(BeliefID(rawValue: id), answer: .correction(text))
+                    try await session.answerBelief(
+                        BeliefID(rawValue: id), answer: .correction(text))
                 },
                 setMorning: { parts in
                     guard let client = app.client() else { return }
@@ -110,9 +113,11 @@ struct OnboardingHost: View {
             try await Task.sleep(for: .milliseconds(250))
             if session.onboarding?.state == .ready { return nil }
             let entries = session.conversation.entries
-            guard let index = entries.firstIndex(where: { $0.id == sent }), session.conversation.turn == nil
+            guard let index = entries.firstIndex(where: { $0.id == sent }),
+                session.conversation.turn == nil
             else { continue }
-            if let reply = entries[(index + 1)...].last(where: { $0.role == .agent && $0.isShown }) {
+            if let reply = entries[(index + 1)...].last(where: { $0.role == .agent && $0.isShown })
+            {
                 return KumoQuestion(id: reply.id.rawValue, text: reply.text)
             }
         }

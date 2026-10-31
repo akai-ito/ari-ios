@@ -67,7 +67,8 @@ struct CalendarEventView: View {
 
     private static func when(_ item: CalendarItem) -> String {
         if item.allDay {
-            return item.start.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+            return item.start.date.formatted(
+                .dateTime.weekday(.abbreviated).day().month(.abbreviated))
         }
         let start = item.start.date.formatted(.dateTime.weekday(.abbreviated).day().hour().minute())
         let end = item.end.date.formatted(.dateTime.hour().minute())

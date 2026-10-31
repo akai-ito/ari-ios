@@ -42,7 +42,8 @@ struct AskAriIntent: AppIntent {
         if let answer = await Self.answer(to: id, in: session) {
             return .result(dialog: IntentDialog(stringLiteral: answer))
         }
-        return .result(dialog: "\(LeadName.current)'s on it. The reply will come as a notification.")
+        return .result(
+            dialog: "\(LeadName.current)'s on it. The reply will come as a notification.")
     }
 
     /// What Ari said back, as Siri should say it, once the turn has ended: the reply up to its

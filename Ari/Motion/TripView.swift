@@ -853,7 +853,8 @@ private struct PlacePage: View {
 
     private static func line(for status: PlaceStatus, planned: Bool) -> String {
         switch status {
-        case .picked: planned ? "In the plan, below." : "\(LeadName.current) will fit it into a day."
+        case .picked:
+            planned ? "In the plan, below." : "\(LeadName.current) will fit it into a day."
         case .passed: "\(LeadName.current) won't suggest it again."
         default: "An idea for now."
         }
