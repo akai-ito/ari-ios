@@ -12,7 +12,10 @@ final class ScrollingTests: XCTestCase {
         // Ito opens on the Desk; these drive the chat.
         app.launchEnvironment["ARI_PLACE"] = "chat"
         app.launch()
-        XCTAssertTrue(app.buttons["Send"].waitForExistence(timeout: 30))
+        // Send, or Talk where the server has a voice: either means the composer is ready.
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "label IN %@", ["Send", "Talk"])).firstMatch
+                .waitForExistence(timeout: 30))
     }
 
     private var composer: XCUIElement {

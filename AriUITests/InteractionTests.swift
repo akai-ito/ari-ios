@@ -16,13 +16,18 @@ final class InteractionTests: XCTestCase {
         app.launch()
         XCTAssertTrue(composer.waitForExistence(timeout: 15), "the composer never appeared")
         // Let any turn left from an earlier test finish, so this one starts clean.
-        _ = sendButton.waitForExistence(timeout: 30)
+        _ = idleButton.waitForExistence(timeout: 30)
     }
 
     private var composer: XCUIElement {
         app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
     }
     private var sendButton: XCUIElement { app.buttons["Send"] }
+    /// The composer's round button once a turn is over: Send, or Talk where the server has a voice
+    /// (dimmed while it isn't ready).
+    private var idleButton: XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label IN %@", ["Send", "Talk"])).firstMatch
+    }
     private var stopButton: XCUIElement { app.buttons["Stop"] }
 
     private func say(_ text: String) {
@@ -60,7 +65,7 @@ final class InteractionTests: XCTestCase {
         sleep(3)
         stopButton.tap()
         XCTAssertTrue(app.staticTexts["Stopped"].waitForExistence(timeout: 15), "no Stopped tag")
-        XCTAssertTrue(sendButton.waitForExistence(timeout: 10), "Stop never gave way to Send")
+        XCTAssertTrue(idleButton.waitForExistence(timeout: 10), "Stop never gave way to Send")
     }
 
     func testAFailureCanBeTriedAgainOnce() {
@@ -72,7 +77,7 @@ final class InteractionTests: XCTestCase {
         // The newest failure is the last one; earlier ones may still offer theirs.
         retries.element(boundBy: retries.count - 1).tap()
         // The attempt fails again in the demo: its own failure offers Try again, the first doesn't.
-        XCTAssertTrue(sendButton.waitForExistence(timeout: 20))
+        XCTAssertTrue(idleButton.waitForExistence(timeout: 20))
         XCTAssertLessThanOrEqual(retries.count, before + 1, "a failure offered Try again twice")
     }
 
@@ -112,7 +117,7 @@ final class InteractionTests: XCTestCase {
 
     func testTheTrailOpensAStep() {
         say("Please be busy for a moment")
-        XCTAssertTrue(sendButton.waitForExistence(timeout: 40), "the busy turn never ended")
+        XCTAssertTrue(idleButton.waitForExistence(timeout: 40), "the busy turn never ended")
         let step = app.buttons.containing(
             NSPredicate(
                 format:

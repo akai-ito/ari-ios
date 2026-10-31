@@ -36,7 +36,7 @@ final class CapabilitiesTests: XCTestCase {
 
         let reports = button(labelled: "Reports")
         XCTAssertTrue(reports.waitForExistence(timeout: 10), "Reports isn't listed")
-        XCTAssertTrue(app.staticTexts["Ari's hands"].exists)
+        XCTAssertTrue(app.staticTexts["Kumo's hands"].exists)
         snapshot("2-capabilities")
         reports.tap()
 
