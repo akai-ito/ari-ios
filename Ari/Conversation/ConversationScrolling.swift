@@ -18,9 +18,15 @@ extension ConversationView {
 
     /// The marker after the last row.
     static let end = "end"
-    /// How many rows show at first, and how many more each time you reach the top.
+    /// How many rows show at first, and how many more each time you near the top.
     static let window = 60
-    static let more = 40
+    static let more = 30
+    /// The most rows on screen while you read back. Older ones come in above and the newest let go
+    /// below, so going a long way back stays as light as the start: every row on screen is laid
+    /// out, and hundreds of them, with their maps and pictures, made scrolling back hang.
+    static let mostShown = 120
+    /// How far before the top (or the bottom of what's shown) more comes in, in points.
+    static let ahead: CGFloat = 1200
 
     func scrollToEnd() {
         follow()
@@ -34,6 +40,7 @@ extension ConversationView {
         repliedWhileAway = false
         // Back at the end, the older rows shown on the way up can go.
         firstShown = nil
+        lastShown = nil
     }
 
     func withoutAnimation(_ change: () -> Void) {
@@ -43,13 +50,13 @@ extension ConversationView {
     }
 
     /// Opens the conversation at a row, as from a tapped notification: an older one is shown first,
-    /// since only the latest rows are on screen until you scroll back.
+    /// with the rows around it, since only the latest rows are on screen until you scroll back.
     func open(at id: String, in rows: [Row]) {
         following = false
         if !shownRows(rows).contains(where: { $0.id == id }),
             let index = rows.firstIndex(where: { $0.id == id })
         {
-            firstShown = rows[max(0, index - 2)].id
+            show(around: index, in: rows)
         }
         Task {
             // A moment for the newly shown rows to be laid out before scrolling to one.
@@ -58,37 +65,81 @@ extension ConversationView {
         }
     }
 
-    /// The rows on screen: the latest ones, from `firstShown` on. More are shown as you scroll up
-    /// (see ``showEarlier(_:)``), and the oldest are let go again once you're back at the end.
+    /// The rows on screen: the latest ones, or from `firstShown` to `lastShown` once you've gone
+    /// back. Older rows come in as you near the top (see ``showEarlier(_:)``) and newer ones as you
+    /// read back down (``showLater(_:)``); back at the end, it's the latest ones again.
     func shownRows(_ rows: [Row]) -> ArraySlice<Row> {
-        if let firstShown, let start = rows.firstIndex(where: { $0.id == firstShown }) {
-            return rows[start...]
-        }
-        return rows.suffix(Self.window)
+        guard !rows.isEmpty else { return rows[...] }
+        guard let firstShown, let start = cache.index[firstShown] ?? index(of: firstShown, in: rows)
+        else { return rows.suffix(Self.window) }
+        let end = lastShown.flatMap { cache.index[$0] ?? index(of: $0, in: rows) } ?? rows.count - 1
+        return start <= end ? rows[start...end] : rows[start...]
     }
 
-    /// You reached the top of what's shown: show more of what Ari has, then ask the server for
-    /// what came before.
+    /// A row's place, for rows the cache hasn't seen yet.
+    private func index(of id: String, in rows: [Row]) -> Int? {
+        rows.firstIndex { $0.id == id }
+    }
+
+    /// Shows a row with a little before it and a window's worth after: the rows around a day or a
+    /// topic you jumped to, without laying out everything down to the end first.
+    func show(around index: Int, in rows: [Row]) {
+        firstShown = rows[max(0, index - 2)].id
+        let end = index + Self.window
+        lastShown = end >= rows.count - 1 ? nil : rows[end].id
+    }
+
+    /// You're nearing the top of what's shown: show more of what Ari has, letting the newest go
+    /// below once there are too many, and fetch the page before from the server ahead of time.
     func showEarlier(_ rows: [Row]) {
-        let first = shownRows(rows).first?.id
-        let start = rows.firstIndex(where: { $0.id == first }) ?? 0
+        let shown = shownRows(rows)
+        guard let first = shown.first?.id, let last = shown.last?.id else { return }
+        let start = cache.index[first] ?? 0
         if start > 0 {
-            firstShown = rows[max(0, start - Self.more)].id
+            reveal(from: max(0, start - Self.more), keepingTo: last, in: rows)
+            // Close to the oldest Ari has: the server's page before comes now, not at the top.
+            if start - Self.more < Self.more { fetchEarlier(showing: nil) }
             return
         }
         firstShown = first
+        fetchEarlier(showing: first)
+    }
+
+    /// Shows from `start`, keeping the rows down to `last` but no more than ``mostShown``.
+    private func reveal(from start: Int, keepingTo last: String, in rows: [Row]) {
+        firstShown = rows[start].id
+        let end = cache.index[last] ?? rows.count - 1
+        if end - start + 1 > Self.mostShown {
+            lastShown = rows[start + Self.mostShown - 1].id
+        }
+    }
+
+    /// Asks the server for the page before what Ari has. With `showing`, the oldest row shown, some
+    /// of the page comes on screen above it as it arrives, keeping your place.
+    private func fetchEarlier(showing first: String?) {
         // Only once you've scrolled up: at the end, a short screen would otherwise page back
         // through the whole history by itself.
         guard !following, session.conversation.hasEarlierMessages, !session.isLoadingEarlier
         else { return }
         Task {
             await session.loadEarlier()
-            // The page arrives above what you're reading: show some of it, keeping your place.
+            guard let first else { return }
             let now = self.rows(session.conversation)
-            if let index = now.firstIndex(where: { $0.id == first }), index > 0 {
-                firstShown = now[max(0, index - Self.more)].id
-            }
+            guard let index = cache.index[first], index > 0, let last = shownRows(now).last?.id
+            else { return }
+            reveal(from: max(0, index - Self.more), keepingTo: last, in: now)
         }
+    }
+
+    /// You're reading back down from far back: the newer rows come back below, until it reaches
+    /// the end and you're following again.
+    func showLater(_ rows: [Row]) {
+        guard let last = lastShown, let end = cache.index[last] else {
+            lastShown = nil
+            return
+        }
+        let next = end + Self.more
+        lastShown = next >= rows.count - 1 ? nil : rows[next].id
     }
 
     /// Goes to a topic or a day: older history comes in until it's there, then the conversation
@@ -104,12 +155,13 @@ extension ConversationView {
                 if rows.count == before { break }
             }
             guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-            firstShown = rows[max(0, index - 2)].id
+            // Only the rows around it, so there's little to lay out before it lands.
+            show(around: index, in: rows)
             // The sheet goes, and the rows are laid out, before scrolling; and once more after,
             // when the rows above have settled their heights.
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: .milliseconds(300))
             withoutAnimation { position.scrollTo(id: id, anchor: .top) }
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: .milliseconds(150))
             withoutAnimation { position.scrollTo(id: id, anchor: .top) }
         }
     }
@@ -135,9 +187,10 @@ extension ConversationView {
     }
 
     func pillText(working: Bool) -> String? {
-        guard !following, distanceFromEnd != .atEnd else { return nil }
+        // Reading far back, the end of what's shown isn't the end of the conversation.
+        guard !following, distanceFromEnd != .atEnd || lastShown != nil else { return nil }
         if working { return "Ari is writing" }
         if repliedWhileAway { return "Ari has replied" }
-        return distanceFromEnd == .far ? "Latest" : nil
+        return distanceFromEnd == .far || lastShown != nil ? "Latest" : nil
     }
 }
