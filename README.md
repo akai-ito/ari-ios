@@ -50,8 +50,12 @@
   place on a real map with Directions, short answers to tap, pictures it found (credited on tap),
   and a line that opens a thing in motion.
 - **Ari's trail.** Between your message and Ari's answer, what it did along the way, in plain words
-  that change tense as it finishes, with its short notes. `Timeline` merges messages and steps,
-  groups similar steps, and folds each run once the turn is over; tap a step for its specifics.
+  that change tense as it finishes, with its short notes as quiet grey lines. `Timeline` merges
+  messages and steps, groups similar steps, and folds each run once the turn is over; tap a step
+  for its specifics.
+- **Where you are.** The title under Ari is the topic Ari marked for what's on screen, or its day,
+  changing as you scroll; tap it for every topic and day, to jump to. Your long messages fold after
+  eight lines.
 - **Asks that wait for you.** When Ari needs something (which one you meant, your go-ahead), it
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
   send answers it, from a notification too.
@@ -65,9 +69,10 @@
   provider's own page where it can ("Connect GitHub"), so keys never pass through the phone.
 - **Three places, and Settings.** Chat, In motion and Library in the iOS 26 tab bar. Settings opens
   from the corner: the server, notifications, Ari's voice and model, capabilities, and the app icon.
-- **The look.** A cool slate dark with soft white text and no accent colour. Ari writes in New
-  York, Apple's serif; you write in SF Pro, in a thin outline. Ari's presence is a small pebble of
-  bone-coloured dots whose eyes follow what it's doing.
+- **The look.** A cool slate dark with soft white text and no accent colour. Ari's answers are in
+  New York, Apple's serif, the only serif in the conversation; you write in SF Pro, in a thin
+  outline. Ari's presence is a small pebble of bone-coloured dots whose eyes follow what it's
+  doing, and look at you when you tap it.
 
 ## Building Ari
 

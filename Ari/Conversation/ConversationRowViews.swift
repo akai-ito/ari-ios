@@ -13,8 +13,7 @@ extension ConversationView {
             offering: offering && offersNotifications)
         if cache.key == key { return cache.rows }
         let rows = RowsCache.make(conversation, reveal: reveal.reveal, offering: key.offering)
-        cache.key = key
-        cache.rows = rows
+        cache.keep(rows, for: key)
         return rows
     }
 
@@ -69,7 +68,7 @@ extension ConversationView {
         case .trail(let trail):
             TrailView(
                 trail: trail, conversation: conversation, reveal: reveal, opened: $opened,
-                answer: answer)
+                answer: answer, document: cache.document)
         case .failure(let turn, let error):
             failureLine(turn: turn, error: error, in: conversation)
         case .offer:
