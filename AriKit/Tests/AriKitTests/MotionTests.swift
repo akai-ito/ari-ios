@@ -157,6 +157,40 @@ struct MotionTests {
         #expect(!stops.contains { $0.stop.id == "land" }, "landing has no place to pin")
     }
 
+    @Test("places go in rows by kind, ideas first, and a place a stop goes to is in the plan")
+    func placeRows() {
+        let trip = Trip(
+            destination: "Cambridge", dates: .init(start: "2026-11-01", end: "2026-11-01"),
+            timezone: "Europe/London",
+            days: [
+                .init(
+                    id: "sun", date: "2026-11-01",
+                    stops: [
+                        .init(id: "lunch", title: "Lunch", place: "bun"),
+                        .init(id: "punt", title: "Punt", place: "punts"),
+                    ])
+            ],
+            places: [
+                .init(id: "bun", name: "Fitzbillies", category: .cafe, why: "Buns."),
+                .init(id: "kricket", name: "Kricket", category: .restaurant, why: "Small plates."),
+                .init(id: "chapel", name: "King's", category: .sight, why: "Vaulting."),
+                .init(
+                    id: "punts", name: "Scudamore's", category: .activity, why: "Punts.",
+                    status: .booked),
+                .init(id: "station", name: "Station", category: .other, why: "Trains."),
+            ],
+            todo: [.init(id: "book-chapel", text: "Book King's", done: true, about: ["chapel"])])
+        let rows = TripReading.placeRows(trip, state: [:])
+        #expect(rows.map(\.title) == ["Eat", "See", "Do", "Other"])
+        // Ari wrote Fitzbillies as shortlisted, but lunch goes there: it's in the plan, after the
+        // idea still to decide on.
+        #expect(rows[0].places.map(\.id) == ["kricket", "bun"])
+        #expect(TripReading.status(of: trip.places[0], in: trip, state: [:]) == .picked)
+        // A ticked to-do books what it's about.
+        #expect(TripReading.status(of: trip.places[2], in: trip, state: [:]) == .booked)
+        #expect(TripReading.stops(at: "punts", in: trip).map(\.stop.id) == ["punt"])
+    }
+
     @Test("a trip opens on today while it's on, and on its first day otherwise")
     func openingDay() throws {
         let trip = Trip(

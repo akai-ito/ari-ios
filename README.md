@@ -60,7 +60,9 @@
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
   send answers it, from a notification too.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block.
-  It's pinned above the composer and opens full screen; In motion is its own tab.
+  It's pinned above the composer and opens full screen; In motion is its own tab. A trip has its
+  days, a map whose pins show their place, its places by kind (each with a page of its own), and
+  travel; what Ari changed is behind a button at the top.
 - **What Ari knows.** The Library shows Ari's memory: In mind, shelves of pages (each with its glyph
   in Ari's dots; people by circle), and the journal, all in the device's search.
 - **Talk.** A call with Ari through CallKit: your voice goes to your server, and Ari's comes back
@@ -91,7 +93,8 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
 `ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
 `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_TOPICS` opens the topics sheet, `ARI_PLACE`
-opens a tab (`ARI_MOTION` then opens a thing in motion), `ARI_SHELF` opens a shelf in the
+opens a tab (`ARI_MOTION` then opens a thing in motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`,
+`ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going further in), `ARI_SHELF` opens a shelf in the
 Library (`ARI_CALENDAR` shows the Journal's calendar), `ARI_SETTINGS` opens Settings and
 `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it

@@ -2,14 +2,17 @@ import AriKit
 import MapKit
 import SwiftUI
 
-/// A trip, open: its cover, then Days, Map, Places, Travel and Stay, and what changed. Ari writes
-/// all of it; you tick what's done, and that's yours.
+/// A trip, open: its cover, then Days, Map, Places, Travel and Stay. Ari writes all of it; you tick
+/// what's done, and that's yours. What changed is a button on the cover, not a list under every
+/// tab. A place opens as its own page, grown from what you tapped.
 struct TripView: View {
     let detail: MotionDetail
     let trip: Trip
 
     @State private var tab = Section.days
-    @State private var openedPlace: Trip.Place?
+    /// The place open on its own page.
+    @State private var openedPlace: String?
+    @Namespace private var placeSpace
     /// Scrolled past the tabs: a compact header holds the name and the tabs at the top.
     @State private var compact = false
     /// How far down the screen the status bar and the island reach.
@@ -49,12 +52,8 @@ struct TripView: View {
                     tabRow(in: underline)
                     content
                         .padding(.top, 16)
-                        .animation(.smooth(duration: 0.3), value: tab)
-                    ChangesList(changes: detail.changes)
-                        .id("changes")
-                        .padding(.horizontal, 20)
-                        .padding(.top, 36)
                         .padding(.bottom, 60)
+                        .animation(.smooth(duration: 0.3), value: tab)
                 }
                 .frame(maxWidth: Rhythm.column)
                 .frame(maxWidth: .infinity)
@@ -80,10 +79,7 @@ struct TripView: View {
                     if let name = DebugScript.motionTab, let section = Section(rawValue: name) {
                         tab = section
                     }
-                    if DebugScript.motionTab == "changes" {
-                        try? await Task.sleep(for: .milliseconds(600))
-                        scroller.scrollTo("changes", anchor: .bottom)
-                    }
+                    if let place = DebugScript.motionPlace { openedPlace = place }
                 }
             #endif
             .task {
@@ -96,9 +92,11 @@ struct TripView: View {
                 }
             }
         }
-        .sheet(item: $openedPlace) { place in
-            TripPlaceSheet(place: place, trip: trip, state: detail.state)
-                .presentationDetents([.medium, .large])
+        .navigationDestination(item: $openedPlace) { id in
+            if let place = trip.places.first(where: { $0.id == id }) {
+                PlacePage(place: place, trip: trip, state: detail.state)
+                    .navigationTransition(.zoom(sourceID: "place \(id)", in: placeSpace))
+            }
         }
     }
 
@@ -107,7 +105,14 @@ struct TripView: View {
     /// The compact header's bar, which leaves room for the close button at its leading end.
     private static let barHeight: CGFloat = 44
 
-    private var coverHeight: CGFloat { trip.cover == nil ? 150 : 340 }
+    /// Tall on Days, where the trip opens; slim on the other tabs, so their own photos lead.
+    private var coverHeight: CGFloat {
+        switch (trip.cover != nil, tab == .days) {
+        case (true, true): 340
+        case (true, false): 196
+        case (false, _): 150
+        }
+    }
 
     private var cover: some View {
         ZStack(alignment: .bottomLeading) {
@@ -125,7 +130,12 @@ struct TripView: View {
                 Color.clear.frame(height: coverHeight)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(detail.motion.title).font(.ariTitle).foregroundStyle(.ariText)
+                Text(detail.motion.title)
+                    .font(
+                        tab == .days ? .ariTitle : .system(.title, design: .serif).weight(.semibold)
+                    )
+                    .foregroundStyle(.ariText)
+                    .lineLimit(2)
                 Text(TripReading.subtitle(trip)).font(.subheadline).foregroundStyle(.ariSecondary)
             }
             .padding(.horizontal, 20)
@@ -183,14 +193,17 @@ struct TripView: View {
     private var content: some View {
         switch tab {
         case .days:
-            DaysSection(motion: detail.motion.id, trip: trip, state: detail.state) {
-                openedPlace = $0
+            DaysSection(
+                motion: detail.motion.id, trip: trip, state: detail.state, space: placeSpace
+            ) {
+                openedPlace = $0.id
             }
             .padding(.horizontal, 20)
         case .map:
-            TripMap(trip: trip, state: detail.state).padding(.horizontal, 12)
+            TripMap(trip: trip, state: detail.state) { openedPlace = $0.id }
+                .padding(.horizontal, 12)
         case .places:
-            PlacesCarousel(trip: trip, state: detail.state) { openedPlace = $0 }
+            PlaceRows(trip: trip, state: detail.state, space: placeSpace) { openedPlace = $0.id }
         case .travel:
             TravelList(trip: trip, state: detail.state).padding(.horizontal, 20)
         case .stay:
@@ -207,6 +220,7 @@ private struct DaysSection: View {
     let motion: MotionID
     let trip: Trip
     let state: MotionState
+    let space: Namespace.ID
     let openPlace: (Trip.Place) -> Void
 
     @Environment(Motions.self) private var motions: Motions?
@@ -270,18 +284,16 @@ private struct DaysSection: View {
 
     private func dayView(_ day: Trip.Day) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(TripReading.heading(of: day)).font(.ariHeading).foregroundStyle(.ariText)
-                if let title = day.title {
-                    Text("· \(title)").font(.subheadline).foregroundStyle(.ariSecondary)
-                }
-            }
+            // One text, so a long day title wraps under the date rather than in a column of its own.
+            Text(
+                "\(Text(TripReading.heading(of: day)).font(.ariHeading).foregroundStyle(.ariText))\(Text(day.title.map { "  ·  \($0)" } ?? "").font(.subheadline).foregroundStyle(.ariSecondary))"
+            )
             .padding(.bottom, 12)
             ForEach(Array(day.stops.enumerated()), id: \.element.id) { index, stop in
                 StopRow(
                     stop: stop, place: TripReading.place(of: stop, in: trip),
                     booking: TripReading.booking(stop.booking, of: stop.id, in: trip, state: state),
-                    isLast: index == day.stops.count - 1, openPlace: openPlace)
+                    isLast: index == day.stops.count - 1, space: space, openPlace: openPlace)
             }
         }
     }
@@ -293,6 +305,7 @@ private struct StopRow: View {
     let place: Trip.Place?
     let booking: Trip.Booking?
     let isLast: Bool
+    let space: Namespace.ID
     let openPlace: (Trip.Place) -> Void
 
     var body: some View {
@@ -317,6 +330,7 @@ private struct StopRow: View {
                         card
                     }
                     .buttonStyle(.plain)
+                    .matchedTransitionSource(id: "place \(place.id)", in: space)
                     .accessibilityHint("Opens the place")
                 } else {
                     card
@@ -366,10 +380,12 @@ private struct StopRow: View {
 // MARK: - Map
 
 /// Every stop on Apple's map, numbered through the trip. The day you're looking at is in bone, its
-/// route drawn; the others are grey. A pin raises its place, with the way there in Maps.
+/// route drawn; the others are grey. Tapping a pin lifts its place right there, in a callout; tap
+/// the callout for the place's page.
 private struct TripMap: View {
     let trip: Trip
     let state: MotionState
+    let openPlace: (Trip.Place) -> Void
 
     @State private var day: String?
     @State private var selected: String?
@@ -378,56 +394,138 @@ private struct TripMap: View {
     var body: some View {
         let stops = TripReading.mapStops(trip)
         let shownDay = day ?? TripReading.openingDay(of: trip)?.id
-        VStack(alignment: .leading, spacing: 14) {
-            Map(position: $camera, selection: $selected) {
-                // The other days first, so the day you're looking at sits on top.
-                ForEach(
-                    stops.sorted { ($0.day == shownDay ? 1 : 0) < ($1.day == shownDay ? 1 : 0) }
-                ) {
-                    stop in
-                    Annotation(stop.stop.title, coordinate: stop.location.coordinate) {
-                        MapPin(number: stop.number, lit: stop.day == shownDay)
+        MapReader { map in
+            self.map(stops, shownDay: shownDay)
+                // A pin near the edge pans into view, so its callout isn't cut off.
+                .onChange(of: selected) { _, selected in
+                    guard let stop = stops.first(where: { $0.stop.id == selected }),
+                        let point = map.convert(stop.location.coordinate, to: .local),
+                        point.x < 145 || point.x > mapWidth - 145 || point.y < 110
+                    else { return }
+                    withAnimation(.smooth(duration: 0.5)) {
+                        camera = .camera(
+                            MapCamera(
+                                centerCoordinate: stop.location.coordinate, distance: distance))
                     }
-                    .annotationTitles(.hidden)
-                    .tag(stop.stop.id)
                 }
-                let route = stops.filter { $0.day == shownDay }.map(\.location.coordinate)
-                if route.count > 1 {
-                    MapPolyline(coordinates: route)
-                        .stroke(
-                            .ariBone.opacity(0.85),
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [2, 6]))
-                }
-                ForEach(trip.stays.filter { $0.location != nil }) { stay in
-                    Annotation(stay.name, coordinate: stay.location!.coordinate) {
-                        Image(systemName: "bed.double.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.ariText)
-                            .frame(width: 28, height: 28)
-                            .background(.ariSurface, in: Circle())
-                            .overlay(Circle().strokeBorder(.ariLine))
-                    }
-                    .annotationTitles(.hidden)
-                }
-            }
-            .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-            .environment(\.colorScheme, .dark)
-            .frame(height: 440)
-            .clipShape(.rect(cornerRadius: 20, style: .continuous))
-            .overlay(alignment: .topLeading) { dayChips(selected: shownDay).padding(12) }
-            .onAppear { camera = Self.fit(stops.filter { $0.day == shownDay }) }
-            .onChange(of: day) { _, day in
-                selected = nil
-                withAnimation(.smooth(duration: 0.6)) {
-                    camera = Self.fit(stops.filter { $0.day == day })
-                }
-            }
-            if let selected, let stop = stops.first(where: { $0.stop.id == selected }) {
-                PlaceCard(stop: stop, trip: trip, state: state)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                .onGeometryChange(for: CGFloat.self, of: \.size.width) { mapWidth = $0 }
+                .onMapCameraChange { distance = $0.camera.distance }
+        }
+        .clipShape(.rect(cornerRadius: 20, style: .continuous))
+        .overlay(alignment: .topLeading) { dayChips(selected: shownDay).padding(12) }
+        .onAppear {
+            camera = Self.fit(stops.filter { $0.day == shownDay })
+            #if DEBUG
+                selected = DebugScript.motionPin
+            #endif
+        }
+        .onChange(of: day) { _, day in
+            selected = nil
+            withAnimation(.smooth(duration: 0.6)) {
+                camera = Self.fit(stops.filter { $0.day == day })
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selected)
+        .sensoryFeedback(.selection, trigger: selected)
+    }
+
+    @State private var mapWidth: CGFloat = 0
+    @State private var distance: CLLocationDistance = 3000
+
+    private func map(_ stops: [TripReading.MapStop], shownDay: String?) -> some View {
+        Map(position: $camera, selection: $selected) {
+            // The other days first, so the day you're looking at sits on top, and the pin you
+            // tapped above them all.
+            ForEach(
+                stops.sorted { rank($0, shownDay) < rank($1, shownDay) }
+            ) { stop in
+                Annotation(stop.stop.title, coordinate: stop.location.coordinate, anchor: .bottom) {
+                    VStack(spacing: 6) {
+                        if selected == stop.stop.id {
+                            callout(for: stop)
+                                .transition(
+                                    .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                        }
+                        MapPin(number: stop.number, lit: stop.day == shownDay)
+                    }
+                    .animation(.spring(response: 0.32, dampingFraction: 0.78), value: selected)
+                }
+                .annotationTitles(.hidden)
+                .tag(stop.stop.id)
+            }
+            let route = stops.filter { $0.day == shownDay }.map(\.location.coordinate)
+            if route.count > 1 {
+                MapPolyline(coordinates: route)
+                    .stroke(
+                        .ariBone.opacity(0.85),
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [2, 6]))
+            }
+            ForEach(trip.stays.filter { $0.location != nil }) { stay in
+                Annotation(stay.name, coordinate: stay.location!.coordinate) {
+                    Image(systemName: "bed.double.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.ariText)
+                        .frame(width: 28, height: 28)
+                        .background(.ariSurface, in: Circle())
+                        .overlay(Circle().strokeBorder(.ariLine))
+                }
+                .annotationTitles(.hidden)
+            }
+        }
+        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        .environment(\.colorScheme, .dark)
+        // Most of the screen: with nothing under it any more, the map can have the room.
+        .containerRelativeFrame(.vertical) { height, _ in max(440, height * 0.66) }
+    }
+
+    private func rank(_ stop: TripReading.MapStop, _ shownDay: String?) -> Int {
+        stop.stop.id == selected ? 2 : stop.day == shownDay ? 1 : 0
+    }
+
+    /// The place a pin stands for, over it: its photo, name and when. Tap it for the place's page.
+    @ViewBuilder
+    private func callout(for stop: TripReading.MapStop) -> some View {
+        let place = TripReading.place(of: stop.stop, in: trip)
+        Button {
+            if let place { openPlace(place) }
+        } label: {
+            HStack(spacing: 10) {
+                if let photo = place?.photo {
+                    FoundPhoto(photo: photo, longest: 200, creditOnTap: false)
+                        .frame(width: 40, height: 40)
+                        .clipShape(.rect(cornerRadius: 9, style: .continuous))
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(place?.name ?? stop.stop.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.ariText)
+                        .lineLimit(1)
+                    Text(
+                        [stop.stop.time, stop.stop.title].compactMap(\.self).joined(
+                            separator: " · ")
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.ariSecondary)
+                    .lineLimit(1)
+                }
+                if place != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.ariTertiary)
+                }
+            }
+            .padding(.leading, place?.photo == nil ? 12 : 6)
+            .padding(.trailing, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: 250)
+            .background(.ariSurface, in: .rect(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.ariLine)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .accessibilityHint(place == nil ? "" : "Opens the place")
     }
 
     private func dayChips(selected: String?) -> some View {
@@ -459,49 +557,15 @@ private struct TripMap: View {
         let longitudes = stops.map(\.location.lon)
         let (south, north) = (latitudes.min()!, latitudes.max()!)
         let (west, east) = (longitudes.min()!, longitudes.max()!)
+        // Shifted up a little, so a callout over the top pin still fits.
         let center = CLLocationCoordinate2D(
-            latitude: (south + north) / 2, longitude: (west + east) / 2)
+            latitude: (south + north) / 2 + (north - south) * 0.12, longitude: (west + east) / 2)
         // Half again around the stops, so the pins and their callouts clear the edges, and at
         // least a few streets for a single stop.
         let span = MKCoordinateSpan(
-            latitudeDelta: max((north - south) * 1.5, 0.006),
+            latitudeDelta: max((north - south) * 1.6, 0.006),
             longitudeDelta: max((east - west) * 1.5, 0.006))
         return .region(MKCoordinateRegion(center: center, span: span))
-    }
-
-    /// The place a pin stands for, with the way there.
-    private struct PlaceCard: View {
-        let stop: TripReading.MapStop
-        let trip: Trip
-        let state: MotionState
-
-        var body: some View {
-            let place = TripReading.place(of: stop.stop, in: trip)
-            let booking = TripReading.booking(
-                stop.stop.booking, of: stop.stop.id, in: trip, state: state)
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    if let photo = place?.photo {
-                        FoundPhoto(photo: photo, longest: 300, creditOnTap: false)
-                            .frame(width: 64, height: 64)
-                            .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(place?.name ?? stop.stop.title).font(.headline).foregroundStyle(
-                            .ariText)
-                        if let why = place?.why {
-                            Text(why).font(.footnote).foregroundStyle(.ariSecondary)
-                        }
-                        StatusChip.booking(booking)
-                    }
-                }
-                directions(
-                    to: place?.name ?? stop.stop.title, at: stop.location, booking: booking)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ariSurface, in: .rect(cornerRadius: 22, style: .continuous))
-        }
     }
 }
 
@@ -547,103 +611,238 @@ extension Trip.Location {
 
 // MARK: - Places
 
-/// The places Ari found, as a carousel: a photo where there's a good one, why Ari chose it, its
-/// hours and price, and where it stands. A picked or booked place takes a bone edge.
-private struct PlacesCarousel: View {
+/// The trip's shortlist, by what you'd do there: a row each for Eat, See and Do, of cards all the
+/// same size, so the choice reads at a glance. Ideas come first in each row, then what's in the
+/// plan, then what's booked. A card opens the place as its own page.
+private struct PlaceRows: View {
     let trip: Trip
     let state: MotionState
+    let space: Namespace.ID
     let openPlace: (Trip.Place) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: 14) {
-                ForEach(trip.places) { place in
-                    Button {
-                        openPlace(place)
-                    } label: {
-                        card(place, status: TripReading.status(of: place, in: trip, state: state))
+        VStack(alignment: .leading, spacing: 26) {
+            ForEach(TripReading.placeRows(trip, state: state)) { row in
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(row.title)
+                        .font(.ariHeading)
+                        .foregroundStyle(.ariText)
+                        .padding(.horizontal, 20)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 12) {
+                            ForEach(row.places) { place in
+                                Button {
+                                    openPlace(place)
+                                } label: {
+                                    PlaceCard(
+                                        place: place,
+                                        status: TripReading.status(
+                                            of: place, in: trip, state: state))
+                                }
+                                .buttonStyle(.plain)
+                                .matchedTransitionSource(id: "place \(place.id)", in: space)
+                            }
+                        }
+                        .scrollTargetLayout()
                     }
-                    .buttonStyle(.plain)
-                    .containerRelativeFrame(.horizontal) { width, _ in width * 0.8 }
+                    .scrollTargetBehavior(.viewAligned)
+                    .contentMargins(.horizontal, 20, for: .scrollContent)
                 }
             }
-            .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, 20, for: .scrollContent)
-    }
-
-    private func card(_ place: Trip.Place, status: PlaceStatus) -> some View {
-        let settled = status == .picked || status == .booked
-        return VStack(alignment: .leading, spacing: 0) {
-            if let photo = place.photo {
-                FoundPhoto(photo: photo, longest: 900, creditOnTap: false)
-                    .frame(height: 230)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(place.name).font(.ariHeading).foregroundStyle(.ariText)
-                    Spacer(minLength: 8)
-                    StatusChip.place(status)
-                }
-                Text(place.why)
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                let facts = [place.hours, place.price].compactMap(\.self)
-                if !facts.isEmpty {
-                    Text(facts.joined(separator: " · ")).font(.caption).foregroundStyle(
-                        .ariTertiary)
-                }
-            }
-            .multilineTextAlignment(.leading)
-            .padding(16)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ariSurface)
-        .clipShape(.rect(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.ariBone.opacity(settled ? 0.7 : 0), lineWidth: 1.5)
-        )
-        .animation(.smooth(duration: 0.5), value: status)
     }
 }
 
-/// A place, in full: its photo with its credit, why Ari chose it, and the way there.
-private struct TripPlaceSheet: View {
+/// A place on the Places tab: its photo (or its kind in Ari's dots when there's none), its name and
+/// where it stands. Every card is the same size, whatever Ari wrote about it.
+private struct PlaceCard: View {
+    let place: Trip.Place
+    let status: PlaceStatus
+
+    static let width: CGFloat = 172
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PlacePhoto(place: place, longest: 500)
+                .frame(width: Self.width, height: Self.width * 3 / 4)
+                .clipShape(.rect(cornerRadius: 16, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    PlaceChip(status: status).padding(8)
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(place.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.ariText)
+                    .lineLimit(1)
+                Text([place.hours, place.price].compactMap(\.self).joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 2)
+        }
+        .frame(width: Self.width, alignment: .leading)
+        .contentShape(.rect(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the place")
+    }
+}
+
+/// Where a place stands, in plain words: an idea, in the plan, booked.
+private struct PlaceChip: View {
+    let status: PlaceStatus
+
+    var body: some View {
+        switch status {
+        case .booked: chip("Booked", filled: true)
+        case .picked: chip("In the plan", filled: true)
+        case .shortlisted: chip("Idea", filled: false)
+        default: EmptyView()
+        }
+    }
+
+    private func chip(_ text: String, filled: Bool) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(filled ? Color.ariBackground : .ariText)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                filled ? AnyShapeStyle(Color.ariBone) : AnyShapeStyle(.ultraThinMaterial),
+                in: Capsule()
+            )
+            .environment(\.colorScheme, .dark)
+            .fixedSize()
+    }
+}
+
+/// A place's photo, or, without one, its kind drawn in Ari's dots, so a card never looks empty.
+private struct PlacePhoto: View {
+    let place: Trip.Place
+    var longest = 900
+    var creditOnTap = false
+
+    var body: some View {
+        if let photo = place.photo {
+            FoundPhoto(photo: photo, longest: longest, creditOnTap: creditOnTap)
+        } else {
+            Rectangle()
+                .fill(.ariSurface)
+                .overlay { DotGlyph(symbol: Self.symbol(for: place.category), side: 56) }
+        }
+    }
+
+    static func symbol(for category: PlaceCategory) -> String {
+        switch category {
+        case .restaurant: "fork.knife"
+        case .cafe: "cup.and.saucer.fill"
+        case .bar: "wineglass.fill"
+        case .museum: "building.columns.fill"
+        case .sight: "binoculars.fill"
+        case .park: "leaf.fill"
+        case .shop: "bag.fill"
+        case .activity: "figure.walk"
+        default: "mappin"
+        }
+    }
+}
+
+/// A place, as its own page: its photo, why Ari chose it, the facts, where it sits in the plan,
+/// and the way there.
+private struct PlacePage: View {
     let place: Trip.Place
     let trip: Trip
     let state: MotionState
 
     var body: some View {
+        let status = TripReading.status(of: place, in: trip, state: state)
+        let booking = TripReading.booking(place.booking, of: place.id, in: trip, state: state)
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if let photo = place.photo {
-                    FoundPhoto(photo: photo, longest: 1200, creditAlignment: .bottomLeading)
-                        .frame(height: 240)
-                        .clipShape(.rect(cornerRadius: 18, style: .continuous))
+            VStack(alignment: .leading, spacing: 0) {
+                PlacePhoto(place: place, longest: 1400, creditOnTap: true)
+                    .frame(height: 340)
+                    .overlay {
+                        LinearGradient(
+                            colors: [.clear, .clear, .ariBackground], startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .allowsHitTesting(false)
+                    }
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        PlaceChip(status: status)
+                        Text(place.name).font(.ariTitle).foregroundStyle(.ariText)
+                    }
+                    // Ari's words, in its serif.
+                    Text(place.why)
+                        .font(.ariBody)
+                        .foregroundStyle(.ariText)
+                        .lineSpacing(Rhythm.ariLineSpacing)
+                    facts
+                    plan
+                    directions(
+                        to: place.name, at: place.location, booking: booking, website: place.url)
+                    if let photo = place.photo {
+                        Link(destination: photo.sourceURL) {
+                            Label("Photo: \(photo.credit)", systemImage: "camera")
+                                .font(.caption)
+                                .foregroundStyle(.ariTertiary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
-                HStack(alignment: .firstTextBaseline) {
-                    Text(place.name).font(.ariHeading).foregroundStyle(.ariText)
-                    Spacer()
-                    StatusChip.place(TripReading.status(of: place, in: trip, state: state))
-                }
-                Text(place.why).font(.body).foregroundStyle(.ariSecondary)
-                let facts = [place.hours, place.price, place.address].compactMap(\.self)
-                if !facts.isEmpty {
-                    Text(facts.joined(separator: " · ")).font(.footnote).foregroundStyle(
-                        .ariTertiary)
-                }
-                directions(
-                    to: place.name, at: place.location,
-                    booking: TripReading.booking(
-                        place.booking, of: place.id, in: trip, state: state),
-                    website: place.url)
+                .padding(.horizontal, 20)
+                .padding(.top, -24)
+                .padding(.bottom, 40)
+                .frame(maxWidth: Rhythm.column, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
         }
+        .ignoresSafeArea(edges: .top)
         .background(.ariBackground)
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    /// Hours, price and address, a line each.
+    @ViewBuilder
+    private var facts: some View {
+        let lines: [(symbol: String, text: String)] = [
+            place.hours.map { ("clock", $0) }, place.price.map { ("banknote", $0) },
+            place.address.map { ("mappin.and.ellipse", $0) },
+        ].compactMap(\.self)
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(lines, id: \.text) { line in
+                    Label(line.text, systemImage: line.symbol)
+                        .font(.subheadline)
+                        .foregroundStyle(.ariSecondary)
+                }
+            }
+        }
+    }
+
+    /// Where it sits in the plan: each stop that goes there.
+    @ViewBuilder
+    private var plan: some View {
+        let stops = TripReading.stops(at: place.id, in: trip)
+        if !stops.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("In the plan")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.ariTertiary)
+                ForEach(stops, id: \.stop.id) { day, stop in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Circle().fill(.ariBone).frame(width: 6, height: 6)
+                        Text(
+                            [TripReading.shortName(of: day), stop.time, stop.title]
+                                .compactMap(\.self).joined(separator: " · ")
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.ariText)
+                    }
+                }
+            }
+        }
     }
 }
 
