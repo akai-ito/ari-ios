@@ -89,32 +89,19 @@ private struct PlaceView: View {
         return await find(place)?.location.coordinate
     }
 
-    /// The place in Maps, for the way there: near where Ari put it, or by its name and address.
-    /// Looked up once, and kept while there's memory for it.
+    /// The place in Maps, for the way there: its listing, found by name and address near where Ari
+    /// put it, or a pin there when Maps has none.
     static func find(_ place: ReplyShape.Place) async -> MKMapItem? {
-        let key =
-            [place.name, place.address, place.lat.map { "\($0)" }, place.lon.map { "\($0)" }]
-            .compactMap(\.self).joined(separator: "|") as NSString
-        if let kept = found.object(forKey: key) { return kept }
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = [place.name, place.address].compactMap(\.self).joined(
-            separator: ", ")
-        var item: MKMapItem?
-        if let lat = place.lat, let lon = place.lon {
-            let center = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-            request.region = MKCoordinateRegion(
-                center: center, latitudinalMeters: 400, longitudinalMeters: 400)
-            item =
-                (try? await MKLocalSearch(request: request).start().mapItems.first)
-                ?? .at(lat: lat, lon: lon, name: place.name)
-        } else {
-            item = try? await MKLocalSearch(request: request).start().mapItems.first
+        let near = place.lat.flatMap { lat in
+            place.lon.map { CLLocationCoordinate2D(latitude: lat, longitude: $0) }
         }
-        if let item { found.setObject(item, forKey: key) }
-        return item
+        if let listing = await MapsListing.find(
+            name: place.name, address: place.address, near: near)
+        {
+            return listing
+        }
+        return near.map { .at(lat: $0.latitude, lon: $0.longitude, name: place.name) }
     }
-
-    private static let found = NSCache<NSString, MKMapItem>()
 }
 
 /// A still picture of somewhere on Apple's map, dark like Ari, with a pin in Ari's bone. Made once
