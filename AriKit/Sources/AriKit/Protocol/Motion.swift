@@ -99,8 +99,9 @@ public struct MotionChange: Sendable, Equatable, Decodable, Identifiable {
     }
 }
 
-/// Your ticks, by list and then by item id, such as `todo` → `book-uffizi` → done. `[:]` until you
-/// tick something. A tick here wins over how Ari wrote the item.
+/// Your ticks and choices, by list and then by item id, such as `todo` → `book-uffizi` → done, or
+/// `places` → `boboli` → picked. `[:]` until you tap something. A tap here wins over how Ari wrote
+/// the item, except over a booking.
 public typealias MotionState = [String: [String: MotionTick]]
 
 /// Reads ticks, skipping any field that isn't a list of them, as from a newer server.
@@ -137,10 +138,42 @@ extension KeyedDecodingContainer {
     }
 }
 
+/// One of your taps on an item: a tick on a to-do or a session (`done`), or your choice for a
+/// trip's place (`status`): an idea, in the plan, or not for you.
 public struct MotionTick: Sendable, Equatable, Codable {
     public let done: Bool
+    public let status: PlaceStatus?
 
-    public init(done: Bool) { self.done = done }
+    public init(done: Bool) {
+        self.done = done
+        status = nil
+    }
+
+    public init(status: PlaceStatus) {
+        done = false
+        self.status = status
+    }
+
+    enum CodingKeys: String, CodingKey { case done, status }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        status = try c.decodeIfPresent(PlaceStatus.self, forKey: .status)
+        if status == nil {
+            done = try c.decode(Bool.self, forKey: .done)
+        } else {
+            done = try c.decodeIfPresent(Bool.self, forKey: .done) ?? false
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let status {
+            try c.encode(status, forKey: .status)
+        } else {
+            try c.encode(done, forKey: .done)
+        }
+    }
 }
 
 /// `GET /v0/motion`: everything going on, then what's done, each newest first.

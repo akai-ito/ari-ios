@@ -321,7 +321,7 @@ public struct PlaceCategory: OpenValue {
     ]
 }
 
-/// Where a place stands: one Ari found, one you're going to, one that's booked.
+/// Where a place stands: an idea, in the plan, booked, or not for you.
 public struct PlaceStatus: OpenValue {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -329,7 +329,9 @@ public struct PlaceStatus: OpenValue {
     public static let shortlisted = PlaceStatus(rawValue: "shortlisted")
     public static let picked = PlaceStatus(rawValue: "picked")
     public static let booked = PlaceStatus(rawValue: "booked")
-    public static let known = [shortlisted, picked, booked]
+    /// Not for you: Ari stops suggesting it.
+    public static let passed = PlaceStatus(rawValue: "passed")
+    public static let known = [shortlisted, picked, booked, passed]
 }
 
 /// Whether something still needs booking.

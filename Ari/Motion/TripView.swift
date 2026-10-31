@@ -94,7 +94,7 @@ struct TripView: View {
         }
         .navigationDestination(item: $openedPlace) { id in
             if let place = trip.places.first(where: { $0.id == id }) {
-                PlacePage(place: place, trip: trip, state: detail.state)
+                PlacePage(motion: detail.motion.id, place: place, trip: trip, state: detail.state)
                     .navigationTransition(.zoom(sourceID: "place \(id)", in: placeSpace))
             }
         }
@@ -637,7 +637,9 @@ private struct PlaceRows: View {
                                     PlaceCard(
                                         place: place,
                                         status: TripReading.status(
-                                            of: place, in: trip, state: state))
+                                            of: place, in: trip, state: state)
+                                    )
+                                    .opacity(row.title == "Passed" ? 0.55 : 1)
                                 }
                                 .buttonStyle(.plain)
                                 .matchedTransitionSource(id: "place \(place.id)", in: space)
@@ -697,6 +699,7 @@ private struct PlaceChip: View {
         case .booked: chip("Booked", filled: true)
         case .picked: chip("In the plan", filled: true)
         case .shortlisted: chip("Idea", filled: false)
+        case .passed: chip("Not for us", filled: false)
         default: EmptyView()
         }
     }
@@ -747,14 +750,29 @@ private struct PlacePhoto: View {
     }
 }
 
-/// A place, as its own page: its photo, why Ari chose it, the facts, where it sits in the plan,
-/// and the way there.
+/// A place, as its own page: its photo, why Ari chose it, your choice for it, the facts, where it
+/// sits in the plan, and the way there. It follows the thing as it changes, so your choice and Ari
+/// fitting it into a day show here at once.
 private struct PlacePage: View {
+    let motion: MotionID
     let place: Trip.Place
     let trip: Trip
     let state: MotionState
 
+    @Environment(Motions.self) private var motions: Motions?
+    @State private var problem: String?
+    @State private var chosen = 0
+
+    /// The thing as it is now: your choices and Ari's changes since the page opened.
+    private var live: (trip: Trip, place: Trip.Place, state: MotionState) {
+        guard let detail = motions?.details[motion], case .trip(let trip) = detail.content,
+            let place = trip.places.first(where: { $0.id == place.id })
+        else { return (trip, place, state) }
+        return (trip, place, detail.state)
+    }
+
     var body: some View {
+        let (trip, place, state) = live
         let status = TripReading.status(of: place, in: trip, state: state)
         let booking = TripReading.booking(place.booking, of: place.id, in: trip, state: state)
         ScrollView {
@@ -778,8 +796,11 @@ private struct PlacePage: View {
                         .font(.ariBody)
                         .foregroundStyle(.ariText)
                         .lineSpacing(Rhythm.ariLineSpacing)
-                    facts
-                    plan
+                    if status != .booked {
+                        choice(status, planned: TripReading.isPlanned(place.id, in: trip))
+                    }
+                    facts(place)
+                    plan(place, in: trip)
                     directions(
                         to: place.name, at: place.location, booking: booking, website: place.url)
                     if let photo = place.photo {
@@ -801,11 +822,55 @@ private struct PlacePage: View {
         .ignoresSafeArea(edges: .top)
         .background(.ariBackground)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .sensoryFeedback(.selection, trigger: chosen)
+    }
+
+    /// Your choice for the place: still an idea, in the plan, or not for you. Ari fits what you put
+    /// in the plan into a day a few seconds later, and stops suggesting what you pass on. Booked is
+    /// Ari's, so there's no choosing once it is.
+    private func choice(_ status: PlaceStatus, planned: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker(
+                "Your choice",
+                selection: Binding(
+                    get: { status },
+                    set: { choose($0) })
+            ) {
+                Text("Idea").tag(PlaceStatus.shortlisted)
+                Text("In the plan").tag(PlaceStatus.picked)
+                Text("Not for us").tag(PlaceStatus.passed)
+            }
+            .pickerStyle(.segmented)
+            Text(problem ?? Self.line(for: status, planned: planned))
+                .font(.footnote)
+                .foregroundStyle(problem == nil ? Color.ariTertiary : .ariSecondary)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: status)
+        }
+    }
+
+    private static func line(for status: PlaceStatus, planned: Bool) -> String {
+        switch status {
+        case .picked: planned ? "In the plan, below." : "Ari will fit it into a day."
+        case .passed: "Ari won't suggest it again."
+        default: "An idea for now."
+        }
+    }
+
+    private func choose(_ status: PlaceStatus) {
+        chosen += 1
+        problem = nil
+        Task {
+            guard let motions else { return }
+            if !(await motions.choose(motion, place: place.id, status: status)) {
+                problem = "Couldn't save that. Try again in a moment."
+            }
+        }
     }
 
     /// Hours, price and address, a line each.
     @ViewBuilder
-    private var facts: some View {
+    private func facts(_ place: Trip.Place) -> some View {
         let lines: [(symbol: String, text: String)] = [
             place.hours.map { ("clock", $0) }, place.price.map { ("banknote", $0) },
             place.address.map { ("mappin.and.ellipse", $0) },
@@ -823,7 +888,7 @@ private struct PlacePage: View {
 
     /// Where it sits in the plan: each stop that goes there.
     @ViewBuilder
-    private var plan: some View {
+    private func plan(_ place: Trip.Place, in trip: Trip) -> some View {
         let stops = TripReading.stops(at: place.id, in: trip)
         if !stops.isEmpty {
             VStack(alignment: .leading, spacing: 8) {

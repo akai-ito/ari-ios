@@ -122,6 +122,22 @@ public final class Motions {
         }
     }
 
+    /// Your choice for one of a trip's places, at once on screen; `nil` takes it back. `false` if
+    /// the server didn't take it, and the choice goes back. Ari fits it in a few seconds later.
+    public func choose(_ motion: MotionID, place: String, status: PlaceStatus?) async -> Bool {
+        let before = details[motion]?.state
+        details[motion]?.state[TripReading.placesList, default: [:]][place] = status.map(
+            MotionTick.init(status:))
+        do {
+            let state = try await client.choose(motion, place: place, status: status)
+            details[motion]?.state = state
+            return true
+        } catch {
+            if let before { details[motion]?.state = before }
+            return false
+        }
+    }
+
     /// Swipes a thing's pinned line away until Ari next changes it. It stays in In motion.
     public func dismiss(_ motion: Motion) {
         dismissed[motion.id] = motion.version
