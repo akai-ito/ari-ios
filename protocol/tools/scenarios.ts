@@ -1254,7 +1254,7 @@ const scenarios: readonly (() => Transcript)[] = [
       summary:
         "You send two messages and leave. The first reply reaches your lock screen as a notification with " +
         "its first line, Markdown stripped; the second turn fails, and that arrives too. Opening Ari catches up.",
-      guarantees: ["G15", "G18"],
+      guarantees: ["G15", "G18", "G38"],
     });
     yesterday(transcript);
     transcript.begin(todayAt, { cursor: "latest" });
@@ -1396,7 +1396,7 @@ const scenarios: readonly (() => Transcript)[] = [
         "The agent asks while you're away, so the ask arrives as a time-sensitive notification carrying " +
         "its options. Answering from the notification is an ordinary send naming the ask; the agent carries " +
         "on, and its reply notifies you too.",
-      guarantees: ["G15", "G16", "G18"],
+      guarantees: ["G15", "G16", "G18", "G38"],
     });
     yesterday(transcript);
     transcript.begin(todayAt, { cursor: "latest" });
@@ -3438,7 +3438,6 @@ const scenarios: readonly (() => Transcript)[] = [
     const lessons = "Italian is on: 15 minutes on Tuesday and Thursday evenings, from this week.";
     transcript.world("kumo_works", { calls: [], post: lessons });
     transcript.answerCard(offer.id, { option: "Yes" });
-    transcript.wait(3000);
     transcript.post(lessons);
     transcript.settleCard(offer.id);
     transcript.wait(4000);
@@ -3457,7 +3456,6 @@ const scenarios: readonly (() => Transcript)[] = [
       ],
     });
     transcript.answerCard(times.id, { slots: [0, 2] });
-    transcript.wait(6000);
     transcript.addCard({
       kind: "draft",
       title: "Draft to Sarah at Citadel",
@@ -3536,7 +3534,6 @@ const scenarios: readonly (() => Transcript)[] = [
       subject: "Booking confirmed: 20–23 November",
       text: "Dear Divy, your stay at Hotel Orto is confirmed for 20–23 November. Reception is open until 22:00.",
     });
-    transcript.wait(9000);
     transcript.addCard({
       kind: "draft",
       title: "Note to Hotel Orto",
@@ -3644,19 +3641,20 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 69,
       title: "Getting started",
       summary:
-        "On a fresh box you connect iCloud, and Kumo reads your last 90 days of mail, with its progress on " +
-        "every app, and asks its first question in the conversation. When it has read everything it shows what " +
-        "it found: a booking it put on your calendar and a belief to check. You answer the question, confirm " +
-        "the belief and finish.",
+        "On a fresh box Kumo asks its first question in the conversation as soon as the app connects. You " +
+        "connect iCloud, and Kumo reads your last 90 days of mail, with its progress on every app. When it has " +
+        "read everything it shows what it found: a booking it put on your calendar and a belief to check. You " +
+        "answer the question, confirm the belief and finish.",
       guarantees: ["G39"],
     });
     transcript.time("2026-11-09T19:00:00.000Z");
     transcript.onboarding({ state: "reading" });
     transcript.begin("2026-11-09T19:02:00.000Z");
-    transcript.connect();
-    transcript.wait(2000);
     const question = "While I read: what would make the next month a good one for you?";
     transcript.world("kumo_works", { calls: [], post: question });
+    transcript.connect();
+    transcript.post(question);
+    transcript.wait(20_000);
     const flights = {
       title: "Flights to Valencia",
       start: "2026-12-04T07:15:00.000Z",
@@ -3677,9 +3675,6 @@ const scenarios: readonly (() => Transcript)[] = [
       values: { apple_id: "divy@icloud.com", app_password: "abcd-efgh-ijkl-mnop" },
     });
     transcript.onboarding({ state: "reading", progress: { mails_read: 0, mails_total: 40 } });
-    transcript.wait(4000);
-    transcript.post(question);
-    transcript.wait(30_000);
     const belief = transcript.belief();
     const booked = transcript.calendarItem({
       uid: transcript.eventUid(),
