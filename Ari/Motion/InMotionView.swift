@@ -87,8 +87,8 @@ struct InMotionView: View {
                 .padding(40)
             case .loaded:
                 Text(
-                    "Nothing in motion yet. When Ari plans something with you, like a trip, it "
-                        + "lives here, and Ari keeps it current as you talk."
+                    "Nothing in motion yet. When \(LeadName.current) plans something with you, like a trip, it "
+                        + "lives here, and \(LeadName.current) keeps it current as you talk."
                 )
                 .font(.ariBody)
                 .foregroundStyle(.ariTertiary)

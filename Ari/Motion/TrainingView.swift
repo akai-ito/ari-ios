@@ -90,7 +90,7 @@ struct TrainingView: View {
                             ) { tick(session, $0) }
                         }
                         if week.sessions.isEmpty {
-                            Text("Ari writes this week's sessions nearer the time.")
+                            Text("\(LeadName.current) writes this week's sessions nearer the time.")
                                 .font(.footnote)
                                 .foregroundStyle(.ariTertiary)
                         }
