@@ -39,6 +39,14 @@ where the protocol has to make it possible, marked *App*.
 | G29 | **Topics mark where the subject changed.** When you change the subject, Ito puts a label of a few plain words on the message that changed it, just after the turn, typed or spoken, at most one a turn. Every app gets the label live, and in snapshots and history with the messages it labels; a label used again is the same subject, returned to. | 58 |
 | G31 | **Pictures come from your server.** A picture in a reply is one Ari found on the web and kept on your server as an attachment, with where it came from and who to credit; the app never contacts the site, and the picture stays. | 60 |
 | G32 | **Things in motion change a part at a time.** Ari starts a thing whole, once, then changes it by item id, citing the version it read: a stale or misshapen change is refused, nothing empties it, and every change keeps Ari's note and where in the conversation it happened. Your ticks, and your choices for a trip's places, are your own and every app hears them. Ari keeps the thing up with them at once, as an ordinary change with its note and no chat message, and hears of them with your next message. Ari can't start or change a trip without a cover, a photo for every place and every stop at its place, or any thing with a title over 28 characters. Forgetting a thing asks you first. | 62, 63, 64 |
+| G33 | **Each space keeps its own conversation.** Kumo's spaces each have their own conversation, things in motion and standing work; every conversation event names its space, and one stream and one snapshot cover them all. A space's mark shows how many of Kumo's messages you haven't read there, until you read it. | 65 |
+| G34 | **Tell Kumo files it for you.** Something said from the Desk, Siri or a call lands in the space it belongs in, and the answer says which, so you never choose or hand off. | 66 |
+| G35 | **The Desk is home.** The briefing, what's coming up and what's waiting on you come whole in the snapshot and in every change, so an app never pieces it together. The morning briefing comes once, at the first calm moment after your time, and is gone by the afternoon. | 67, 70 |
+| G36 | **Waiting on you stays until it's done.** A card waits whatever the date, shows when the box is acting on your answer, and leaves only when that's done. | 67, 69 |
+| G37 | **Every mail is read, and only work becomes work.** A quick model judges each new mail by its consequences, not its tone; only mail with work to do starts a short-lived work thread, and the space's conversation stays clean. | 68 |
+| G38 | **Kumo never sends what you'd write.** Replies to people are drafts in your Drafts folder and cards on the Desk; you send them from Mail. | 68 |
+| G39 | **The calendar goes through the box.** Events, holds and invite answers are written to iCloud by the box, so they land while your phone sleeps; an invite is held on Kumo's calendar until you answer. | 69 |
+| G40 | **Kumo picks the moment; manners pick the volume.** A notification lands when Kumo sends it. It's quiet during a calendar event and overnight, at most one an hour has sound, and urgent always sounds. | 70 |
 
 ## Scenario by scenario
 
@@ -426,6 +434,39 @@ where the protocol has to make it possible, marked *App*.
 - Ari keeps a picture from the web on the server before showing it, and the block names it as an
   attachment, with its source and credit. (G31)
 
+### 65 · [A space of its own](transcripts/65-a-space-of-its-own.jsonl)
+
+- The snapshot holds every space, each with its own stretch of conversation. A message sent in a
+  space starts its turn there, and every event of the turn names the space. (G33)
+- When the turn ends with a reply, `space.changed` raises the space's `unread` and sets its `last`
+  line; marking the space read brings `unread` back to zero. (G33)
+
+### 66 · [Tell Kumo](transcripts/66-tell-kumo.jsonl)
+
+- Tell Kumo answers once the message is filed, with the space; the message carries `filed: true`,
+  and its turn runs in that space. (G34)
+
+### 67 · [The Desk](transcripts/67-the-desk.jsonl)
+
+- The Desk comes whole: in the snapshot, from `GET /v0/desk`, and in every `desk.changed`. (G35)
+- Answering a card shows it `working` until the box has acted, then removes it or puts its result
+  in its place; accepting an offer of a space adds the space. (G36)
+
+### 68 · [A mail arrives](transcripts/68-a-mail-arrives.jsonl)
+
+- A new mail goes through the attention pass; work for a space runs in a work thread, which may
+  change the calendar, put a draft on the Desk and post one line into the space. (G37, G38)
+
+### 69 · [An invite](transcripts/69-an-invite.jsonl)
+
+- An invite is held on Kumo's calendar, shown with its clash check, and answered through iCloud
+  when you tap. (G36, G39)
+
+### 70 · [The morning briefing](transcripts/70-the-morning-briefing.jsonl)
+
+- The morning briefing waits for your time and a calm moment, arrives as a quiet notification, and
+  is marked seen when an app shows it. (G35, G40)
+
 ## Not in this version
 
-Editing or deleting messages, more than one conversation, and reactions.
+Editing or deleting messages, and reactions.

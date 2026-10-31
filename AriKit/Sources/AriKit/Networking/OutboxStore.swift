@@ -22,10 +22,16 @@ public struct OutboxStore: Sendable {
             directory: support.appending(path: "Outbox/\(name)", directoryHint: .isDirectory))
     }
 
-    /// The waiting messages, oldest first.
+    /// The waiting messages, oldest first. A file that reads but isn't a waiting message, such as
+    /// one an older Ari left, is deleted.
     public func load() throws -> [SendMessage] {
-        try files().map {
-            try JSONDecoder().decode(SendMessage.self, from: Data(contentsOf: $0.url))
+        try files().compactMap { file in
+            let data = try Data(contentsOf: file.url)
+            guard let message = try? JSONDecoder().decode(SendMessage.self, from: data) else {
+                try? FileManager.default.removeItem(at: file.url)
+                return nil
+            }
+            return message
         }
     }
 

@@ -12,8 +12,10 @@ struct ProtocolDecodingTests {
             let place = "\(transcript.name).jsonl line \(logged.line)"
             #expect(logged.event.type == logged.json["type"]?.string, "\(place)")
             #expect(logged.event.id?.rawValue == logged.json["id"]?.string, "\(place)")
-            #expect(
-                logged.event.payload.type == logged.event.type, "\(place): decoded as another type")
+            // The pinned transcripts' space events are types Ari doesn't know: see OneConversation.
+            let type =
+                OneConversation.spaceEvents.contains(logged.event.type) ? nil : logged.event.type
+            #expect(logged.event.payload.type == type, "\(place): decoded as another type")
         }
     }
 
@@ -37,7 +39,7 @@ struct ProtocolDecodingTests {
                 case .discover:
                     #expect(try body.decode(Discovery.self).product == "ito", "\(place)")
                 case .server:
-                    #expect(try !body.decode(ServerInfo.self).agent.name.isEmpty, "\(place)")
+                    #expect(try !body.decode(ServerInfo.self).lead.name.isEmpty, "\(place)")
                 case .send:
                     let sent = try #require(request.body).decode(SendMessage.self)
                     let result = try body.decode(MessageResult.self)
@@ -46,6 +48,21 @@ struct ProtocolDecodingTests {
                         "\(place)")
                 case .earlierMessages:
                     #expect(try !body.decode(MessagePage.self).messages.isEmpty, "\(place)")
+                case .desk:
+                    _ = try body.decode(Desk.self)
+                case .answerCard(let card):
+                    #expect(try body.decode(CardResult.self).card.id == card, "\(place)")
+                case .done:
+                    _ = try body.decode(DonePage.self)
+                case .undo(let entry):
+                    #expect(try body.decode(DoneResult.self).entry.id == entry, "\(place)")
+                case .jobs:
+                    _ = try body.decode(JobList.self)
+                case .addEvent:
+                    _ = try body.decode(CalendarEventResult.self)
+                case .lead, .briefingSettings, .readBriefing:
+                    // Settings' requests, and a briefing read, which has no answer to read.
+                    continue
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
                 case .retry(let turn):
@@ -126,10 +143,18 @@ struct ProtocolDecodingTests {
             case .send:
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
-                    id: message.id, text: message.text, attachments: message.attachments ?? [])
+                    id: message.id, text: message.text, attachments: message.attachments ?? [],
+                    done: message.done)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .answerCard:
+                #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
+            case .briefingSettings, .lead:
+                // Settings' requests.
+                continue
             case .stop:
                 Issue.record("\(place): a Stop has no body")
+            case .startCall:
+                Issue.record("\(place): starting a call has no body")
             case .device:
                 let registration = try body.decode(RegisterDevice.self)
                 #expect(try JSONValue(encoding: registration) == body, "\(place)")
@@ -185,7 +210,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 16) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 17) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
@@ -217,6 +242,7 @@ extension Event.Payload {
         case .messageStarted: "message.started"
         case .messageDelta: "message.delta"
         case .messageEnded: "message.ended"
+        case .messagePosted: "message.posted"
         case .turnEnded: "turn.ended"
         case .callStarted: "call.started"
         case .callEnded: "call.ended"
@@ -229,6 +255,8 @@ extension Event.Payload {
         case .motionFinished: "motion.finished"
         case .motionState: "motion.state"
         case .motionRemoved: "motion.removed"
+        case .deskChanged: "desk.changed"
+        case .onboardingChanged: "onboarding.changed"
         case .unknown: nil
         }
     }

@@ -3,7 +3,8 @@ import Foundation
 import Testing
 
 /// A golden transcript from ito-core: a header, the server's log when the scenario starts (`given`),
-/// then every step in time order. protocol/transcripts/README.md describes the format.
+/// then every step in time order. protocol/transcripts/README.md describes the format. Each line is
+/// read through ``OneConversation`` until the server's one-conversation contract is pinned.
 struct Transcript: Sendable, CustomTestStringConvertible {
     /// The file's name without its extension, such as "07-stop".
     let name: String
@@ -13,6 +14,15 @@ struct Transcript: Sendable, CustomTestStringConvertible {
     let steps: [Step]
 
     var testDescription: String { name }
+
+    /// Whether Ari is closed when the scenario starts, opening only later.
+    var startsClosed: Bool {
+        for step in steps {
+            if case .world(let world) = step, world.marker == "app_opened" { return true }
+            if case .app(let request) = step, request.route == .events { return false }
+        }
+        return false
+    }
 
     struct Header: Sendable, Decodable {
         let transcript: String
@@ -169,10 +179,13 @@ struct Transcript: Sendable, CustomTestStringConvertible {
 
         var given: [LoggedEvent] = []
         var steps: [Step] = []
+        var oneConversation = OneConversation()
         for (index, text) in lines.enumerated().dropFirst() {
             let line = index + 1
             try Self.reading(url, line: line) {
-                let json = try JSONValue(json: String(text))
+                guard let json = oneConversation.adapt(try JSONValue(json: String(text))) else {
+                    return
+                }
                 if let event = json["given"] {
                     let logged = LoggedEvent(
                         line: line, json: event, event: try event.decode(Event.self))
@@ -262,6 +275,15 @@ enum Route: Equatable {
     case events
     case send
     case earlierMessages(before: MessageID, limit: Int?)
+    case done
+    case jobs
+    case undo(DoneID)
+    case desk
+    case answerCard(CardID)
+    case readBriefing(BriefingID)
+    case addEvent
+    case lead
+    case briefingSettings
     case stop(TurnID)
     case retry(TurnID)
     case cancelAsk(AskID)
@@ -313,6 +335,20 @@ enum Route: Equatable {
         case ("GET", 2) where parts == ["v0", "messages"]:
             self = .earlierMessages(
                 before: MessageID(query["before"] ?? ""), limit: query["limit"].flatMap { Int($0) })
+        case ("GET", 2) where parts == ["v0", "done"]: self = .done
+        case ("GET", 2) where parts == ["v0", "jobs"]: self = .jobs
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "done" && parts[3] == "undo":
+            self = .undo(DoneID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "desk"]: self = .desk
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "cards" && parts[4] == "answer":
+            self = .answerCard(CardID(parts[3]))
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "briefing" && parts[4] == "read":
+            self = .readBriefing(BriefingID(parts[3]))
+        case ("POST", 3) where parts == ["v0", "calendar", "events"]: self = .addEvent
+        case ("PUT", 2) where parts == ["v0", "lead"]: self = .lead
+        case ("PUT", 2) where parts == ["v0", "briefing"]: self = .briefingSettings
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "stop":
             self = .stop(TurnID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "retry":
@@ -374,9 +410,11 @@ enum Route: Equatable {
         }
     }
 
-    /// Settings, the Library and a call ask for these, not the conversation's session.
+    /// Settings, the Library and a call ask for these, not the session.
     var isOutsideSession: Bool {
         switch self {
+        case .lead, .briefingSettings:
+            true
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability,
             .connectCapability,
             .memoryInMind,

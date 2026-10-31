@@ -26,7 +26,10 @@ export type OpenApiParameter = {
 export type OpenApiOperation = {
   readonly operationId?: string;
   readonly parameters?: readonly OpenApiParameter[];
-  readonly requestBody?: { readonly content?: Readonly<Record<string, { readonly schema?: JsonSchema }>> };
+  readonly requestBody?: {
+    readonly required?: boolean;
+    readonly content?: Readonly<Record<string, { readonly schema?: JsonSchema }>>;
+  };
   readonly responses?: Readonly<
     Record<
       string,

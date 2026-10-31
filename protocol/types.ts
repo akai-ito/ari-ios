@@ -78,7 +78,7 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Follow the conversation
+     * Follow every space and the Desk
      * @description One long-lived `text/event-stream` response that carries every event, in order. Each
      *     Server-Sent Event has an `id:` line (the event's id) and a `data:` line (the event as JSON,
      *     described by [the events schema](events.schema.json)). A comment line, `: ping`, arrives at
@@ -87,7 +87,7 @@ export interface paths {
      *     Send the id of the last event you applied as `Last-Event-ID` to resume: you receive every
      *     later event exactly once. When the server can't resume from it (there was none, it doesn't
      *     know it, or you are too far behind), the stream starts with a `snapshot` instead; replace
-     *     your view of the conversation with it.
+     *     your view of every space and of the Desk with it. Conversation events name their space.
      *
      *     A turn runs to its end whether or not anyone is connected.
      */
@@ -100,7 +100,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v0/messages": {
+  "/v0/onboarding": {
     parameters: {
       query?: never;
       header?: never;
@@ -108,21 +108,148 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Read older messages
-     * @description The messages just before a given one, oldest first, with the agent's steps among them.
-     *     The newest messages come from the event stream's `snapshot`, so `before` is always
+     * Read how getting started is going
+     * @description Where getting started stands: the catch-up's progress while Kumo reads, then its proposal of
+     *     spaces, beliefs to confirm and bookings it added. `onboarding.changed` carries every change.
+     *     The short talk is an ordinary conversation in the space `onboarding`, sent with
+     *     `POST /v0/spaces/onboarding/messages`, and the snapshot holds it until getting started is done.
+     */
+    get: operations["getOnboarding"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/onboarding/accept": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept your spaces
+     * @description Accepts the proposed spaces you kept, with their names as you left them; the rest are dropped.
+     *     Every app hears `space.added` for each, then `onboarding.changed` with `done`. From then on Tell
+     *     Kumo works.
+     */
+    post: operations["acceptSpaces"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/onboarding/beliefs/{belief}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm or correct a belief
+     * @description Says a belief is true, or corrects it in your words; Kumo fixes its memory from the correction
+     *     in the background, and the belief's `answer` follows in `onboarding.changed`.
+     */
+    post: operations["answerBelief"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/spaces": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the spaces
+     * @description Every space, in the order of the row of marks. The four Kumo starts with are made on a fresh box.
+     */
+    get: operations["listSpaces"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/spaces/{space}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Rename a space
+     * @description Every app hears `space.changed`. Kumo's manner there stays the same.
+     */
+    patch: operations["renameSpace"];
+    trace?: never;
+  };
+  "/v0/spaces/{space}/read": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Mark a space read
+     * @description Tells the box you've read the space up to a message, so its `unread` count drops to the
+     *     messages from Kumo after it. Every app hears `space.changed`.
+     */
+    put: operations["readSpace"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/spaces/{space}/messages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read older messages in a space
+     * @description The messages just before a given one in the space, oldest first, with Kumo's steps among
+     *     them. The newest messages come from the event stream's `snapshot`, so `before` is always
      *     required. A `404` means the server doesn't know that message (it was restored from a
      *     backup): reconnect to the event stream for a snapshot.
      */
-    get: operations["listMessages"];
+    get: operations["listSpaceMessages"];
     put?: never;
     /**
-     * Send a message
-     * @description Answers as soon as the message is on the server's disk, without waiting for the agent.
-     *     What happens next arrives on the event stream: `turn.started` when it starts a turn,
-     *     `message.read` when the agent takes it into the running turn, or `message.queued` when it
-     *     waits as Next. Send waiting messages one at a time, in order, each answered before the
-     *     next.
+     * Send a message in a space
+     * @description Answers as soon as the message is on the server's disk, without waiting for Kumo. What
+     *     happens next arrives on the event stream, each event naming the space: `turn.started` when
+     *     it starts a turn, `message.read` when Kumo takes it into the running turn, or
+     *     `message.queued` when it waits as Next. Send waiting messages one at a time, in order, each
+     *     answered before the next.
      *
      *     Sending the same id again returns the same message and changes nothing.
      *
@@ -132,10 +259,224 @@ export interface paths {
      *     refused with `attachment_missing`: upload its attachments again under the same ids, then
      *     send the same message again.
      *
-     *     While an ask waits, the message answers it: `message.accepted` for the message comes first,
-     *     then `ask.ended`.
+     *     While an ask waits in the space, the message answers it: `message.accepted` for the message
+     *     comes first, then `ask.ended`. To reply to an entry in the space's Done list, name it in
+     *     `done`.
      */
-    post: operations["sendMessage"];
+    post: operations["sendSpaceMessage"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/spaces/{space}/done": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read what Kumo did in a space
+     * @description The space's Done list, newest first: what Kumo did without you, and the mail it read and
+     *     left alone (`quiet`), each with its reason. Page back with `before`.
+     */
+    get: operations["listDone"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/spaces/{space}/jobs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Kumo's scheduled looks in a space
+     * @description The follow-ups, check-ins and standing jobs Kumo scheduled in the space, soonest first. To
+     *     stop one, tell Kumo in the space.
+     */
+    get: operations["listJobs"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/done/{entry}/undo": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Take back something Kumo did
+     * @description Undoes an entry whose `undo` is true, such as moving a binned mail back to the inbox. The
+     *     entry stays in the list, marked undone in its text.
+     */
+    post: operations["undoDone"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/desk": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the Desk
+     * @description Home: the briefing, Coming up, Waiting on you and the spaces. The snapshot carries it too,
+     *     and `desk.changed` carries the whole Desk whenever it changes.
+     */
+    get: operations["getDesk"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/desk/messages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Tell Kumo
+     * @description Says something to Kumo without choosing a space. The box files it into the space it
+     *     belongs in, then accepts it there exactly as `POST /v0/spaces/{space}/messages` would, with
+     *     `filed: true` on the message. It answers once the message is filed, with the space, so the
+     *     app can say "in Career". Siri, calls and the share sheet come in this way.
+     */
+    post: operations["tellKumo"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/desk/briefing/{briefing}/read": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Say the briefing was seen
+     * @description Tells the box an app showed the briefing, so it can fold it and, later, write a "since this
+     *     morning" briefing only for what happened after.
+     */
+    post: operations["readBriefing"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/desk/cards/{card}/answer": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer a card
+     * @description Answers a card waiting on you: tap one of its `options`, pick the clear `slots` of a
+     *     `times` card, or type `text`. For a draft, `text` asks for a change, such as "a bit more
+     *     casual", and Kumo rewrites the same draft. The card shows `state: working` while the box
+     *     acts, then leaves the Desk when it's done, or comes back changed; `desk.changed` says which.
+     */
+    post: operations["answerCard"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/calendar/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add an event to your calendar
+     * @description Adds an event to your own iCloud calendar through the box, the one path for "Add to
+     *     calendar". Needs the iCloud source set up.
+     */
+    post: operations["addEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/lead": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Rename Kumo
+     * @description Kumo is the lead's name until you choose another. `GET /v0/server` shows it.
+     */
+    put: operations["renameLead"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/briefing": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set when the morning briefing may come
+     * @description The morning briefing comes at the first calm moment after `not_before`, local time: when
+     *     you first open Ito, or the first gap with nothing on your calendar.
+     */
+    put: operations["setBriefing"];
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -649,7 +990,8 @@ export interface paths {
      * Start a call
      * @description Starts a call under the id the app chose, so starting it again is safe. While it's on, the
      *     agent speaks: short replies, no lists, the details in the chat, and notes as spoken lines.
-     *     Starting a call while another is on ends the earlier one first.
+     *     Starting a call while another is on ends the earlier one first. A call from inside a
+     *     space names it; one from the Desk joins the space its first words are filed into.
      */
     put: operations["startCall"];
     post?: never;
@@ -1026,10 +1368,10 @@ export interface components {
     Capability: {
       id: components["schemas"]["CapabilityId"];
       /**
-       * @description `domain` for a topic of your life (Your life), `hand` for a way Ari acts (Ari's hands).
+       * @description `domain` for a topic of your life, `hand` for a way Kumo acts, `source` for an account Kumo reads, such as iCloud for mail and calendar.
        * @enum {unknown}
        */
-      kind: "domain" | "hand";
+      kind: "domain" | "hand" | "source";
       /** @description Its name, such as Reports. */
       title: string;
       /** @description One sentence on what it does. */
@@ -1115,6 +1457,8 @@ export interface components {
     CheckResult: {
       /** @description What's wrong with the values, in plain words. Absent when they work. */
       problem?: string;
+      /** @description When they work, what connected, such as "Connected: 2 addresses, 4 calendars. Kumo's calendar added." */
+      summary?: string;
     };
     /** @description One event on the stream; its `type` says which. */
     Event:
@@ -1131,6 +1475,7 @@ export interface components {
       | components["schemas"]["MessageStarted"]
       | components["schemas"]["MessageDelta"]
       | components["schemas"]["MessageEnded"]
+      | components["schemas"]["MessagePosted"]
       | components["schemas"]["AskStarted"]
       | components["schemas"]["AskEnded"]
       | components["schemas"]["TurnEnded"]
@@ -1143,10 +1488,14 @@ export interface components {
       | components["schemas"]["MotionChanged"]
       | components["schemas"]["MotionFinished"]
       | components["schemas"]["MotionStateChanged"]
-      | components["schemas"]["MotionRemoved"];
+      | components["schemas"]["MotionRemoved"]
+      | components["schemas"]["SpaceChanged"]
+      | components["schemas"]["SpaceAdded"]
+      | components["schemas"]["DeskChanged"]
+      | components["schemas"]["OnboardingChanged"];
     /**
      * snapshot
-     * @description The first event when the server can't resume from your cursor: there was none, the server doesn't know it (it was restored from a backup, compacted it away, or is a different server), or you are too far behind. Replace your view of the conversation with it. Its id is the id of the latest event, so resuming after it continues from here; it has no id while the conversation is empty.
+     * @description The first event when the server can't resume from your cursor: there was none, the server doesn't know it (it was restored from a backup, compacted it away, or is a different server), or you are too far behind. Replace your view of every space and of the Desk with it. Its id is the id of the latest event, so resuming after it continues from here; it has no id while nothing has happened yet.
      */
     Snapshot: {
       id?: components["schemas"]["EventId"];
@@ -1158,22 +1507,9 @@ export interface components {
        * @enum {unknown}
        */
       reason: "no_cursor" | "cursor_unknown" | "too_far_behind";
-      /** @description The latest messages, oldest first, including a message still being written (with its text so far and no outcome). Page further back with `GET /v0/messages`. */
-      messages: components["schemas"]["Message"][];
-      /** @description Whether older messages exist. */
-      has_more: boolean;
-      /** @description Every step from the first of these messages on, including the running turn's steps, in position order. */
-      steps: components["schemas"]["Step"][];
-      /** @description Every ask from the first of these messages on, in position order, including the one that waits for your answer (it has no outcome). */
-      asks: components["schemas"]["Ask"][];
-      /** @description The running turn, or null when the agent is idle. */
-      turn: components["schemas"]["LiveTurn"] | null;
-      /** @description Messages waiting as Next, in the order they will be answered. */
-      next: components["schemas"]["MessageId"][];
-      /** @description The calls that started within these messages, and one still on. */
-      calls: components["schemas"]["Call"][];
-      /** @description The topics Ari marked on these messages, in position order. */
-      topics: components["schemas"]["Topic"][];
+      /** @description Every space, in order, each with the latest stretch of its conversation. */
+      spaces: components["schemas"]["SpaceConversation"][];
+      desk: components["schemas"]["Desk"];
     };
     /**
      * message.accepted
@@ -1184,6 +1520,8 @@ export interface components {
       /** @constant */
       type: "message.accepted";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["Message"];
     };
     /**
@@ -1195,6 +1533,8 @@ export interface components {
       /** @constant */
       type: "message.queued";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["MessageId"];
       /** @description The running turn it waits behind. */
       turn: components["schemas"]["TurnId"];
@@ -1208,6 +1548,8 @@ export interface components {
       /** @constant */
       type: "message.read";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["MessageId"];
       turn: components["schemas"]["TurnId"];
     };
@@ -1220,6 +1562,8 @@ export interface components {
       /** @constant */
       type: "turn.started";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       turn: components["schemas"]["TurnId"];
       /** @description The messages this turn answers, in the order they were sent. */
       inputs: components["schemas"]["MessageId"][];
@@ -1235,6 +1579,8 @@ export interface components {
       /** @constant */
       type: "turn.status";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       turn: components["schemas"]["TurnId"];
       kind: components["schemas"]["StatusKind"];
       label: components["schemas"]["StatusLabel"];
@@ -1249,6 +1595,8 @@ export interface components {
       /** @constant */
       type: "step.started";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       step: components["schemas"]["Step"];
     };
     /**
@@ -1260,6 +1608,8 @@ export interface components {
       /** @constant */
       type: "step.updated";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       step: components["schemas"]["Step"];
     };
     /**
@@ -1271,6 +1621,8 @@ export interface components {
       /** @constant */
       type: "step.ended";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       step: components["schemas"]["Step"];
     };
     /**
@@ -1282,6 +1634,8 @@ export interface components {
       /** @constant */
       type: "message.started";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["Message"];
     };
     /**
@@ -1293,6 +1647,8 @@ export interface components {
       /** @constant */
       type: "message.delta";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["MessageId"];
       /** @description Where this piece starts, in UTF-16 code units. */
       offset: number;
@@ -1307,6 +1663,8 @@ export interface components {
       /** @constant */
       type: "message.ended";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["MessageId"];
       outcome: components["schemas"]["Outcome"];
       /** @description The final length of the text, in UTF-16 code units. */
@@ -1323,6 +1681,8 @@ export interface components {
       /** @constant */
       type: "turn.ended";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       turn: components["schemas"]["TurnId"];
       outcome: components["schemas"]["Outcome"];
       /** @description Present when the outcome is `failed`. */
@@ -1337,6 +1697,8 @@ export interface components {
       /** @constant */
       type: "ask.started";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       ask: components["schemas"]["Ask"];
     };
     /**
@@ -1348,6 +1710,8 @@ export interface components {
       /** @constant */
       type: "ask.ended";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       ask: components["schemas"]["Ask"];
     };
     /** @description Something the agent asked you. Asking ends the agent's turn, and the ask waits as long as it takes: through the app closing, the phone going offline and the server restarting. The next message you send answers it, whether you tap an option, type your own answer or write about something else. At most one ask waits at a time. */
@@ -1393,7 +1757,7 @@ export interface components {
     /** @description What the device shows, once decrypted. */
     Notification: {
       kind: components["schemas"]["NotificationKind"];
-      /** @description `reply`: the reply's first line, with Markdown stripped, at most 200 characters. `failed`: "Couldn't finish: " and the error's message. `ask`: the question. `reminder`: "Still waiting on one thing: " and the question. */
+      /** @description `reply`: the reply's first line, with Markdown stripped, at most 200 characters. `failed`: "Couldn't finish: " and the error's message. `ask`: the question. `reminder`: "Still waiting on one thing: " and the question. `post`: its first line. `card`: the card's title. `briefing`: its first line. */
       text: string;
       /** @description `reply` and `failed`: the turn. */
       turn?: components["schemas"]["TurnId"];
@@ -1406,6 +1770,10 @@ export interface components {
         options: string[];
         allows_text: boolean;
       };
+      /** @description The space to open on a tap, for `reply`, `failed`, `ask`, `reminder` and `post`. */
+      space?: components["schemas"]["SpaceId"];
+      /** @description `card`: the card, to open the Desk at it. */
+      card?: components["schemas"]["CardId"];
     };
     /** @description One message in the conversation. Messages are ordered by when they began. */
     Message: {
@@ -1416,7 +1784,7 @@ export interface components {
        */
       role: "user" | "agent";
       kind?: components["schemas"]["MessageKind"];
-      /** @description Agent messages only: the turn that wrote it. */
+      /** @description Replies and notes only: the turn that wrote it. */
       turn?: components["schemas"]["TurnId"];
       /** @description GitHub-flavoured Markdown, exactly as written. While a message is still being written, the text so far. Empty for a message that only carries attachments, and for a reply that stands in for a turn that failed or was cut off before writing. A reply may hold `ari:` blocks, described in [the blocks schema](blocks.schema.json). */
       text: string;
@@ -1435,7 +1803,14 @@ export interface components {
       outcome?: components["schemas"]["Outcome"];
       /** @description Present when the outcome is `failed`. */
       error?: components["schemas"]["Error"];
-    };
+      /**
+       * @description User messages only: you said it to Kumo from the Desk, and Kumo filed it into this space.
+       * @constant
+       */
+      filed?: true;
+      /** @description User messages only: the Done entry this message replies to, such as a correction to one of Kumo's calls. */
+      done?: components["schemas"]["DoneId"];
+    } & unknown;
     /** @description One thing the agent did while working on a turn: thinking, a web search, a command, an edit, a tool, a plan, a wait. Its title is plain words written by the server, safe to show as it is. Its other fields carry the specifics exactly as the agent used them (commands, paths, queries, URLs, output); show what you choose. Fields beyond the common ones belong to particular kinds, and a step carries those its kind has. */
     Step: {
       id: components["schemas"]["StepId"];
@@ -1558,6 +1933,80 @@ export interface components {
       /** @description The protocol versions this server speaks, as `MAJOR.MINOR`. */
       protocol: string[];
     };
+    SpaceList: {
+      spaces: components["schemas"]["Space"][];
+    };
+    SpaceResult: {
+      space: components["schemas"]["Space"];
+    };
+    AcceptSpaces: {
+      spaces: {
+        id: components["schemas"]["SpaceId"];
+        name: string;
+      }[];
+    };
+    /** @description One of `answer` or `correction`. */
+    BeliefAnswer: {
+      /** @constant */
+      answer?: "true";
+      correction?: string;
+    };
+    SpaceRename: {
+      name: string;
+    };
+    SpaceRead: {
+      /** @description The latest message you've seen in the space. */
+      message: components["schemas"]["MessageId"];
+    };
+    FiledMessage: {
+      /** @description The space Kumo filed it into. */
+      space: components["schemas"]["SpaceId"];
+      message: components["schemas"]["Message"];
+    };
+    DonePage: {
+      entries: components["schemas"]["DoneEntry"][];
+      has_more: boolean;
+    };
+    DoneResult: {
+      entry: components["schemas"]["DoneEntry"];
+    };
+    JobList: {
+      jobs: components["schemas"]["Job"][];
+    };
+    /** @description One of `option`, `slots` or `text`. */
+    CardAnswer: {
+      /** @description The label of the option you tapped. */
+      option?: string;
+      /** @description `times` cards: the indexes of the slots that are clear, in the card's order. */
+      slots?: number[];
+      /** @description A typed answer; for a draft, the change you want. */
+      text?: string;
+    };
+    CardResult: {
+      card: components["schemas"]["Card"];
+    };
+    NewEvent: {
+      title: string;
+      start: components["schemas"]["When"];
+      end: components["schemas"]["When"];
+      location?: string;
+      notes?: string;
+    };
+    EventResult: {
+      event: components["schemas"]["CalendarItem"];
+    };
+    Lead: {
+      /** @description What the lead is called; Kumo until you choose another name. */
+      name: string;
+    };
+    BriefingSettings: {
+      /** @description The earliest local time the morning briefing may come, such as `07:30`. */
+      not_before: string;
+    };
+    StartCall: {
+      /** @description The space to call in. Leave it out from the Desk, and the call joins the space its first words are filed into. */
+      space?: components["schemas"]["SpaceId"];
+    };
     ServerInfo: {
       /** @description The server's name, usually its host name. */
       name: string;
@@ -1565,9 +2014,10 @@ export interface components {
       version: string;
       /** @description The protocol version of this route, as `MAJOR.MINOR`. */
       protocol: string;
+      lead: components["schemas"]["Lead"];
+      briefing: components["schemas"]["BriefingSettings"];
+      /** @description The model Kumo runs on. */
       agent: {
-        /** @description What the agent is called; Ari until you choose another name. */
-        name: string;
         /**
          * @description The model the agent runs on: the one chosen with `PUT /v0/agent`, or otherwise the one it
          *     last ran on, as its engine names it. Absent until either has happened.
@@ -1616,6 +2066,8 @@ export interface components {
           text?: string;
           /** @description The photos and files to attach, uploaded first, in order, each once. Naming one the server doesn't have is an `attachment_missing`. Naming one another message already carries is an `invalid_request`. */
           attachments?: components["schemas"]["UploadId"][];
+          /** @description The Done entry this message replies to, such as a correction to one of Kumo's calls. */
+          done?: components["schemas"]["DoneId"];
         }
       | {
           text: string;
@@ -1728,21 +2180,123 @@ export interface components {
     };
     /** @description Opaque and never reused, even after the server is restored from a backup. Resume by sending the id of the last event you applied as `Last-Event-ID`. */
     EventId: string;
-    /** @description Opaque. The app makes the ids of the messages you send (random UUIDs); the server makes the ids of the agent's messages. */
-    MessageId: string;
+    /** @description A space's id: `home`, `body`, `heart` or `career` for the four Kumo starts with, or lowercase words joined by dashes for one you added, such as `italian`. */
+    SpaceId: string;
     /**
-     * @description Agent messages only. A `reply` is part of the answer. A `note` is the agent's commentary while it works, such as "I'll check current prices first."; an app may show notes as live detail instead of in the conversation. Hide a kind you don't recognise.
+     * @description Which manner Kumo has there: `home` (Home & admin, brisk), `body` (direct), `heart` (Love & friends: a safe place and a bridge to people), `career` (challenges you), `custom`, or `onboarding` for the short getting-to-know-you talk before your spaces exist.
      * @enum {unknown}
      */
-    MessageKind: "reply" | "note";
-    /** @description Opaque. A turn is one run of the agent, from its inputs to an answer, a stop or an error. */
-    TurnId: string;
+    SpaceKind: "home" | "body" | "heart" | "career" | "custom" | "onboarding";
+    /** @description A thing's id: readable, chosen by Ari, unique on the server, such as `florence-with-janki`. */
+    MotionId: string;
+    /** @description A space Kumo proposes from what it found in your mail, calendar and memory. */
+    ProposedSpace: {
+      id: components["schemas"]["SpaceId"];
+      name: string;
+      kind: components["schemas"]["SpaceKind"];
+      /** @description Why, in a line, such as "You're interviewing with QRT and Citadel". */
+      reason: string;
+      /** @description The things in motion it would start with. */
+      motions: components["schemas"]["MotionId"][];
+    };
+    /** @description Opaque. The server makes it for each belief it checks with you. */
+    BeliefId: string;
+    /** @description Where something lives in memory: `memory:portrait`, `memory:now`, `memory:helping-you`, a shelf page such as `memory:people/alex`, a journal day such as `memory:journal/2026-10-25`, a thing in motion such as `motion:florence-with-janki`, or `conversation:past`. */
+    MemoryAddress: string;
+    /** @description Something Kumo believes about you from memory, for you to confirm or correct before it relies on it. */
+    Belief: {
+      id: components["schemas"]["BeliefId"];
+      /** @description Such as "You're training for a sub-20 5K". */
+      text: string;
+      page: components["schemas"]["MemoryAddress"];
+      /**
+       * @description How you answered it: `true`, or `corrected` once Kumo fixed it from your correction.
+       * @enum {unknown}
+       */
+      answer?: "true" | "corrected";
+    };
+    /** @description Opaque. The server makes it for each event it shows. */
+    CalendarItemId: string;
+    /** @description An instant, such as `2026-11-12T14:00:00Z`, or for an all-day event a date, such as `2026-11-12`. */
+    When: string;
     /**
      * Format: date-time
      * @description Server time, RFC 3339 in UTC with milliseconds.
      * @example 2026-10-12T09:41:07.120Z
      */
     Timestamp: string;
+    /** @description An event on one of your calendars, as the box reads it from iCloud. Open it with the event whose `uid` matches, in Apple's own views. */
+    CalendarItem: {
+      id: components["schemas"]["CalendarItemId"];
+      /** @description The event's iCalendar UID, which finds it on the phone. */
+      uid: string;
+      title: string;
+      start: components["schemas"]["When"];
+      end: components["schemas"]["When"];
+      all_day: boolean;
+      location?: string;
+      /** @description Which calendar it's on. `kumo` is true for Kumo's own calendar of holds, travel and prep. */
+      calendar: {
+        name: string;
+        kumo: boolean;
+      };
+      /** @description When to leave to get there on time, when Kumo worked it out. */
+      leave_at?: components["schemas"]["Timestamp"];
+      /** @description The thing in motion it belongs to, such as the Florence trip. */
+      motion?: components["schemas"]["MotionId"];
+      /**
+       * @description `hold` for a time Kumo is keeping free, `tentative` for maybe, `confirmed` otherwise.
+       * @enum {unknown}
+       */
+      status?: "hold" | "tentative" | "confirmed";
+    };
+    /** @description Getting started: Kumo reads your recent mail and calendar, talks with you briefly, then proposes your spaces. Until you accept them there are no spaces, and Tell Kumo waits. */
+    Onboarding: {
+      /**
+       * @description `reading` while the catch-up runs, `ready` when the proposal is there, `done` once you accepted spaces.
+       * @enum {unknown}
+       */
+      state: "reading" | "ready" | "done";
+      /** @description `reading`: how far the catch-up is. */
+      progress?: {
+        mails_read: number;
+        mails_total: number;
+      };
+      proposal?: {
+        spaces: components["schemas"]["ProposedSpace"][];
+        /** @description With memory from before, a few beliefs to confirm: "Here's what I know. Still true?" */
+        beliefs: components["schemas"]["Belief"][];
+        /** @description Future bookings the catch-up put on your calendar. */
+        added: components["schemas"]["CalendarItem"][];
+      };
+    };
+    /** @description One of Kumo's spaces: an area of your life with its own conversation, things in motion and standing work. */
+    Space: {
+      id: components["schemas"]["SpaceId"];
+      /** @description Such as "Home & admin". You can rename it. */
+      name: string;
+      kind: components["schemas"]["SpaceKind"];
+      /** @description How hard Kumo thinks here: one of the model's efforts, such as `max` for Career. */
+      effort: string;
+      /** @description Where its mark sits in the row, from the left. */
+      order: number;
+      /** @description Kumo's messages here since you last read it. Show a dot above zero. */
+      unread: number;
+      /** @description Kumo's latest message here, as one plain line: the start of its text with Markdown and blocks stripped. */
+      last?: {
+        text: string;
+        at: components["schemas"]["Timestamp"];
+      };
+    };
+    /** @description Opaque. The app makes the ids of the messages you send (random UUIDs); the server makes the ids of the agent's messages. */
+    MessageId: string;
+    /** @description Opaque. A turn is one run of the agent, from its inputs to an answer, a stop or an error. */
+    TurnId: string;
+    /**
+     * @description Agent messages only. A `reply` is part of the answer. A `note` is the agent's commentary while it works, such as "I'll check current prices first."; an app may show notes as live detail instead of in the conversation. A `post` is a message Kumo wrote outside a turn, from work it did in the background, such as "How did the QRT interview go?". Hide a kind you don't recognise.
+     * @enum {unknown}
+     */
+    MessageKind: "reply" | "note" | "post";
     /** @description Where a message or a step sits in the conversation: strictly increasing in conversation order, with gaps. Snapshots and history pages carry messages and steps in separate lists; merge them by position. */
     Position: number;
     /** @description Opaque. The server makes it when the agent asks. */
@@ -1770,6 +2324,8 @@ export interface components {
      * @enum {unknown}
      */
     Outcome: "completed" | "stopped" | "interrupted" | "failed";
+    /** @description Opaque. The server makes it for each entry. */
+    DoneId: string;
     /** @description Opaque. The server makes it when a step starts. */
     StepId: string;
     /**
@@ -1788,8 +2344,6 @@ export interface components {
       | "compacting"
       | "memory"
       | "motion";
-    /** @description Where something lives in memory: `memory:portrait`, `memory:now`, `memory:helping-you`, a shelf page such as `memory:people/alex`, a journal day such as `memory:journal/2026-10-25`, a thing in motion such as `motion:florence-with-janki`, or `conversation:past`. */
-    MemoryAddress: string;
     /** @description A page in memory, named but not shown. */
     MemoryPageRef: {
       address: components["schemas"]["MemoryAddress"];
@@ -1797,8 +2351,6 @@ export interface components {
     };
     /** @description An opaque id the server chooses for one change to memory. */
     ChangeId: string;
-    /** @description A thing's id: readable, chosen by Ari, unique on the server, such as `florence-with-janki`. */
-    MotionId: string;
     /**
      * @description `question` asks for information or a choice. `approval` asks before the agent does something consequential, and shows a `preview` of what would happen. Treat a kind you don't recognise as a question.
      * @enum {unknown}
@@ -1835,6 +2387,8 @@ export interface components {
       audio_deleted?: boolean;
       /** @description Why the server ended it, in a line to show, such as "The connection dropped." Absent when you ended it. */
       end_reason?: string;
+      /** @description The space the call is in. A call started from the Desk has none until its first words are filed into a space. */
+      space?: components["schemas"]["SpaceId"];
     };
     /** @description Opaque. The server makes it when Ari marks a topic. */
     TopicId: string;
@@ -1852,6 +2406,153 @@ export interface components {
      * @description A random UUID, in lowercase, the app makes before uploading. It is the attachment's id and its retry key.
      */
     UploadId: string;
+    /** @description One thing Kumo did in a space without you, for its Done list. Reply to it with a message whose `done` names it, and the correction becomes a preference. */
+    DoneEntry: {
+      id: components["schemas"]["DoneId"];
+      at: components["schemas"]["Timestamp"];
+      /** @description What Kumo did, such as "Unsubscribed from Deliveroo promos and binned 3". */
+      text: string;
+      /** @description Why, in a line. */
+      reason?: string;
+      /** @description The mail it was about. */
+      mail?: {
+        account?: string;
+        message_id: string;
+        from: string;
+        subject: string;
+      };
+      /** @description The event it added or changed. */
+      event?: components["schemas"]["CalendarItem"];
+      motion?: components["schemas"]["MotionId"];
+      /** @description Whether `POST /v0/done/{entry}/undo` can take it back. */
+      undo: boolean;
+      /** @description A mail Kumo read and left alone: "read, nothing needed". Fold these into one line a day. */
+      quiet: boolean;
+    };
+    /** @description Opaque. The server makes it when Kumo schedules a look. */
+    JobId: string;
+    /** @description A look Kumo scheduled for itself in a space: a follow-up, a check-in after an event, or a standing job it keeps doing. It's judged when it comes due, and moves itself if the moment is bad. */
+    Job: {
+      id: components["schemas"]["JobId"];
+      space: components["schemas"]["SpaceId"];
+      /** @description Such as "Ask how the QRT interview went". */
+      why: string;
+      /** @description When it's next due. */
+      at?: components["schemas"]["Timestamp"];
+      /** @description Due after this event ends. */
+      after_event?: {
+        uid: string;
+        title: string;
+      };
+      /** @description A standing job, with what it keeps looking for, such as "startups I'd join". */
+      standing?: {
+        ask: string;
+      };
+      motion?: components["schemas"]["MotionId"];
+    };
+    /** @description Opaque. The server makes it for each briefing. */
+    BriefingId: string;
+    /** @description Opaque. The server makes it for each card. */
+    CardId: string;
+    BriefingLine: {
+      /** @description One line, plain words. */
+      text: string;
+      /** @description The space it's about, to open on tap. */
+      space?: components["schemas"]["SpaceId"];
+      /** @description The thing in motion it's about. */
+      motion?: components["schemas"]["MotionId"];
+      /** @description The card waiting on you that it's about. */
+      card?: components["schemas"]["CardId"];
+    };
+    /** @description Kumo's briefing at the top of the Desk: `morning` once a day at the first calm moment, or `since` for what happened after you read the morning one. The box drops it at 14:00 local, or when a newer one replaces it. */
+    Briefing: {
+      id: components["schemas"]["BriefingId"];
+      /** @enum {unknown} */
+      kind: "morning" | "since";
+      at: components["schemas"]["Timestamp"];
+      /** @description What matters, most important first. Only what needs you or changed your plans. */
+      lines: components["schemas"]["BriefingLine"][];
+      /** @description How many small things Kumo handled without you, for "Also handled 9 small things". */
+      handled: number;
+      /** @description When an app first showed it, as told with `POST /v0/desk/briefing/{briefing}/read`. */
+      read_at?: components["schemas"]["Timestamp"];
+    };
+    /** @description A time Kumo offers. */
+    Slot: {
+      start: components["schemas"]["Timestamp"];
+      end: components["schemas"]["Timestamp"];
+      /** @description Such as "WFH day". */
+      note?: string;
+    };
+    /** @description Something waiting on you on the Desk. It stays until it's done, whatever the date. Draw its buttons from `options`; `allows_text` offers a typed answer, which for a draft asks for a change, such as "a bit more casual". Its kind's payload sits under a field of the same name. Show a kind you don't recognise by its title and options. */
+    Card: {
+      id: components["schemas"]["CardId"];
+      /**
+       * @description `draft`, `invite`, `times`, `question` or `offer`.
+       * @enum {unknown}
+       */
+      kind: "draft" | "invite" | "times" | "question" | "offer";
+      space: components["schemas"]["SpaceId"];
+      motion?: components["schemas"]["MotionId"];
+      /** @description When it began waiting, for "since Wed". */
+      at: components["schemas"]["Timestamp"];
+      /** @description One line, such as "Draft to Poppy". */
+      title: string;
+      options: components["schemas"]["AskOption"][];
+      allows_text: boolean;
+      /**
+       * @description `working` while the box acts on your answer, such as rewriting a draft. Absent while it waits on you.
+       * @constant
+       */
+      state?: "working";
+      /** @description A reply Kumo wrote into your Drafts folder. Kumo never sends it: open it in Mail with `message://` and the draft's Message-ID, and send it yourself. */
+      draft?: {
+        /** @description The mail account it's in, such as `icloud` or `outlook`. */
+        account: string;
+        from: string;
+        to: string[];
+        cc?: string[];
+        subject: string;
+        /** @description Plain text, as it will be sent. */
+        body: string;
+        /** @description The draft's own Message-ID, without angle brackets. */
+        message_id: string;
+        /** @description The Message-ID of the mail it answers. */
+        in_reply_to?: string;
+      };
+      /** @description An invitation, held on Kumo's calendar until you answer; your answer goes back through iCloud. */
+      invite?: {
+        event: components["schemas"]["CalendarItem"];
+        /** @description Something already at that time. */
+        clash?: components["schemas"]["CalendarItem"];
+      };
+      /** @description Times to check against your work calendar, which Kumo can't see. Answer with the slots that are clear. */
+      times?: {
+        /** @description Such as "A call with Poppy". */
+        purpose: string;
+        slots: components["schemas"]["Slot"][];
+      };
+      /** @description Something Kumo isn't sure about, such as whether a mail it binned was right. */
+      question?: {
+        text: string;
+      };
+      /** @description Kumo offers something new: a space for a need that keeps coming up, or a capability. */
+      offer?: {
+        text: string;
+        space?: {
+          name: string;
+        };
+        capability?: string;
+      };
+    } & (unknown & unknown & unknown & unknown & unknown);
+    /** @description Home: the briefing, what's coming up and what's waiting on you. The spaces come from the snapshot and `space.changed`. */
+    Desk: {
+      briefing?: components["schemas"]["Briefing"];
+      /** @description Events in the next 36 hours or so, plus anything big this week, in time order. */
+      coming_up: components["schemas"]["CalendarItem"][];
+      /** @description Cards waiting on you, oldest first. */
+      waiting: components["schemas"]["Card"][];
+    };
     /** @description A thing in motion: something going on that Ari keeps for you, such as a trip being planned. Its content and state come from `GET /v0/motion/{id}`. */
     Motion: {
       id: components["schemas"]["MotionId"];
@@ -1878,6 +2579,8 @@ export interface components {
       done_at?: components["schemas"]["Timestamp"];
       /** @description The position of your message Ari was answering when it started the thing. */
       position: components["schemas"]["Position"];
+      /** @description The space it belongs to, such as `career` for a job search. */
+      space: components["schemas"]["SpaceId"];
     };
     /** @description One entry of "What changed". */
     MotionChange: {
@@ -1916,6 +2619,26 @@ export interface components {
       /** @description The current live status, if there is one yet. */
       status: components["schemas"]["Status"] | null;
     };
+    /** @description One space and the latest stretch of its conversation. */
+    SpaceConversation: {
+      space: components["schemas"]["Space"];
+      /** @description The space's latest messages, oldest first, including a message still being written (with its text so far and no outcome). Page further back with `GET /v0/spaces/{space}/messages`. */
+      messages: components["schemas"]["Message"][];
+      /** @description Whether older messages exist. */
+      has_more: boolean;
+      /** @description Every step from the first of these messages on, including the running turn's steps, in position order. */
+      steps: components["schemas"]["Step"][];
+      /** @description Every ask from the first of these messages on, in position order, including the one that waits for your answer (it has no outcome). */
+      asks: components["schemas"]["Ask"][];
+      /** @description The running turn, or null when the agent is idle. */
+      turn: components["schemas"]["LiveTurn"] | null;
+      /** @description Messages waiting as Next, in the order they will be answered. */
+      next: components["schemas"]["MessageId"][];
+      /** @description The calls that started within these messages, and one still on. */
+      calls: components["schemas"]["Call"][];
+      /** @description The topics on these messages, in position order. */
+      topics: components["schemas"]["Topic"][];
+    };
     /**
      * message.amended
      * @description On a call you carried on speaking before Ari began to answer, so your words joined the message you'd just spoken. It carries the whole message as it is now: the text with your new words, and one recording of both parts, in place of the earlier recording, which is gone. Replace the message you have with it.
@@ -1925,6 +2648,21 @@ export interface components {
       /** @constant */
       type: "message.amended";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
+      message: components["schemas"]["Message"];
+    };
+    /**
+     * message.posted
+     * @description Kumo posted a message into a space from work it did in the background, outside any turn. It arrives whole.
+     */
+    MessagePosted: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "message.posted";
+      at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       message: components["schemas"]["Message"];
     };
     /**
@@ -1981,6 +2719,8 @@ export interface components {
       /** @constant */
       type: "topic.started";
       at: components["schemas"]["Timestamp"];
+      /** @description The space whose conversation this is. */
+      space: components["schemas"]["SpaceId"];
       topic: components["schemas"]["Topic"];
     };
     /**
@@ -2049,10 +2789,54 @@ export interface components {
       motion: components["schemas"]["MotionId"];
     };
     /**
-     * @description Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or a `reminder` for an ask still waiting after three hours, sent once.
+     * space.changed
+     * @description A space changed: its name, its unread count or its latest line.
+     */
+    SpaceChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "space.changed";
+      at: components["schemas"]["Timestamp"];
+      space: components["schemas"]["Space"];
+    };
+    /**
+     * space.added
+     * @description You accepted Kumo's offer of a new space.
+     */
+    SpaceAdded: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "space.added";
+      at: components["schemas"]["Timestamp"];
+      space: components["schemas"]["Space"];
+    };
+    /**
+     * desk.changed
+     * @description Something on the Desk changed. It carries the whole Desk, which is small: replace yours.
+     */
+    DeskChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "desk.changed";
+      at: components["schemas"]["Timestamp"];
+      desk: components["schemas"]["Desk"];
+    };
+    /**
+     * onboarding.changed
+     * @description Getting started moved on. It carries the whole state.
+     */
+    OnboardingChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "onboarding.changed";
+      at: components["schemas"]["Timestamp"];
+      onboarding: components["schemas"]["Onboarding"];
+    };
+    /**
+     * @description Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or a `reminder` for an ask still waiting after three hours, sent once. `post`: Kumo posted into a space from background work. `card`: something started waiting on you on the Desk. `briefing`: the morning briefing is ready.
      * @enum {unknown}
      */
-    NotificationKind: "reply" | "failed" | "ask" | "reminder";
+    NotificationKind: "reply" | "failed" | "ask" | "reminder" | "post" | "card" | "briefing";
   };
   responses: {
     /** @description The request is malformed, or not possible in the current state (`invalid_request`). */
@@ -2166,6 +2950,8 @@ export interface components {
     };
   };
   parameters: {
+    /** @description The space's id, from its `Space`. */
+    Space: components["schemas"]["SpaceId"];
     /** @description The thing's id, from its `Motion`. */
     Motion: components["schemas"]["MotionId"];
     /** @description The turn's id, from `turn.started`. */
@@ -2245,6 +3031,23 @@ export type Step = components["schemas"]["Step"];
 export type Status = components["schemas"]["Status"];
 export type Error = components["schemas"]["Error"];
 export type Discovery = components["schemas"]["Discovery"];
+export type SpaceList = components["schemas"]["SpaceList"];
+export type SpaceResult = components["schemas"]["SpaceResult"];
+export type AcceptSpaces = components["schemas"]["AcceptSpaces"];
+export type BeliefAnswer = components["schemas"]["BeliefAnswer"];
+export type SpaceRename = components["schemas"]["SpaceRename"];
+export type SpaceRead = components["schemas"]["SpaceRead"];
+export type FiledMessage = components["schemas"]["FiledMessage"];
+export type DonePage = components["schemas"]["DonePage"];
+export type DoneResult = components["schemas"]["DoneResult"];
+export type JobList = components["schemas"]["JobList"];
+export type CardAnswer = components["schemas"]["CardAnswer"];
+export type CardResult = components["schemas"]["CardResult"];
+export type NewEvent = components["schemas"]["NewEvent"];
+export type EventResult = components["schemas"]["EventResult"];
+export type Lead = components["schemas"]["Lead"];
+export type BriefingSettings = components["schemas"]["BriefingSettings"];
+export type StartCall = components["schemas"]["StartCall"];
 export type ServerInfo = components["schemas"]["ServerInfo"];
 export type SendMessage = components["schemas"]["SendMessage"];
 export type MessageResult = components["schemas"]["MessageResult"];
@@ -2264,10 +3067,22 @@ export type DeviceResult = components["schemas"]["DeviceResult"];
 export type Presence = components["schemas"]["Presence"];
 export type ErrorResult = components["schemas"]["ErrorResult"];
 export type EventId = components["schemas"]["EventId"];
-export type MessageId = components["schemas"]["MessageId"];
-export type MessageKind = components["schemas"]["MessageKind"];
-export type TurnId = components["schemas"]["TurnId"];
+export type SpaceId = components["schemas"]["SpaceId"];
+export type SpaceKind = components["schemas"]["SpaceKind"];
+export type MotionId = components["schemas"]["MotionId"];
+export type ProposedSpace = components["schemas"]["ProposedSpace"];
+export type BeliefId = components["schemas"]["BeliefId"];
+export type MemoryAddress = components["schemas"]["MemoryAddress"];
+export type Belief = components["schemas"]["Belief"];
+export type CalendarItemId = components["schemas"]["CalendarItemId"];
+export type When = components["schemas"]["When"];
 export type Timestamp = components["schemas"]["Timestamp"];
+export type CalendarItem = components["schemas"]["CalendarItem"];
+export type Onboarding = components["schemas"]["Onboarding"];
+export type Space = components["schemas"]["Space"];
+export type MessageId = components["schemas"]["MessageId"];
+export type TurnId = components["schemas"]["TurnId"];
+export type MessageKind = components["schemas"]["MessageKind"];
 export type Position = components["schemas"]["Position"];
 export type AskId = components["schemas"]["AskId"];
 export type AttachmentId = components["schemas"]["AttachmentId"];
@@ -2275,12 +3090,11 @@ export type AttachmentKind = components["schemas"]["AttachmentKind"];
 export type CallId = components["schemas"]["CallId"];
 export type Spoken = components["schemas"]["Spoken"];
 export type Outcome = components["schemas"]["Outcome"];
+export type DoneId = components["schemas"]["DoneId"];
 export type StepId = components["schemas"]["StepId"];
 export type StepKind = components["schemas"]["StepKind"];
-export type MemoryAddress = components["schemas"]["MemoryAddress"];
 export type MemoryPageRef = components["schemas"]["MemoryPageRef"];
 export type ChangeId = components["schemas"]["ChangeId"];
-export type MotionId = components["schemas"]["MotionId"];
 export type AskKind = components["schemas"]["AskKind"];
 export type AskOption = components["schemas"]["AskOption"];
 export type AskOutcome = components["schemas"]["AskOutcome"];
@@ -2288,6 +3102,16 @@ export type Call = components["schemas"]["Call"];
 export type TopicId = components["schemas"]["TopicId"];
 export type Topic = components["schemas"]["Topic"];
 export type UploadId = components["schemas"]["UploadId"];
+export type DoneEntry = components["schemas"]["DoneEntry"];
+export type JobId = components["schemas"]["JobId"];
+export type Job = components["schemas"]["Job"];
+export type BriefingId = components["schemas"]["BriefingId"];
+export type CardId = components["schemas"]["CardId"];
+export type BriefingLine = components["schemas"]["BriefingLine"];
+export type Briefing = components["schemas"]["Briefing"];
+export type Slot = components["schemas"]["Slot"];
+export type Card = components["schemas"]["Card"];
+export type Desk = components["schemas"]["Desk"];
 export type Motion = components["schemas"]["Motion"];
 export type MotionChange = components["schemas"]["MotionChange"];
 export type VoiceState = components["schemas"]["VoiceState"];
@@ -2296,7 +3120,9 @@ export type StatusKind = components["schemas"]["StatusKind"];
 export type StatusLabel = components["schemas"]["StatusLabel"];
 export type StatusDetail = components["schemas"]["StatusDetail"];
 export type LiveTurn = components["schemas"]["LiveTurn"];
+export type SpaceConversation = components["schemas"]["SpaceConversation"];
 export type MessageAmended = components["schemas"]["MessageAmended"];
+export type MessagePosted = components["schemas"]["MessagePosted"];
 export type CallStarted = components["schemas"]["CallStarted"];
 export type CallEnded = components["schemas"]["CallEnded"];
 export type CallAudioDeleted = components["schemas"]["CallAudioDeleted"];
@@ -2307,6 +3133,10 @@ export type MotionChanged = components["schemas"]["MotionChanged"];
 export type MotionFinished = components["schemas"]["MotionFinished"];
 export type MotionStateChanged = components["schemas"]["MotionStateChanged"];
 export type MotionRemoved = components["schemas"]["MotionRemoved"];
+export type SpaceChanged = components["schemas"]["SpaceChanged"];
+export type SpaceAdded = components["schemas"]["SpaceAdded"];
+export type DeskChanged = components["schemas"]["DeskChanged"];
+export type OnboardingChanged = components["schemas"]["OnboardingChanged"];
 export type NotificationKind = components["schemas"]["NotificationKind"];
 export type ResponseInvalidRequest = components["responses"]["InvalidRequest"];
 export type ResponseTokenRejected = components["responses"]["TokenRejected"];
@@ -2316,6 +3146,7 @@ export type ResponseIdConflict = components["responses"]["IdConflict"];
 export type ResponseTooLarge = components["responses"]["TooLarge"];
 export type ResponseSlowDown = components["responses"]["SlowDown"];
 export type ResponseUnavailable = components["responses"]["Unavailable"];
+export type ParameterSpace = components["parameters"]["Space"];
 export type ParameterMotion = components["parameters"]["Motion"];
 export type ParameterTurn = components["parameters"]["Turn"];
 export type ParameterUpload = components["parameters"]["Upload"];
@@ -2413,8 +3244,13 @@ export interface operations {
            *       "name": "studio",
            *       "version": "0.9.0",
            *       "protocol": "0.9",
+           *       "lead": {
+           *         "name": "Kumo"
+           *       },
+           *       "briefing": {
+           *         "not_before": "07:30"
+           *       },
            *       "agent": {
-           *         "name": "Ari",
            *         "model": "gpt-6.1-sol",
            *         "effort": "low",
            *         "account": {
@@ -2475,7 +3311,202 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
-  listMessages: {
+  getOnboarding: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The state. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Onboarding"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  acceptSpaces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "spaces": [
+         *         {
+         *           "id": "home",
+         *           "name": "Home & admin"
+         *         },
+         *         {
+         *           "id": "career",
+         *           "name": "Career"
+         *         }
+         *       ]
+         *     }
+         */
+        "application/json": components["schemas"]["AcceptSpaces"];
+      };
+    };
+    responses: {
+      /** @description The spaces, in order. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpaceList"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      /** @description Getting started is already done, or not ready yet. */
+      409: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResult"];
+        };
+      };
+    };
+  };
+  answerBelief: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        belief: components["schemas"]["BeliefId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "correction": "Training for the Valencia half now, not a 5K."
+         *     }
+         */
+        "application/json": components["schemas"]["BeliefAnswer"];
+      };
+    };
+    responses: {
+      /** @description Taken. */
+      202: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listSpaces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The spaces. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpaceList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  renameSpace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The space's id, from its `Space`. */
+        space: components["parameters"]["Space"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "name": "Work"
+         *     }
+         */
+        "application/json": components["schemas"]["SpaceRename"];
+      };
+    };
+    responses: {
+      /** @description The space, renamed. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpaceResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  readSpace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The space's id, from its `Space`. */
+        space: components["parameters"]["Space"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SpaceRead"];
+      };
+    };
+    responses: {
+      /** @description The space, with its new count. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpaceResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listSpaceMessages: {
     parameters: {
       query: {
         /** @description Return messages older than this one. */
@@ -2484,7 +3515,10 @@ export interface operations {
         limit?: number;
       };
       header?: never;
-      path?: never;
+      path: {
+        /** @description The space's id, from its `Space`. */
+        space: components["parameters"]["Space"];
+      };
       cookie?: never;
     };
     requestBody?: never;
@@ -2505,11 +3539,14 @@ export interface operations {
       429: components["responses"]["SlowDown"];
     };
   };
-  sendMessage: {
+  sendSpaceMessage: {
     parameters: {
       query?: never;
       header?: never;
-      path?: never;
+      path: {
+        /** @description The space's id, from its `Space`. */
+        space: components["parameters"]["Space"];
+      };
       cookie?: never;
     };
     requestBody: {
@@ -2564,10 +3601,317 @@ export interface operations {
         };
       };
       401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
       409: components["responses"]["IdConflict"];
       413: components["responses"]["TooLarge"];
       429: components["responses"]["SlowDown"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  listDone: {
+    parameters: {
+      query?: {
+        /** @description Return entries older than this one. */
+        before?: components["schemas"]["DoneId"];
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        /** @description The space's id, from its `Space`. */
+        space: components["parameters"]["Space"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of entries. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DonePage"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listJobs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The space's id, from its `Space`. */
+        space: components["parameters"]["Space"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The jobs. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JobList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  undoDone: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        entry: components["schemas"]["DoneId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Undone. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DoneResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  getDesk: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The Desk. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Desk"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  tellKumo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "id": "0c9e8f61-2b8d-4a57-9d3e-7a1f6e5b4c32",
+         *       "text": "Remind me to get Janki flowers for Saturday."
+         *     }
+         */
+        "application/json": components["schemas"]["SendMessage"];
+      };
+    };
+    responses: {
+      /** @description Already filed and accepted earlier; nothing changed. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FiledMessage"];
+        };
+      };
+      /** @description Filed and accepted. */
+      201: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FiledMessage"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      409: components["responses"]["IdConflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  readBriefing: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        briefing: components["schemas"]["BriefingId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Noted. */
+      204: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  answerCard: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        card: components["schemas"]["CardId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "option": "Accept"
+         *     }
+         */
+        "application/json": components["schemas"]["CardAnswer"];
+      };
+    };
+    responses: {
+      /** @description Taken; the box is acting on it. */
+      202: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CardResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  addEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "title": "Call Mum",
+         *       "start": "2026-11-01T14:00:00Z",
+         *       "end": "2026-11-01T14:30:00Z"
+         *     }
+         */
+        "application/json": components["schemas"]["NewEvent"];
+      };
+    };
+    responses: {
+      /** @description Added. */
+      201: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  renameLead: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "name": "Kumo"
+         *     }
+         */
+        "application/json": components["schemas"]["Lead"];
+      };
+    };
+    responses: {
+      /** @description Renamed. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Lead"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  setBriefing: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "not_before": "07:30"
+         *     }
+         */
+        "application/json": components["schemas"]["BriefingSettings"];
+      };
+    };
+    responses: {
+      /** @description Saved. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BriefingSettings"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
     };
   };
   stopTurn: {
@@ -3333,7 +4677,11 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["StartCall"];
+      };
+    };
     responses: {
       /** @description It had already started; nothing changed. */
       200: {

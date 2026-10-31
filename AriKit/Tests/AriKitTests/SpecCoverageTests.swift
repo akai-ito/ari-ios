@@ -31,7 +31,9 @@ struct SpecCoverageTests {
             let definition = try #require(spec.eventDefinition(type: type), "no schema for \(type)")
             let minimal = spec.keepingRequired(logged.json, schema: definition)
             let event = try minimal.decode(Event.self)
-            #expect(event.payload.type == type, "\(transcript.name).jsonl line \(logged.line)")
+            // The pinned transcripts' space events are types Ari doesn't know: see OneConversation.
+            let known = OneConversation.spaceEvents.contains(type) ? nil : type
+            #expect(event.payload.type == known, "\(transcript.name).jsonl line \(logged.line)")
         }
     }
 
@@ -64,6 +66,15 @@ struct SpecCoverageTests {
         let reason = try #require(
             spec.definitions["Snapshot"]?["properties"]?["reason"]?["enum"]?.array)
         #expect(reason.compactMap(\.string) == SnapshotReason.known.map(\.rawValue))
+        func values(of definition: String, _ field: String) throws -> [String] {
+            try #require(spec.definitions[definition]?["properties"]?[field]?["enum"]?.array)
+                .compactMap(\.string)
+        }
+        #expect(try values(of: "Card", "kind") == CardKind.known.map(\.rawValue))
+        #expect(try values(of: "Briefing", "kind") == BriefingKind.known.map(\.rawValue))
+        #expect(try values(of: "CalendarItem", "status") == CalendarStatus.known.map(\.rawValue))
+        let state = spec.definitions["Card"]?["properties"]?["state"]?["const"]?.string
+        #expect([state] == CardState.known.map(\.rawValue))
         // The spec lists error codes in prose, each in backticks.
         let prose = try #require(spec.definitions["Error"]?["description"]?.string)
         let codes = prose.matches(of: /`([a-z][a-z0-9_]*)`/).map { String($0.output.1) }
@@ -71,12 +82,14 @@ struct SpecCoverageTests {
     }
 }
 
-/// protocol/events.schema.json, read just far enough for these checks.
+/// protocol/events.schema.json, read just far enough for these checks, as one conversation until the
+/// server's one-conversation contract is pinned.
 private struct Spec {
     let definitions: [String: JSONValue]
 
     init() throws {
-        definitions = try #require(Fixtures.eventsSchema()["$defs"]?.object)
+        definitions = try #require(
+            OneConversation.schema(Fixtures.eventsSchema())["$defs"]?.object)
     }
 
     func definition(at reference: String) throws -> JSONValue {

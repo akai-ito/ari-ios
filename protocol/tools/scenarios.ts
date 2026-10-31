@@ -9,8 +9,8 @@ import { florenceId, florencePictures, florenceTrip, type FlorencePictures } fro
 import { sub20Id, sub20Training } from "./sub20.ts";
 import { createTranscript, type Transcript } from "./transcript.ts";
 
-const protocol = "0.15";
-const serverVersion = "0.15.0";
+const protocol = "0.16";
+const serverVersion = "0.16.0";
 const yesterdayAt = "2026-10-11T21:14:00.000Z";
 const todayAt = "2026-10-12T08:41:00.000Z";
 const authorization = "Bearer ito_example_not_a_real_token_00000000000000000000";
@@ -249,6 +249,7 @@ const memoryStep = (
 
 const florenceCard = {
   id: florenceId,
+  space: "home",
   kind: "trip",
   title: "Florence with Janki",
   summary: "6–9 Nov · 4 to book",
@@ -302,6 +303,7 @@ const startFlorence = (transcript: Transcript, pictures: FlorencePictures): Retu
 
 const sub20Card = {
   id: sub20Id,
+  space: "body",
   kind: "training",
   title: "Sub-20 5K",
   summary: "Week 6 of 10 · intervals today",
@@ -331,6 +333,31 @@ const findFlorencePictures = (transcript: Transcript): FlorencePictures => {
     }),
   ) as FlorencePictures;
 };
+
+const qrtTechnical = {
+  uid: "qrt-technical-1113@qrt.com",
+  title: "QRT technical",
+  start: "2026-11-13T14:00:00.000Z",
+  end: "2026-11-13T15:30:00.000Z",
+  all_day: false,
+  location: "Microsoft Teams",
+  calendar: { name: "Home", kumo: false },
+  status: "confirmed" as const,
+};
+
+const poppyDraft = {
+  account: "outlook",
+  from: "divy@outlook.com",
+  to: ["poppy.ward@qrt.com"],
+  subject: "Re: Thursday's technical",
+  body: "Hi Poppy, Thursday at 2 works great, thanks for moving it. See you on Teams! Divy",
+  message_id: "draft-poppy-0001@ito.local",
+  in_reply_to: "moved-0091@qrt.com",
+};
+
+const citadelBody =
+  "Hi Sarah, thanks for reaching out! I'd love a first call. Thursday 13th at 9:00 or Friday 14th at 17:30 " +
+  "work well for me. Here's my CV, and I'm on LinkedIn too. Best, Divy";
 
 const spokenWav = { "Content-Type": "audio/wav", "Content-Length": "12044" };
 
@@ -382,7 +409,9 @@ const scenarios: readonly (() => Transcript)[] = [
         name: "studio",
         version: serverVersion,
         protocol,
-        agent: { name: "Ari" },
+        lead: { name: "Kumo" },
+        agent: {},
+        briefing: { not_before: "07:30" },
         setup: { notifications: false, memory_backup: false },
         capabilities: [],
       },
@@ -1681,7 +1710,9 @@ const scenarios: readonly (() => Transcript)[] = [
         name: "studio",
         version: serverVersion,
         protocol,
-        agent: { name: "Ari" },
+        lead: { name: "Kumo" },
+        agent: {},
+        briefing: { not_before: "07:30" },
         setup: { notifications: false, memory_backup: false },
         capabilities: [],
       },
@@ -1726,7 +1757,9 @@ const scenarios: readonly (() => Transcript)[] = [
         name: "studio",
         version: serverVersion,
         protocol,
-        agent: { name: "Ari" },
+        lead: { name: "Kumo" },
+        agent: {},
+        briefing: { not_before: "07:30" },
         setup: { notifications: false, memory_backup: false },
         capabilities: [{ id: "reports", version: "0.2" }],
       },
@@ -2036,7 +2069,9 @@ const scenarios: readonly (() => Transcript)[] = [
         name: "studio",
         version: serverVersion,
         protocol,
-        agent: { name: "Ari", model: "gpt-6-luna", effort: "medium" },
+        lead: { name: "Kumo" },
+        agent: { model: "gpt-6-luna", effort: "medium" },
+        briefing: { not_before: "07:30" },
         setup: { notifications: false, memory_backup: false },
         capabilities: [],
       },
@@ -3132,6 +3167,7 @@ const scenarios: readonly (() => Transcript)[] = [
       guarantees: ["G32"],
     });
     transcript.begin("2026-10-28T07:30:00.000Z");
+    transcript.inSpace("body");
     transcript.connect();
     transcript.wait(2000);
     sendAndStart(
@@ -3217,6 +3253,349 @@ const scenarios: readonly (() => Transcript)[] = [
       `20:12, 29 seconds off in four weeks. Sunday's long run stays easy.\n\n${motionLine(sub20Id, 3)}`,
     );
     transcript.endTurn("completed");
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "65-a-space-of-its-own",
+      scenario: 65,
+      title: "A space of its own",
+      summary:
+        "The snapshot holds Kumo's four spaces, each with its own conversation. You open Career and ask for help " +
+        "with Thursday's interview; the turn runs there, every event naming the space. Career's mark gets a dot, " +
+        "and reading the space clears it.",
+      guarantees: ["G33"],
+    });
+    transcript.begin("2026-11-10T08:15:00.000Z");
+    transcript.connect();
+    transcript.wait(2000);
+    transcript.inSpace("career");
+    sendAndStart(transcript, "Help me prepare for Thursday's QRT technical.");
+    transcript.wait(400);
+    transcript.step("thinking", thinking);
+    transcript.wait(2200);
+    writeWhole(
+      transcript,
+      "Let's rehearse one system-design story out loud: the market-data fan-out you rebuilt. Start with the " +
+        "constraint that forced it, then the trade-off you'd defend.",
+    );
+    transcript.endTurn("completed");
+    transcript.wait(4000);
+    transcript.readSpace();
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "66-tell-kumo",
+      scenario: 66,
+      title: "Tell Kumo",
+      summary:
+        "You tell Kumo something from the Desk without choosing a space. The box files it into Home & admin, " +
+        "answers with the space so the app can say where it went, and Kumo answers there.",
+      guarantees: ["G34"],
+    });
+    transcript.begin("2026-11-10T08:40:00.000Z");
+    transcript.connect();
+    transcript.wait(2000);
+    transcript.world("kumo_files", { space: "home" });
+    const told = transcript.tellKumo("Remind me to book the Uffizi tickets on Friday.", "home");
+    transcript.startTurn([told]);
+    transcript.wait(500);
+    transcript.step("thinking", thinking);
+    transcript.wait(1200);
+    writeWhole(transcript, "I'll bring it to you on Friday morning, with the 8:15 slot if it's still open.");
+    transcript.endTurn("completed");
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "67-the-desk",
+      scenario: 67,
+      title: "The Desk",
+      summary:
+        "Overnight Kumo filled the Desk: a morning briefing, what's coming up and five cards waiting on you, one " +
+        "of each kind. The snapshot carries it, and so does GET /v0/desk. You answer the question, accept the " +
+        "offer of a space for Italian, and pick the clear times, which Kumo turns into a draft.",
+      guarantees: ["G35", "G36"],
+    });
+    transcript.time("2026-11-11T06:00:00.000Z");
+    const technical = transcript.calendarItem(qrtTechnical);
+    const janki = transcript.calendarItem({
+      uid: "janki-dinner-1111@icloud.com",
+      title: "Janki",
+      start: "2026-11-11T19:30:00.000Z",
+      end: "2026-11-11T21:30:00.000Z",
+      all_day: false,
+      location: "Dishoom Shoreditch",
+      calendar: { name: "Home", kumo: false },
+      leave_at: "2026-11-11T19:05:00.000Z",
+      status: "confirmed",
+    });
+    transcript.comingUp([janki, technical]);
+    const question = transcript.addCard({
+      kind: "question",
+      space: "home",
+      title: "Binned a Revolut mail",
+      options: [{ label: "Right", acts: true }, { label: "Keep it" }],
+      allows_text: true,
+      question: { text: 'Binned "Your account update" from Revolut as a promotion. Right?' },
+    });
+    transcript.addCard({
+      kind: "draft",
+      space: "career",
+      title: "Draft to Poppy",
+      options: [{ label: "Drop it" }],
+      allows_text: true,
+      draft: poppyDraft,
+    });
+    transcript.addCard({
+      kind: "invite",
+      space: "career",
+      title: "QRT technical, Thursday 14:00",
+      options: [{ label: "Accept", acts: true }, { label: "Maybe" }, { label: "Decline" }],
+      allows_text: false,
+      invite: { event: technical },
+    });
+    const times = transcript.addCard({
+      kind: "times",
+      space: "career",
+      title: "Times for a call with Citadel",
+      options: [{ label: "Draft it", acts: true }],
+      allows_text: true,
+      times: {
+        purpose: "A first call with Sarah at Citadel",
+        slots: [
+          { start: "2026-11-13T09:00:00.000Z", end: "2026-11-13T09:30:00.000Z", note: "WFH day" },
+          { start: "2026-11-13T12:30:00.000Z", end: "2026-11-13T13:00:00.000Z", note: "WFH day" },
+          { start: "2026-11-14T17:30:00.000Z", end: "2026-11-14T18:00:00.000Z" },
+        ],
+      },
+    });
+    const offer = transcript.addCard({
+      kind: "offer",
+      space: "home",
+      title: "A space for Italian?",
+      options: [{ label: "Make it", acts: true }, { label: "Not now" }],
+      allows_text: false,
+      offer: {
+        text: "Italian keeps coming up. Want a space for it, with lessons and practice?",
+        space: { name: "Italian" },
+      },
+    });
+    transcript.brief({
+      kind: "morning",
+      lines: [
+        { text: "Poppy sent the Teams link for Thursday; it's on the event.", space: "career", card: question.id },
+        { text: "Body: easy 30 minutes or rest; big afternoon.", space: "body" },
+      ],
+      handled: 9,
+    });
+    transcript.begin("2026-11-11T07:40:00.000Z");
+    transcript.connect();
+    transcript.wait(1500);
+    transcript.getDesk();
+    transcript.wait(3000);
+    transcript.answerCard(question.id, { option: "Right" });
+    transcript.settleCard(question.id);
+    transcript.wait(2000);
+    transcript.answerCard(offer.id, { option: "Make it" });
+    transcript.addSpace({ id: "italian", name: "Italian", kind: "custom", effort: "low" });
+    transcript.settleCard(offer.id);
+    transcript.wait(4000);
+    transcript.answerCard(times.id, { slots: [0, 2] });
+    transcript.world("kumo_works", {
+      space: "career",
+      calls: [
+        {
+          tool: "draft",
+          input: {
+            account: "outlook",
+            to: ["sarah.lee@citadel.com"],
+            subject: "Re: AI Engineer, FI",
+            body: citadelBody,
+          },
+        },
+      ],
+    });
+    transcript.wait(6000);
+    transcript.settleCard(times.id);
+    transcript.addCard({
+      kind: "draft",
+      space: "career",
+      title: "Draft to Sarah at Citadel",
+      options: [{ label: "Drop it" }],
+      allows_text: true,
+      draft: {
+        account: "outlook",
+        from: "divy@outlook.com",
+        to: ["sarah.lee@citadel.com"],
+        subject: "Re: AI Engineer, FI",
+        body: citadelBody,
+        message_id: "draft-citadel-0001@ito.local",
+      },
+    });
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "68-a-mail-arrives",
+      scenario: 68,
+      title: "A mail arrives",
+      summary:
+        "A booking confirmation lands in iCloud Mail. The attention pass judges it work for Home & admin, and a " +
+        "short-lived work thread puts the stay on your calendar, notices check-in closes before you land, drafts " +
+        "a note in your voice into Drafts and posts one line into the space. Nothing is sent.",
+      guarantees: ["G37", "G38"],
+    });
+    transcript.begin("2026-11-10T22:31:00.000Z");
+    transcript.connect();
+    transcript.wait(1000);
+    transcript.world("mail_arrives", {
+      account: "icloud",
+      message_id: "confirm-48213@hotelorto.it",
+      from: "Hotel Orto <reservations@hotelorto.it>",
+      to: ["divy@icloud.com"],
+      subject: "Booking confirmed: 12–15 November",
+      text: "Dear Divy, your stay at Hotel Orto is confirmed for 12–15 November. Reception is open until 22:00.",
+    });
+    transcript.world("attention_decides", {
+      decision: "work",
+      space: "home",
+      reason: "A hotel booking for Florence",
+      confidence: 0.94,
+    });
+    const stay = {
+      title: "Hotel Orto",
+      start: "2026-11-12",
+      end: "2026-11-15",
+      all_day: true,
+      location: "Via Guelfa 27, Florence",
+      notes: "Booked through iCloud Mail: Booking confirmed: 12–15 November",
+    };
+    const note =
+      "Hi! We land at 22:10 on the 12th, so we'll reach you around 23:00, after reception closes. Could you " +
+      "leave the keys for us, or tell us how late check-in works? Thanks, Divy";
+    transcript.world("kumo_works", {
+      space: "home",
+      calls: [
+        { tool: "add_event", input: stay },
+        {
+          tool: "draft",
+          input: { account: "icloud", reply_to: "confirm-48213@hotelorto.it", body: note },
+        },
+      ],
+      post: "Hotel Orto confirmed you for 12–15 Nov; it's on your calendar. One snag: you land 22:10 and check-in closes 22:00, so I drafted a note.",
+    });
+    transcript.wait(9000);
+    transcript.addCard({
+      kind: "draft",
+      space: "home",
+      title: "Note to Hotel Orto",
+      options: [{ label: "Drop it" }],
+      allows_text: true,
+      draft: {
+        account: "icloud",
+        from: "divy@icloud.com",
+        to: ["reservations@hotelorto.it"],
+        subject: "Re: Booking confirmed: 12–15 November",
+        body: note,
+        message_id: "draft-orto-0001@ito.local",
+        in_reply_to: "confirm-48213@hotelorto.it",
+      },
+    });
+    transcript.inSpace("home");
+    transcript.post(
+      "Hotel Orto confirmed you for 12–15 Nov; it's on your calendar. One snag: you land 22:10 and check-in closes 22:00, so I drafted a note.",
+    );
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "69-an-invite",
+      scenario: 69,
+      title: "An invite",
+      summary:
+        "Poppy's invite for the QRT technical arrives. Kumo holds the time on its own calendar, checks for a " +
+        "clash and puts Accept, Maybe and Decline on the Desk. You accept; iCloud sends the reply itself, and the " +
+        "event shows in Coming up.",
+      guarantees: ["G36", "G39"],
+    });
+    transcript.begin("2026-11-11T09:00:00.000Z");
+    transcript.connect();
+    transcript.wait(1000);
+    transcript.world("invite_arrives", {
+      uid: qrtTechnical.uid,
+      title: qrtTechnical.title,
+      start: qrtTechnical.start,
+      end: qrtTechnical.end,
+      location: qrtTechnical.location,
+      organizer: "Poppy Ward <poppy.ward@qrt.com>",
+    });
+    transcript.wait(800);
+    const held = transcript.calendarItem({ ...qrtTechnical, calendar: { name: "Kumo", kumo: true }, status: "hold" });
+    transcript.comingUp([held]);
+    const invite = transcript.addCard({
+      kind: "invite",
+      space: "career",
+      title: "QRT technical, Thursday 14:00",
+      options: [{ label: "Accept", acts: true }, { label: "Maybe" }, { label: "Decline" }],
+      allows_text: false,
+      invite: { event: { ...held, calendar: { name: "Home", kumo: false }, status: "tentative" } },
+    });
+    transcript.wait(5000);
+    transcript.answerCard(invite.id, { option: "Accept" });
+    transcript.wait(1200);
+    transcript.comingUp([{ ...held, calendar: { name: "Home", kumo: false }, status: "confirmed" }]);
+    transcript.settleCard(invite.id);
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "70-the-morning-briefing",
+      scenario: 70,
+      title: "The morning briefing",
+      summary:
+        "Your morning starts no earlier than 07:30. At the first calm moment after it, with nothing on your " +
+        "calendar, Kumo writes the briefing and sends it as a quiet notification. You open Ito; the app says it " +
+        "was seen, and by 14:00 the box has dropped it from the Desk.",
+      guarantees: ["G35", "G40"],
+    });
+    transcript.begin("2026-11-11T07:00:00.000Z");
+    transcript.registerDevice();
+    transcript.wait(1000);
+    transcript.request("PUT", "/v0/briefing", { body: { not_before: "07:30" } });
+    transcript.response(200, { not_before: "07:30" }, { headers: { "Ito-Protocol": protocol } });
+    transcript.wait(29 * 60 * 1000);
+    transcript.world("briefing_written", {
+      lines: [
+        { text: "QRT moved Thursday's technical to 2pm; your calendar has it.", space: "career" },
+        { text: "Body: easy 30 minutes or rest; big afternoon.", space: "body" },
+      ],
+      handled: 4,
+    });
+    transcript.wait(60 * 1000);
+    transcript.brief({
+      kind: "morning",
+      lines: [
+        { text: "QRT moved Thursday's technical to 2pm; your calendar has it.", space: "career" },
+        { text: "Body: easy 30 minutes or rest; big afternoon.", space: "body" },
+      ],
+      handled: 4,
+    });
+    transcript.wait(9 * 60 * 1000);
+    transcript.world("app_opened");
+    transcript.connect();
+    transcript.presence(true);
+    transcript.wait(1500);
+    transcript.readBriefing();
+    transcript.disconnect("app_closed");
+    transcript.presence(false);
     return transcript;
   },
 ];

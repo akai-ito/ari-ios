@@ -35,10 +35,10 @@ struct TalkTests {
         var replay = Replay(try Fixtures.transcript("40-delete-a-call-s-audio"))
         let call: CallID = "77429675-c07e-4b87-aa08-044fa314791d"
         let mine: MessageID = "m_0001_90849"
-        try replay.play(throughLine: 35, expecting: "call.ended e_0009_54098")
+        try replay.play(throughLine: 36, expecting: "call.ended e_0010_64795")
         #expect(replay.conversation[mine]?.spoken?.audio != nil)
 
-        try replay.play(throughLine: 38, expecting: "call.audio_deleted e_0010_64795")
+        try replay.play(throughLine: 39, expecting: "call.audio_deleted e_0011_64773")
         #expect(replay.conversation[call: call]?.audioDeleted == true)
         #expect(replay.conversation[mine]?.spoken?.audio == nil)
         #expect(replay.conversation[mine]?.spoken?.call == call)
@@ -50,10 +50,15 @@ struct TalkTests {
         var replay = Replay(try Fixtures.transcript("41-another-device-sees-the-call"))
         try replay.play()
         let call: CallID = "e1a0a4da-4694-4924-95f4-f91185ff711e"
-        #expect(replay.conversation[call: call]?.durationMs == 307_502)
         let items = Timeline(replay.conversation, reveal: Reveal()).items.map(\.id)
-        #expect(items.first == "call \(call)")
-        #expect(items.dropFirst().first == "914f3838-aaa0-49a3-89cd-57b1b6391d24")
+        // Fixed by the server's one-conversation contract, which isn't pinned yet.
+        withKnownIssue(
+            "The pinned transcript 41 starts the call without a space, so its snapshot leaves it out"
+        ) {
+            #expect(replay.conversation[call: call]?.durationMs == 307_502)
+            #expect(items.first == "call \(call)")
+            #expect(items.dropFirst().first == "914f3838-aaa0-49a3-89cd-57b1b6391d24")
+        }
     }
 
     @Test("Forgetting older messages keeps the call that's on")

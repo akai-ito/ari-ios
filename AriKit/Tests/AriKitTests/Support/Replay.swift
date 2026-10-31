@@ -1,13 +1,18 @@
 import AriKit
 import Testing
 
-/// Plays a golden transcript against a ``Conversation``. It starts from the app's cache (the `given`
-/// events up to `app.cursor`, without messages older than `app.oldest_cached`). Then it applies every
-/// event, every send, Stop and Try again the app made, and every answer that reached it. After each
-/// step it checks the rules that must always hold.
+/// Plays a golden transcript against the store: the ``Conversation``, the Desk and getting started.
+/// It starts from the app's cache (the `given` events up to `app.cursor`, without messages older
+/// than `app.oldest_cached`). Then it applies every event, every send, Stop and Try again the app
+/// made, and every answer that reached it. After each step it checks the rules that must always
+/// hold.
 struct Replay {
     let transcript: Transcript
     private(set) var conversation = Conversation()
+    /// The Desk, as the snapshot, `desk.changed` and the answers leave it.
+    private(set) var desk: Desk?
+    /// Getting started, as the snapshot and `onboarding.changed` leave it.
+    private(set) var onboarding: Onboarding?
     /// Each message's text worked out from the transcript's lines alone, to compare with the store's.
     private(set) var streamed: [MessageID: [UInt16]] = [:]
     private var position = 0
@@ -20,7 +25,7 @@ struct Replay {
         self.transcript = transcript
         if let cursor = transcript.header.app.cursor {
             for logged in transcript.given {
-                conversation.apply(logged.event)
+                apply(logged.event)
                 record(logged)
                 if logged.event.id == cursor { break }
             }
@@ -52,7 +57,7 @@ struct Replay {
         let before = conversation
         switch step {
         case .event(let logged):
-            conversation.apply(logged.event)
+            apply(logged.event)
             record(logged)
             if case .turnEnded(let ended) = logged.event.payload {
                 endedTurns.insert(ended.turn)
@@ -69,8 +74,25 @@ struct Replay {
         check(after: step, before: before)
     }
 
+    /// Applies an event as the session does: to the conversation, and a snapshot's or a change's
+    /// Desk and getting started beside it.
+    private mutating func apply(_ event: Event) {
+        conversation.apply(event)
+        switch event.payload {
+        case .snapshot(let snapshot):
+            desk = snapshot.desk
+            onboarding = snapshot.onboarding
+        case .deskChanged(let changed):
+            desk = changed.desk
+        case .onboardingChanged(let changed):
+            onboarding = changed.onboarding
+        default:
+            break
+        }
+    }
+
     /// Turns a request into what the person did: Send for a new message id (a repeat is the outbox
-    /// retrying, which changes nothing), Stop, or Try again.
+    /// retrying, which changes nothing), Stop, Try again, or cancelling an ask.
     private mutating func act(on request: Transcript.Request) throws {
         switch request.route {
         case .send:
@@ -109,6 +131,15 @@ struct Replay {
             conversation.insertEarlier(try body.decode(MessagePage.self), before: before)
         case .startCall, .endCall, .deleteCallAudio:
             conversation.confirm(try body.decode(CallResult.self))
+        case .desk:
+            desk = try body.decode(Desk.self)
+        case .answerCard:
+            let card = try body.decode(CardResult.self).card
+            if let desk {
+                self.desk = Desk(
+                    briefing: desk.briefing, comingUp: desk.comingUp,
+                    waiting: desk.waiting.map { $0.id == card.id ? card : $0 })
+            }
         default:
             break
         }
@@ -124,7 +155,7 @@ struct Replay {
                     streamed[MessageID(id)] = Array(text.utf16)
                 }
             }
-        case "message.started", "message.accepted", "message.amended":
+        case "message.started", "message.accepted", "message.amended", "message.posted":
             if let id = json["message"]?["id"]?.string, let text = json["message"]?["text"]?.string
             {
                 streamed[MessageID(id)] = Array(text.utf16)

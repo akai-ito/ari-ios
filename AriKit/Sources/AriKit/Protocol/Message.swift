@@ -3,9 +3,10 @@
 public struct Message: Hashable, Sendable, Codable {
     public var id: MessageID
     public var role: Role
-    /// Agent messages only: a reply, or a note while the agent works.
+    /// Agent messages only: a reply, a note while the agent works, or a post from work Kumo did in
+    /// the background.
     public var kind: MessageKind?
-    /// Agent messages only: the turn that wrote it.
+    /// Replies and notes only: the turn that wrote it.
     public var turn: TurnID?
     /// GitHub-flavoured Markdown, exactly as written; while the message is still being written, the
     /// text so far.
@@ -27,6 +28,8 @@ public struct Message: Hashable, Sendable, Codable {
     public var attachments: [Attachment]?
     /// Your messages only: how a message you spoke on a call came to be.
     public var spoken: Spoken?
+    /// Your messages only: the line of Done it replies to.
+    public var done: DoneID?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -47,7 +50,7 @@ public struct Message: Hashable, Sendable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, role, kind, turn, text, at, position, outcome, error, answers, attachments,
-            spoken
+            spoken, done
         case endedAt = "ended_at"
     }
 }

@@ -142,8 +142,9 @@ struct CapabilitiesTests {
             ServerInfo.self,
             from: Data(
                 """
-                { "name": "box", "version": "0.5.0", "protocol": "0.5",
-                  "agent": { "name": "Ari" }, "setup": { "notifications": true },
+                { "name": "box", "version": "0.5.0", "protocol": "0.5", "lead": { "name": "Kumo" },
+                  "briefing": { "not_before": "07:30" }, "agent": {},
+                  "setup": { "notifications": true },
                   "capabilities": [ { "id": "reports", "version": "0.1.0" } ] }
                 """.utf8))
         #expect(info.capabilities?.map(\.id) == ["reports"])

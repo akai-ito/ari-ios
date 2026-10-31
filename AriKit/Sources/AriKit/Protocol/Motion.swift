@@ -67,7 +67,15 @@ public struct MotionKind: OpenValue {
     public static let trip = MotionKind(rawValue: "trip")
     /// A training block towards a goal, such as a sub-20 5K.
     public static let training = MotionKind(rawValue: "training")
-    public static let known = [trip, training]
+    /// One outcome with several options moving through stages, such as a job search or a flat hunt.
+    public static let pursuit = MotionKind(rawValue: "pursuit")
+    /// A dated event with people and prep, such as a dentist appointment or a birthday dinner.
+    public static let occasion = MotionKind(rawValue: "occasion")
+    /// A problem with back-and-forth, such as the boiler, a refund or a visa. Named `caseFile`
+    /// because `case` is a Swift keyword: `.case` would need backticks at every use, and reads like
+    /// the start of a `switch` arm.
+    public static let caseFile = MotionKind(rawValue: "case")
+    public static let known = [trip, training, pursuit, occasion, caseFile]
 }
 
 /// Whether a thing is going on, or done. Ari treats a status it doesn't know as going on.
@@ -99,9 +107,9 @@ public struct MotionChange: Sendable, Equatable, Decodable, Identifiable {
     }
 }
 
-/// Your ticks and choices, by list and then by item id, such as `todo` → `book-uffizi` → done, or
-/// `places` → `boboli` → picked. `[:]` until you tap something. A tap here wins over how Ari wrote
-/// the item, except over a booking.
+/// Your ticks and choices, by list and then by item id, such as `todo` → `book-uffizi` → done,
+/// `places` → `boboli` → picked, or an occasion's `prep` → `forms` → done. `[:]` until you tap
+/// something. A tap here wins over how Ari wrote the item, except over a booking.
 public typealias MotionState = [String: [String: MotionTick]]
 
 /// Reads ticks, skipping any field that isn't a list of them, as from a newer server.
@@ -214,6 +222,15 @@ public struct MotionDetail: Sendable, Equatable, Decodable {
             case .training:
                 (try? c.decode(Training.self, forKey: .content)).map(MotionContent.training)
                     ?? .unreadable
+            case .pursuit:
+                (try? c.decode(Pursuit.self, forKey: .content)).map(MotionContent.pursuit)
+                    ?? .unreadable
+            case .occasion:
+                (try? c.decode(Occasion.self, forKey: .content)).map(MotionContent.occasion)
+                    ?? .unreadable
+            case .caseFile:
+                (try? c.decode(CaseFile.self, forKey: .content)).map(MotionContent.caseFile)
+                    ?? .unreadable
             default: .unknown
             }
     }
@@ -223,6 +240,9 @@ public struct MotionDetail: Sendable, Equatable, Decodable {
 public enum MotionContent: Sendable, Equatable {
     case trip(Trip)
     case training(Training)
+    case pursuit(Pursuit)
+    case occasion(Occasion)
+    case caseFile(CaseFile)
     /// A kind this Ari doesn't know: it shows as a plain card.
     case unknown
     /// A kind Ari knows, in a shape it can't read, as from a newer server.

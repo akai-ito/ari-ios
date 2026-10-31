@@ -4,7 +4,8 @@ import Testing
 
 /// Level 2: the whole client against each golden transcript. The transcript's server answers
 /// through the transport seam, and Ari must make exactly the transcript's requests, in order, and
-/// end with the same conversation as the store does when fed the transcript directly.
+/// end with the same conversation as the store does when fed the transcript directly, and with the
+/// same Desk and getting started when it started without a cache.
 @MainActor
 @Suite("The client, scenario by scenario")
 struct SessionTranscriptTests {
@@ -28,6 +29,10 @@ struct SessionTranscriptTests {
         var replay = Replay(transcript)
         try replay.play()
         #expect(rehearsal.session.conversation == replay.conversation)
+        if transcript.header.app.cursor == nil {
+            #expect(rehearsal.session.desk == replay.desk)
+            #expect(rehearsal.session.onboarding == replay.onboarding)
+        }
         #expect(
             await rehearsal.server.takeRequest() == nil, "Ari made a request the transcript doesn't"
         )
