@@ -75,7 +75,7 @@ struct ModelPickerView: View {
                 .accessibilityAddTraits(model.id == list.chosen.model ? .isSelected : [])
             }
             if models.chosenModel == nil {
-                Text("Ari is set to \(list.chosen.model), which your server no longer offers.")
+                Text("\(LeadName.current) is set to \(list.chosen.model), which your server no longer offers.")
                     .font(.footnote)
                     .foregroundStyle(.ariSecondary)
             }
@@ -111,7 +111,7 @@ struct ModelPickerView: View {
                 if let problem {
                     Text(problem)
                 } else {
-                    Text("Applies from your next message, everywhere you use Ari.")
+                    Text("Applies from your next message, everywhere you use Ito.")
                 }
             }
         }
