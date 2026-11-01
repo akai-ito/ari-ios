@@ -36,7 +36,7 @@
             Belief(id: "qrt", text: "You're in QRT's interview process."),
             Belief(id: "florence", text: "Florence with Janki on the 12th."),
             Belief(id: "5k", text: "Training for a sub-20 5K."),
-            Belief(id: "bloomberg", text: "You're at Bloomberg, and looking for what's next."),
+            Belief(id: "work", text: "You're a few years into your job, and looking for what's next."),
         ]
 
         static let reveal = OnboardingReveal(
