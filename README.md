@@ -66,10 +66,12 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   morning card (at the first calm moment, folding once read), what's coming up (opening in Apple's
   own event view), what's waiting on you (drafts to open in Mail, invites, times to check against
   your work calendar, questions Kumo wasn't sure about), and everything Kumo did, which you can
-  correct. Tell Kumo talks into the chat, with the reply on the Desk.
+  correct. Your answer shows on its card while Kumo acts on it, and then a line says what followed.
+  Tell Kumo talks into the chat, with the reply on the Desk.
 - **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
   questions while Kumo reads three months of mail (or "still true?" for what it already knows), the
-  morning and notifications, then what's in motion.
+  morning and notifications, then what's in motion. Kumo's questions can offer answers to tap.
+  Settings opens it again, with nothing wiped: Kumo reads mail again only for an account you add.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block, a
   pursuit such as a job search, an occasion such as a dentist appointment, or a case such as the
   boiler.

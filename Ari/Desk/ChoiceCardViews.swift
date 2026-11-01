@@ -166,9 +166,16 @@ struct CardOptions: View {
         let buttons = card.buttons
         if !buttons.isEmpty || card.isWorking || sending.problem != nil {
             VStack(alignment: .leading, spacing: 10) {
-                if card.isWorking { DeskWorkingLine() }
+                if let said = card.answerWords {
+                    // Your answer, then Kumo at work on it: the tap took, and the card leaves once
+                    // Kumo has acted, with what followed in Done.
+                    DeskAnswerLine(text: said)
+                    DeskWorkingLine(text: "\(LeadName.current)'s on it…")
+                } else if card.isWorking {
+                    DeskWorkingLine()
+                }
                 if let problem = sending.problem { DeskProblemLine(text: problem) }
-                if !buttons.isEmpty {
+                if !buttons.isEmpty, card.answerWords == nil {
                     WrappingStack(spacing: 8) {
                         ForEach(buttons) { button in
                             DeskPill(
@@ -187,6 +194,7 @@ struct CardOptions: View {
                 }
             }
             .animation(.smooth(duration: 0.3), value: sending.problem)
+            .animation(.smooth(duration: 0.3), value: card.answerWords)
         }
     }
 }

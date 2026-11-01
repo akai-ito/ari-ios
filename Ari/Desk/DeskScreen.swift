@@ -22,6 +22,8 @@ struct DeskScreen: View {
     @State private var openedCard: DeskCard?
     @State private var showsDone = false
     @State private var presence = PoseHistory()
+    /// What followed an answer Kumo has just acted on, from Done, for a minute after its card left.
+    @State private var followed: DoneEntry?
 
     var body: some View {
         ScrollView {
@@ -50,6 +52,13 @@ struct DeskScreen: View {
                             try await session.answer(card.id, answer)
                         }
                     }
+                }
+                if let followed {
+                    FollowedLine(entry: followed) { showsDone = true }
+                        .task(id: followed.id) {
+                            try? await Task.sleep(for: .seconds(60))
+                            if !Task.isCancelled { self.followed = nil }
+                        }
                 }
                 if let desk = session.desk, desk.briefing == nil, desk.comingUp.isEmpty,
                     desk.waiting.isEmpty
@@ -85,6 +94,28 @@ struct DeskScreen: View {
         }
         .sheet(isPresented: $showsDone) {
             NavigationStack { AllDoneView(session: session) }
+        }
+        .onChange(of: working) { before, now in
+            let settled = before.filter { now[$0.key] == nil }.map(\.value)
+            if !settled.isEmpty { Task { await showFollowed(settled) } }
+        }
+        .animation(.smooth(duration: 0.35), value: followed)
+    }
+
+    /// The cards the box is acting on, by id, with their titles.
+    private var working: [CardID: String] {
+        Dictionary(
+            (session.desk?.waiting ?? []).filter(\.isWorking).map { ($0.id, $0.title) },
+            uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Once a card you answered has left, what Done says came of it: your answer, and Kumo's line.
+    private func showFollowed(_ titles: [String]) async {
+        guard let page = try? await session.done() else { return }
+        if let entry = page.entries.first(where: { entry in
+            titles.contains { entry.text.contains("“\($0)”") }
+        }) {
+            followed = entry
         }
     }
 
@@ -213,6 +244,40 @@ private struct ReplyCard: View {
             .map(\.text)
             .joined(separator: "\n\n")
         return (entries[index].text, reply)
+    }
+}
+
+/// What came of an answer you gave on the Desk, in one quiet line: what you answered, and Kumo's
+/// line on what followed. A tap opens everything Kumo did.
+private struct FollowedLine: View {
+    let entry: DoneEntry
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: "checkmark")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.ariBone)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.text)
+                        .font(.subheadline)
+                        .foregroundStyle(.ariText)
+                    if let reason = entry.reason {
+                        Text(reason)
+                            .font(.footnote)
+                            .foregroundStyle(.ariSecondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows everything \(LeadName.current) did")
+        .transition(.opacity)
     }
 }
 

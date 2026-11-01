@@ -283,6 +283,7 @@ enum Route: Equatable {
     case onboarding
     case answerBelief(BeliefID)
     case finishOnboarding
+    case replayOnboarding
     case stop(TurnID)
     case retry(TurnID)
     case cancelAsk(AskID)
@@ -353,6 +354,7 @@ enum Route: Equatable {
         where parts[0] == "v0" && parts[1] == "onboarding" && parts[2] == "beliefs":
             self = .answerBelief(BeliefID(parts[3]))
         case ("POST", 3) where parts == ["v0", "onboarding", "done"]: self = .finishOnboarding
+        case ("POST", 3) where parts == ["v0", "onboarding", "replay"]: self = .replayOnboarding
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "stop":
             self = .stop(TurnID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "turns" && parts[3] == "retry":

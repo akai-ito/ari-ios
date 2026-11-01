@@ -44,6 +44,13 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/onboarding/done"))
     }
 
+    /// `POST /v0/onboarding/replay`: getting started again, once it's done, with nothing wiped.
+    /// The answer is getting started, reading again; `onboarding.changed` says the same to every
+    /// device.
+    public func replayOnboarding() async throws(RequestError) -> Onboarding {
+        try await call(HTTPRequest(.post, "/v0/onboarding/replay"))
+    }
+
     /// `POST /v0/onboarding/beliefs/{belief}`: a belief is still true, or here's your correction.
     /// Its answer follows in `onboarding.changed`.
     public func answerBelief(_ belief: BeliefID, answer: BeliefAnswer) async throws(RequestError) {

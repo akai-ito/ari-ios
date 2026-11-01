@@ -36,6 +36,8 @@ struct KumoQuestion: Hashable, Identifiable, Sendable {
     let id: String
     /// In Kumo's words.
     let text: String
+    /// Short answers Kumo offers, to tap; empty when it offers none.
+    var choices: [String] = []
 }
 
 /// Something Kumo already believes about you, for someone who comes with memory: "You're in QRT's

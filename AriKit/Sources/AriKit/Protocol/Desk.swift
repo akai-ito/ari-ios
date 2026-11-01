@@ -109,6 +109,8 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public let allowsText: Bool
     /// `working` while the box acts on your answer, such as rewriting a draft.
     public let state: CardState?
+    /// While it's `working`: the answer you gave, as you gave it.
+    public let answer: CardAnswer?
     public let draft: DraftCard?
     public let invite: InviteCard?
     public let times: TimesCard?
@@ -118,8 +120,9 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public init(
         id: CardID, kind: CardKind, motion: MotionID? = nil, at: Timestamp,
         title: String, options: [Ask.Option] = [], allowsText: Bool = false,
-        state: CardState? = nil, draft: DraftCard? = nil, invite: InviteCard? = nil,
-        times: TimesCard? = nil, question: QuestionCard? = nil, offer: OfferCard? = nil
+        state: CardState? = nil, answer: CardAnswer? = nil, draft: DraftCard? = nil,
+        invite: InviteCard? = nil, times: TimesCard? = nil, question: QuestionCard? = nil,
+        offer: OfferCard? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -129,6 +132,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         self.options = options
         self.allowsText = allowsText
         self.state = state
+        self.answer = answer
         self.draft = draft
         self.invite = invite
         self.times = times
@@ -137,7 +141,8 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, motion, at, title, options, state, draft, invite, times, question, offer
+        case id, kind, motion, at, title, options, state, answer, draft, invite, times, question
+        case offer
         case allowsText = "allows_text"
     }
 }

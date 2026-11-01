@@ -192,7 +192,7 @@ struct SetupSheet: View {
         default:
             TextField(
                 field.label, text: text(field.name),
-                prompt: Text(placeholder).foregroundStyle(.ariTertiary)
+                prompt: Text(field.placeholder ?? placeholder).foregroundStyle(.ariTertiary)
             )
             .font(.subheadline.monospaced())
             .foregroundStyle(.ariText)

@@ -35,6 +35,7 @@ struct DraftCardView: View {
                     .opacity(card.isWorking ? 0.5 : 1)
                     .accessibilityLabel("The mail: \(draft.body)")
                 if card.isWorking {
+                    if let said = card.answerWords { DeskAnswerLine(text: said) }
                     DeskWorkingLine(text: "Redrafting…")
                 }
                 if changing { changeField }

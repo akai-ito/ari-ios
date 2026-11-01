@@ -21,4 +21,11 @@ extension DeskCard {
 
     /// Whether words work as an answer too.
     var takesText: Bool { allowsText }
+
+    /// While the box works on it: the option you tapped or the words you wrote, to show as your
+    /// answer. Times are shown ticked instead.
+    var answerWords: String? {
+        guard isWorking else { return nil }
+        return answer?.option ?? answer?.text
+    }
 }
