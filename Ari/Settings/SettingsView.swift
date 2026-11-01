@@ -14,6 +14,7 @@ struct SettingsView: View {
         _client = State(initialValue: client)
         _capabilities = State(initialValue: client.map(Capabilities.init(client:)))
         _models = State(initialValue: client.map(Models.init(client:)))
+        _backup = State(initialValue: client.map { Backup(client: $0) })
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -23,67 +24,85 @@ struct SettingsView: View {
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
     @State private var models: Models?
+    /// Where memory is backed up, and backing it up to GitHub.
+    @State private var backup: Backup?
     /// Ari's voice on the server, from the main view.
     @Environment(Voices.self) private var voices: Voices?
     @State private var path = Self.startingPath
 
     var body: some View {
         NavigationStack(path: $path) {
-            Form {
-                ServerProblems(problems: session.problems)
-                server
-                KumoSettings(model: model, client: client)
-                MorningSettings(model: model, client: client)
-                capabilitiesSection
-                GettingStartedAgain(session: session) { dismiss() }
-                memoryBackup
-                notifications
-                TalkSettings()
-                Section("App icon") {
-                    AppIconChooser()
-                }
-                .listRowBackground(Color.ariSurface)
-            }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            .background(.ariBackground)
-            .task {
-                async let capabilitiesLoaded: Void? = capabilities?.refresh()
-                async let modelsLoaded: Void? = models?.refresh()
-                _ = await (capabilitiesLoaded, modelsLoaded)
-            }
-            .navigationTitle("Settings")
-            .navigationDestination(for: SettingsRoute.self) { route in
-                switch route {
-                case .capabilities:
-                    if let capabilities { CapabilitiesView(capabilities: capabilities) }
-                case .capability(let id, let setup):
-                    if let capabilities {
-                        CapabilityView(capabilities: capabilities, id: id, opensSetup: setup)
+            ScrollViewReader { proxy in
+                Form {
+                    ServerProblems(problems: session.problems)
+                    server
+                    KumoSettings(model: model, client: client)
+                    MorningSettings(model: model, client: client)
+                    capabilitiesSection
+                    GettingStartedAgain(session: session) { dismiss() }
+                    MemoryBackupSection(
+                        backup: backup, isBackedUp: model.server?.setup?.memoryBackup
+                    )
+                    .id(SettingsAnchor.memory)
+                    notifications
+                    TalkSettings()
+                    Section("App icon") {
+                        AppIconChooser()
                     }
-                case .model:
-                    if let models { ModelPickerView(models: models, chosen: model.refreshServer) }
-                case .voice:
-                    if let voices { VoicePickerView(voices: voices) }
+                    .listRowBackground(Color.ariSurface)
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
+                .background(.ariBackground)
+                .task {
+                    async let capabilitiesLoaded: Void? = capabilities?.refresh()
+                    async let modelsLoaded: Void? = models?.refresh()
+                    async let backupLoaded: Void? = backup?.refresh()
+                    _ = await (capabilitiesLoaded, modelsLoaded, backupLoaded)
+                    #if DEBUG
+                        if let anchor = DebugScript.settingsAnchor {
+                            proxy.scrollTo(anchor, anchor: .top)
+                        }
+                    #endif
                 }
-            }
-            .confirmationDialog(
-                "Connect to another server?", isPresented: $confirmingSwitch,
-                titleVisibility: .visible
-            ) {
-                Button("Disconnect from \(model.server?.name ?? "this server")", role: .destructive)
-                {
-                    dismiss()
-                    model.connectAgain()
+                .navigationTitle("Settings")
+                .navigationDestination(for: SettingsRoute.self) { route in
+                    switch route {
+                    case .capabilities:
+                        if let capabilities { CapabilitiesView(capabilities: capabilities) }
+                    case .capability(let id, let setup):
+                        if let capabilities {
+                            CapabilityView(capabilities: capabilities, id: id, opensSetup: setup)
+                        }
+                    case .model:
+                        if let models {
+                            ModelPickerView(models: models, chosen: model.refreshServer)
+                        }
+                    case .voice:
+                        if let voices { VoicePickerView(voices: voices) }
+                    case .memoryBackup:
+                        if let backup { MemoryBackupPage(backup: backup) }
+                    }
                 }
-            } message: {
-                Text("Ito forgets this server's token. Your conversations stay on the server.")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+                .confirmationDialog(
+                    "Connect to another server?", isPresented: $confirmingSwitch,
+                    titleVisibility: .visible
+                ) {
+                    Button(
+                        "Disconnect from \(model.server?.name ?? "this server")", role: .destructive
+                    ) {
+                        dismiss()
+                        model.connectAgain()
+                    }
+                } message: {
+                    Text("Ito forgets this server's token. Your conversations stay on the server.")
+                }
             }
         }
         .tint(.ariText)
@@ -151,25 +170,6 @@ struct SettingsView: View {
         #else
             []
         #endif
-    }
-
-    /// Whether what Ari knows is backed up off the server.
-    @ViewBuilder
-    private var memoryBackup: some View {
-        if let backedUp = model.server?.setup?.memoryBackup {
-            Section {
-                LabeledContent("Backup", value: backedUp ? "On" : "Not backed up")
-            } header: {
-                Text("Memory")
-            } footer: {
-                Text(
-                    backedUp
-                        ? "What \(LeadName.current) knows is pushed to your private repository as it changes."
-                        : "What \(LeadName.current) knows lives only on your server. Run ito memory remote on it to "
-                            + "back it up to a private repository.")
-            }
-            .listRowBackground(Color.ariSurface)
-        }
     }
 
     /// The model and how hard it thinks, as the picker names them once it has loaded: "GPT-6-Luna ·
