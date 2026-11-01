@@ -20,6 +20,8 @@ struct OnboardingHost: View {
         .task {
             if model == nil { model = makeModel() }
             if capabilities == nil { capabilities = app.client().map(Capabilities.init(client:)) }
+            // Accounts already connected, such as when getting started runs again, show so.
+            await refreshSources()
         }
         .onChange(of: session.onboarding, initial: true) { _, onboarding in update(onboarding) }
         .onChange(of: latestQuestion) { _, _ in updateAsking() }

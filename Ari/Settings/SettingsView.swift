@@ -34,6 +34,7 @@ struct SettingsView: View {
                 KumoSettings(model: model, client: client)
                 MorningSettings(model: model, client: client)
                 capabilitiesSection
+                GettingStartedAgain(session: session) { dismiss() }
                 memoryBackup
                 notifications
                 TalkSettings()
@@ -313,5 +314,49 @@ private struct TalkSettings: View {
                 problem = "Couldn't relearn your voice: \(error.plainWords)"
             }
         }
+    }
+}
+
+/// Going through getting started again, to see it: nothing is wiped, connected accounts stay
+/// connected, and Kumo reads mail again only for an account added now. Settings closes so getting
+/// started can open over everything.
+private struct GettingStartedAgain: View {
+    let session: Session
+    let close: () -> Void
+
+    @State private var opening = false
+    @State private var problem: String?
+
+    var body: some View {
+        Section {
+            Button {
+                Task { await open() }
+            } label: {
+                HStack {
+                    Text("Go through getting started again")
+                    Spacer()
+                    if opening { ProgressView() }
+                }
+            }
+            .disabled(opening)
+        } footer: {
+            Text(
+                problem
+                    ?? "Nothing is wiped. Connected accounts stay connected, and \(LeadName.current) reads mail again only for an account you add."
+            )
+        }
+        .listRowBackground(Color.ariSurface)
+    }
+
+    private func open() async {
+        opening = true
+        problem = nil
+        do throws(RequestError) {
+            try await session.replayOnboarding()
+            close()
+        } catch {
+            problem = "Couldn't open getting started: \(error.plainWords)"
+        }
+        opening = false
     }
 }
