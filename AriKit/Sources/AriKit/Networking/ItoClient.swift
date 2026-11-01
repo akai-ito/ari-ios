@@ -246,6 +246,14 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.put, "/v0/devices/\(Self.segment(device))/presence", body: body))
     }
 
+    /// `PUT /v0/devices/{device}/status`: the Focus your phone is in, when Ito is part of it, or
+    /// none once it's off. Kumo's lines and check-ins fit it.
+    public func setStatus(_ device: String, _ status: DeviceStatus) async throws(RequestError) {
+        try await callWithoutAnswer(
+            HTTPRequest(
+                .put, "/v0/devices/\(Self.segment(device))/status", body: try Self.json(status)))
+    }
+
     /// `GET /v0/capabilities`: every capability, with its state and setup.
     public func capabilities() async throws(RequestError) -> CapabilityList {
         try await call(HTTPRequest(.get, "/v0/capabilities"))

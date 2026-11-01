@@ -241,6 +241,11 @@ final class Rehearsal {
             if let presence = try? request.body?.decode(Presence.self) {
                 session.setLooking(presence.looking, device: device)
             }
+        case .status:
+            let device = String(request.path.split(separator: "/").dropLast().last ?? "")
+            if let status = try? request.body?.decode(DeviceStatus.self) {
+                Task { await session.setFocus(status.focus, device: device) }
+            }
         case .stop:
             session.stop()
         case .retry(let turn):

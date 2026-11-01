@@ -87,7 +87,7 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(AskResult.self).ask.id == ask, "\(place)")
                 case .device:
                     #expect(try body.decode(DeviceResult.self).device.keyID.count == 8, "\(place)")
-                case .presence:
+                case .presence, .status:
                     continue
                 case .upload(let attachment, let name):
                     let uploaded = try body.decode(AttachmentResult.self).attachment
@@ -186,6 +186,10 @@ struct ProtocolDecodingTests {
                 let pairing = try body.decode(PairDevice.self)
                 let encoded = PairDevice(code: pairing.code, deviceName: pairing.deviceName)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .status:
+                let status = try body.decode(DeviceStatus.self)
+                #expect(
+                    try JSONValue(encoding: DeviceStatus(focus: status.focus)) == body, "\(place)")
             case .presence:
                 let presence = try body.decode(Presence.self)
                 #expect(

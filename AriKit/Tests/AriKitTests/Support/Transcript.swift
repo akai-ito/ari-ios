@@ -296,6 +296,8 @@ enum Route: Equatable {
     /// Registering a device for notifications, or forgetting it.
     case device
     case presence
+    /// Your phone's Focus, from Ito's Focus filter.
+    case status
     /// Uploading a photo or file's bytes.
     case upload(AttachmentID, name: String)
     /// Fetching an attachment's bytes.
@@ -388,6 +390,8 @@ enum Route: Equatable {
         case ("GET", 3) where parts[0] == "v0" && parts[1] == "attachments":
             self = .attachment(AttachmentID(parts[2]))
         case ("POST", 2) where parts == ["v0", "pair"]: self = .pair
+        case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "status":
+            self = .status
         case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "presence":
             self = .presence
         case ("GET", 2) where parts == ["v0", "capabilities"]: self = .capabilities
