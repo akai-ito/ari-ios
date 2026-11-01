@@ -2,9 +2,10 @@ import AriKit
 import SwiftUI
 
 /// What's coming up, under day labels: Today, Tomorrow, then "Thu 12". Kumo's own blocks (holds,
-/// travel, prep) are dimmed and marked "Kumo"; travel says when to leave; a trip of several days
-/// says how many. Tapping a row opens the event. With nothing to show it draws nothing: the Desk
-/// hides the section.
+/// travel, prep, its plan for your day) are dimmed and marked "Kumo"; travel says when to leave; a
+/// trip of several days says how many. Kumo's guesses at your day sit in a dashed outline, and a tap
+/// says why, with Right and Not right?. Tapping any other row opens the event. With nothing to show
+/// it draws nothing: the Desk hides the section.
 struct ComingUpList: View {
     let items: [CalendarItem]
     /// The symbol for an all-day item, such as a plane for a trip's days; a calendar otherwise.
@@ -14,12 +15,19 @@ struct ComingUpList: View {
     /// Why Kumo guessed a block, for its guesses at your day (working, building, seeing people,
     /// chilling); `nil` for anything that isn't a guess.
     var guess: (CalendarItem) -> String? = { _ in nil }
-    /// You said a guess was right, or not.
-    var answerGuess: (CalendarItem, _ right: Bool) -> Void = { _, _ in }
+    /// You said a guess was right, or what it really was.
+    var answerGuess: (CalendarItem, GuessAnswer) async throws -> Void = { _, _ in }
     /// A guess shown open from the start, for previews.
     var unfoldedGuess: CalendarItemID?
+    /// A guess shown with its choices from the start, for previews.
+    var correctingGuess: CalendarItemID?
 
     @State private var unfolded: CalendarItemID?
+    /// The guess showing what it really was, after Not right?.
+    @State private var correcting: CalendarItemID?
+    /// The guess you're putting in your own words, from Something else….
+    @State private var describing: CalendarItem?
+    @State private var sending = DeskSending()
 
     @Environment(\.calendar) private var calendar
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -36,7 +44,16 @@ struct ComingUpList: View {
                     }
                 }
             }
-            .onAppear { if unfolded == nil { unfolded = unfoldedGuess } }
+            .onAppear {
+                if unfolded == nil { unfolded = unfoldedGuess ?? correctingGuess }
+                if correcting == nil { correcting = correctingGuess }
+            }
+            .sheet(item: $describing) { item in
+                GuessWords(item: item) { words in
+                    try await answerGuess(item, GuessAnswer(text: words))
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
 
@@ -70,7 +87,7 @@ struct ComingUpList: View {
     }
 
     /// One of Kumo's guesses at your day: its title in a dashed outline, marked "guess". A tap
-    /// unfolds why Kumo thinks so, with Right and Not right?.
+    /// unfolds why Kumo thinks so, with Right and Not right?, which offers what it really was.
     private func guessRow(_ item: CalendarItem, why: String, dayLabel: String, showsDay: Bool)
         -> some View
     {
@@ -124,19 +141,69 @@ struct ComingUpList: View {
                         .font(.footnote)
                         .foregroundStyle(.ariSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 18) {
-                        Button("Right") { answerGuess(item, true) }
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.ariBone)
-                        Button("Not right?") { answerGuess(item, false) }
+                    if sending.isSending {
+                        DeskWorkingLine(text: "Telling \(LeadName.current)…")
+                    } else if correcting == item.id {
+                        choices(for: item)
+                    } else {
+                        HStack(spacing: 18) {
+                            Button("Right") { send(.right, for: item) }
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.ariBone)
+                            Button("Not right?") {
+                                withAnimation(.smooth(duration: 0.25)) { correcting = item.id }
+                            }
                             .foregroundStyle(.ariSecondary)
+                        }
+                        .font(.footnote)
+                        .buttonStyle(.plain)
                     }
-                    .font(.footnote)
-                    .buttonStyle(.plain)
+                    if let problem = sending.problem { DeskProblemLine(text: problem) }
                 }
                 .padding(.leading, stacked ? 0 : dayWidth + timeWidth + 8)
                 .transition(.opacity)
             }
+        }
+    }
+
+    /// What it really was: the usual kinds of time, other than the guess, or your own words.
+    private func choices(for item: CalendarItem) -> some View {
+        WrappingStack(spacing: 8) {
+            ForEach(Self.corrections.filter { $0 != item.guess?.activity }, id: \.rawValue) {
+                activity in
+                GuessChoice(title: Self.name(activity)) {
+                    send(GuessAnswer(activity: activity), for: item)
+                }
+            }
+            GuessChoice(title: "Something else…") { describing = item }
+        }
+        .transition(.opacity)
+    }
+
+    private func send(_ answer: GuessAnswer, for item: CalendarItem) {
+        Task {
+            let failure = "Couldn't tell \(LeadName.current)"
+            if await sending.send(
+                item.id.rawValue, failure: failure, { try await answerGuess(item, answer) })
+            {
+                correcting = nil
+            }
+        }
+    }
+
+    /// The kinds of time Not right? offers.
+    static let corrections: [Activity] = [.working, .building, .people, .chilling]
+
+    /// An activity as a choice: "Seeing people" for people.
+    static func name(_ activity: Activity) -> String {
+        switch activity {
+        case .working: "Working"
+        case .building: "Building"
+        case .training: "Training"
+        case .people: "Seeing people"
+        case .studying: "Studying"
+        case .chilling: "Chilling"
+        default: "Something else"
         }
     }
 
@@ -250,6 +317,93 @@ struct ComingUpList: View {
             return "Tomorrow"
         }
         return day.formatted(DeskTime.weekdayDay)
+    }
+}
+
+/// One of the quick choices after Not right?: small and outlined, in the guess's own row.
+private struct GuessChoice: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.ariText)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Capsule().strokeBorder(Color.ariLine, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// What a guess really was, in your own words: a field and Save. It becomes the block's title on
+/// Kumo's calendar.
+private struct GuessWords: View {
+    let item: CalendarItem
+    let send: (String) async throws -> Void
+
+    @State private var words = ""
+    @State private var sending = DeskSending()
+    @FocusState private var focused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(
+                    "\(LeadName.current) guessed \(item.title), \(item.start.date.formatted(DeskTime.time))."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.ariSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                TextField("What was it?", text: $words)
+                    .font(.ariBody)
+                    .foregroundStyle(.ariText)
+                    .focused($focused)
+                    .submitLabel(.done)
+                    .onSubmit(submit)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
+                if let problem = sending.problem { DeskProblemLine(text: problem) }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(.ariBackground)
+            .navigationTitle("Something else")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.foregroundStyle(.ariText)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: submit)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.ariText)
+                        .disabled(trimmed.isEmpty || sending.isSending)
+                }
+            }
+            .onAppear { focused = true }
+        }
+    }
+
+    private var trimmed: String {
+        String(words.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+    }
+
+    private func submit() {
+        let text = trimmed
+        guard !text.isEmpty else { return }
+        Task {
+            if await sending.send(
+                "text", failure: "Couldn't tell \(LeadName.current)", { try await send(text) })
+            {
+                dismiss()
+            }
+        }
     }
 }
 

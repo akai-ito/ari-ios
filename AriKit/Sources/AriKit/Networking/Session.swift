@@ -404,6 +404,21 @@ public final class Session {
         desk = desk?.replacing(moment: result.moment)
     }
 
+    /// You skipped the day's question: it leaves the Desk at once, and Kumo never asks it again.
+    public func skipMoment(_ moment: MomentID) async throws(RequestError) {
+        _ = try await client.skipMoment(moment)
+        desk = desk?.withoutMoment(moment)
+    }
+
+    /// You answered one of Kumo's guesses at your day: it shows as yours at once, no longer a
+    /// guess, until the Desk says how it is.
+    public func answerGuess(_ item: CalendarItemID, _ answer: GuessAnswer)
+        async throws(RequestError)
+    {
+        let answered = try await client.answerGuess(item, answer)
+        desk = desk?.replacing(item: answered)
+    }
+
     /// Kumo's line has been on the Desk, so it's read and no notification goes out for it.
     public func readMoment(_ id: MomentID) async throws(RequestError) {
         try await client.readMoment(id)

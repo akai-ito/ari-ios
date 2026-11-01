@@ -38,6 +38,9 @@ import SwiftUI
         static let opensKumosWork = environment["ARI_KUMOS_WORK"] != nil
         /// `trust` opens Kumo's work at the ladder; `wrong` asks "That was wrong" of its first entry.
         static let kumosWork = environment["ARI_KUMOS_WORK"]
+        /// `ARI_GUESS` shows the Desk's first guess open (`open`), or with what it really was
+        /// (`correct`).
+        static let guess = environment["ARI_GUESS"]
         static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))
         static let shelf = environment["ARI_SHELF"]
         static let showsCalendar = environment["ARI_CALENDAR"] != nil
