@@ -44,6 +44,11 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.post, "/v0/onboarding/done"))
     }
 
+    /// `GET /v0/problems`: what's wrong on the server right now, each with how to fix it.
+    public func problems() async throws(RequestError) -> ProblemList {
+        try await call(HTTPRequest(.get, "/v0/problems"))
+    }
+
     /// `POST /v0/onboarding/replay`: getting started again, once it's done, with nothing wiped.
     /// The answer is getting started, reading again; `onboarding.changed` says the same to every
     /// device.

@@ -32,6 +32,7 @@ struct SessionTranscriptTests {
         if transcript.header.app.cursor == nil {
             #expect(rehearsal.session.desk == replay.desk)
             #expect(rehearsal.session.onboarding == replay.onboarding)
+            #expect(rehearsal.session.problems == replay.problems)
         }
         #expect(
             await rehearsal.server.takeRequest() == nil, "Ari made a request the transcript doesn't"

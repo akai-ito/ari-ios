@@ -13,6 +13,8 @@ struct Replay {
     private(set) var desk: Desk?
     /// Getting started, as the snapshot and `onboarding.changed` leave it.
     private(set) var onboarding: Onboarding?
+    /// What's wrong on the server, as the snapshot, `problems.changed` and its answers leave it.
+    private(set) var problems: [ServerProblem] = []
     /// Each message's text worked out from the transcript's lines alone, to compare with the store's.
     private(set) var streamed: [MessageID: [UInt16]] = [:]
     private var position = 0
@@ -86,9 +88,12 @@ struct Replay {
             desk = changed.desk
         case .onboardingChanged(let changed):
             onboarding = changed.onboarding
+        case .problemsChanged(let changed):
+            problems = changed.problems
         default:
             break
         }
+        if case .snapshot(let snapshot) = event.payload { problems = snapshot.problems ?? [] }
     }
 
     /// Turns a request into what the person did: Send for a new message id (a repeat is the outbox

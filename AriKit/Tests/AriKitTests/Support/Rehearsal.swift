@@ -200,6 +200,8 @@ final class Rehearsal {
             Task { try? await session.finishOnboarding() }
         case .replayOnboarding:
             Task { try? await session.replayOnboarding() }
+        case .problems:
+            Task { try? await session.refreshProblems() }
         case .upload(let attachment, let name):
             // Attaching it; uploading it again, after a lost answer, is Ari's own doing.
             guard let bytes = try? request.uploadBytes() else { return }

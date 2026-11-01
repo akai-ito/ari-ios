@@ -38,6 +38,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case motionRemoved(MotionRemoved)
         case deskChanged(DeskChanged)
         case onboardingChanged(OnboardingChanged)
+        case problemsChanged(ProblemsChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -49,7 +50,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "message.started", "message.delta", "message.ended", "message.posted", "turn.ended",
         "call.started", "call.ended", "call.audio_deleted", "voice.status", "topic.started",
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
-        "motion.removed", "desk.changed", "onboarding.changed",
+        "motion.removed", "desk.changed", "onboarding.changed", "problems.changed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -91,6 +92,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "motion.removed": .motionRemoved(try MotionRemoved(from: decoder))
             case "desk.changed": .deskChanged(try DeskChanged(from: decoder))
             case "onboarding.changed": .onboardingChanged(try OnboardingChanged(from: decoder))
+            case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))
             default: .unknown
             }
     }
@@ -123,9 +125,12 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let desk: Desk
     /// Where getting started stands, if the box sent it.
     public let onboarding: Onboarding?
+    /// What's wrong on the server, while anything is.
+    public let problems: [ServerProblem]?
 
     enum CodingKeys: String, CodingKey {
         case at, reason, messages, steps, asks, calls, topics, turn, next, desk, onboarding
+        case problems
         case hasMore = "has_more"
     }
 }

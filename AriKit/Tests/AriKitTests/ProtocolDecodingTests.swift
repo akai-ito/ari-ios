@@ -60,6 +60,8 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(CalendarEventResult.self)
                 case .onboarding, .finishOnboarding, .replayOnboarding:
                     _ = try body.decode(Onboarding.self)
+                case .problems:
+                    _ = try body.decode(ProblemList.self)
                 case .lead, .briefingSettings, .readBriefing, .answerBelief:
                     // Settings' requests, a briefing read and a belief's answer, which have no
                     // answer to read.
@@ -262,6 +264,7 @@ extension Event.Payload {
         case .motionRemoved: "motion.removed"
         case .deskChanged: "desk.changed"
         case .onboardingChanged: "onboarding.changed"
+        case .problemsChanged: "problems.changed"
         case .unknown: nil
         }
     }

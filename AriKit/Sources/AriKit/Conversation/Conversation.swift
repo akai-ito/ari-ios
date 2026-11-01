@@ -245,8 +245,8 @@ extension Conversation {
         // In motion follows these, not the conversation.
         case .motionStarted, .motionChanged, .motionFinished, .motionState, .motionRemoved:
             break
-        // The Desk and getting started are the session's.
-        case .deskChanged, .onboardingChanged:
+        // The Desk, getting started and the server's problems are the session's.
+        case .deskChanged, .onboardingChanged, .problemsChanged:
             break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.

@@ -24,11 +24,21 @@ struct DeskScreen: View {
     @State private var presence = PoseHistory()
     /// What followed an answer Kumo has just acted on, from Done, for a minute after its card left.
     @State private var followed: DoneEntry?
+    /// A problem on the server, opened to see how to fix it.
+    @State private var openedProblem: ServerProblem?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
+                if !session.problems.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(session.problems) { problem in
+                            ProblemLine(problem: problem) { openedProblem = problem }
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
                 if let briefing = session.desk?.briefing {
                     BriefingCard(
                         briefing: briefing, folded: $briefingFolded,
@@ -61,7 +71,7 @@ struct DeskScreen: View {
                         }
                 }
                 if let desk = session.desk, desk.briefing == nil, desk.comingUp.isEmpty,
-                    desk.waiting.isEmpty
+                    desk.waiting.isEmpty, session.problems.isEmpty
                 {
                     Text("Nothing needs you.")
                         .font(.ariBody)
@@ -95,11 +105,20 @@ struct DeskScreen: View {
         .sheet(isPresented: $showsDone) {
             NavigationStack { AllDoneView(session: session) }
         }
+        .sheet(item: $openedProblem) { problem in
+            NavigationStack {
+                ProblemView(problem: problem)
+                    .navigationTitle("Needs you")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .presentationDetents([.medium, .large])
+        }
         .onChange(of: working) { before, now in
             let settled = before.filter { now[$0.key] == nil }.map(\.value)
             if !settled.isEmpty { Task { await showFollowed(settled) } }
         }
         .animation(.smooth(duration: 0.35), value: followed)
+        .animation(.smooth(duration: 0.35), value: session.problems)
     }
 
     /// The cards the box is acting on, by id, with their titles.

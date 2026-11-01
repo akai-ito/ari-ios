@@ -25,6 +25,9 @@ public final class Session {
     public private(set) var desk: Desk?
     /// How getting started stands, once the stream or ``refreshOnboarding()`` has said.
     public private(set) var onboarding: Onboarding?
+    /// What's wrong on the server right now, each with how to fix it; empty when nothing is. The
+    /// snapshot and `problems.changed` keep it current.
+    public private(set) var problems: [ServerProblem] = []
     /// How the event stream is doing.
     public private(set) var link: Link = .paused
     /// Something that needs you before Ari can carry on.
@@ -451,6 +454,11 @@ public final class Session {
         onboarding = try await client.finishOnboarding()
     }
 
+    /// Asks what's wrong on the server, which the snapshot and `problems.changed` also say.
+    public func refreshProblems() async throws(RequestError) {
+        problems = try await client.problems().problems
+    }
+
     /// You want to see getting started again. It opens here at once, from the start; Kumo asks
     /// again and reads only an account you connect now.
     public func replayOnboarding() async throws(RequestError) {
@@ -534,7 +542,10 @@ public final class Session {
         case .snapshot(let snapshot):
             desk = snapshot.desk
             onboarding = snapshot.onboarding
+            problems = snapshot.problems ?? []
             wantsSnapshot = false
+        case .problemsChanged(let changed):
+            problems = changed.problems
         case .deskChanged(let changed):
             desk = changed.desk
         case .onboardingChanged(let changed):
