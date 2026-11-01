@@ -220,7 +220,9 @@ public struct Trail: Equatable, Sendable, Identifiable {
 }
 
 /// Steps one after another, with no note between them. Similar steps in a row share a line ("Read 3
-/// files"). Once the turn is over, a run of more than one line folds into a single line.
+/// files"); once the turn is over, so do all of a tool's steps in the run that the server says
+/// share one ("Sorted 23 mails · 18 binned, 5 archived"), wherever they came. Once the turn is
+/// over, a run of more than one line folds into a single line.
 public struct StepRun: Equatable, Sendable, Identifiable {
     public private(set) var lines: [StepLine]
     /// Whether it shows as its summary alone, until you open it.
@@ -234,12 +236,22 @@ public struct StepRun: Equatable, Sendable, Identifiable {
     }
 
     mutating func add(_ step: Step, live: Bool) {
-        let last = lines[lines.count - 1]
-        if let group = StepLine.group(of: step), group == StepLine.group(of: last.steps[0]) {
-            lines[lines.count - 1] = StepLine(last.steps + [step], live: live)
+        if let index = joining(step, live: live) {
+            lines[index] = StepLine(lines[index].steps + [step], live: live)
         } else {
             lines.append(StepLine([step], live: live))
         }
+    }
+
+    /// The line a step joins, if any: the one just before it, for a similar step, or once the turn
+    /// is over, a tool's earlier line for the same operation. While the turn runs, a step joins only
+    /// the line just before it, so the newest stays last.
+    private func joining(_ step: Step, live: Bool) -> Int? {
+        guard let group = StepLine.group(of: step) else { return nil }
+        if group.isTool, !live {
+            return lines.firstIndex { StepLine.group(of: $0.steps[0]) == group }
+        }
+        return StepLine.group(of: lines[lines.count - 1].steps[0]) == group ? lines.count - 1 : nil
     }
 
     /// The folded line: what Ari did, briefly and in order ("Thought it through, searched the web,
@@ -268,10 +280,11 @@ public struct StepLine: Equatable, Sendable, Identifiable {
     }
 
     /// What it says: the server's title, the heading Ari gave its thinking, or for similar steps in
-    /// a row, a count ("Reading 3 files").
+    /// a row, a count ("Reading 3 files"), with what a tool's steps did ("· 18 binned, 5 archived").
     public var title: String {
         if steps.count > 1, let group = Self.group(of: steps[0]) {
-            return group.title(count: count(of: group), running: isRunning)
+            let counted = group.title(count: count(of: group), running: isRunning)
+            return tallies.map { "\(counted) · \($0)" } ?? counted
         }
         let step = steps[0]
         if step.kind == .thinking, let heading = step.heading, !heading.isEmpty { return heading }
@@ -285,8 +298,6 @@ public struct StepLine: Equatable, Sendable, Identifiable {
         case .command: return step.command
         case .webSearch: return step.url
         case .fileChange: return step.files?.map(\.path).joined(separator: ", ")
-        case .tool:
-            return [step.capability, step.operation].compactMap { $0 }.joined(separator: " · ")
         case .imageView: return step.path
         default: return nil
         }
@@ -315,12 +326,29 @@ public struct StepLine: Equatable, Sendable, Identifiable {
         }
     }
 
+    /// What a tool's steps did, counted, most first ("18 binned, 5 archived").
+    var tallies: String? {
+        var counts: [(tally: String, count: Int)] = []
+        for tally in steps.compactMap(\.tally) {
+            if let index = counts.firstIndex(where: { $0.tally == tally }) {
+                counts[index].count += 1
+            } else {
+                counts.append((tally, 1))
+            }
+        }
+        guard !counts.isEmpty else { return nil }
+        let ordered = counts.enumerated().sorted {
+            ($0.element.count, -$0.offset) > ($1.element.count, -$1.offset)
+        }
+        return ordered.map { "\($0.element.count) \($0.element.tally)" }.joined(separator: ", ")
+    }
+
     private func count(of group: Group) -> Int {
         let paths: [String] =
             switch group {
             case .read, .list: steps.flatMap { $0.actions ?? [] }.compactMap(\.path)
             case .edit: steps.flatMap { $0.files ?? [] }.map(\.path)
-            case .search, .web: []
+            case .search, .web, .tool: []
             }
         let distinct = Set(paths).count
         return distinct > 0 ? distinct : steps.count
@@ -333,6 +361,12 @@ public struct StepLine: Equatable, Sendable, Identifiable {
     /// Sorts of step that share a line when they come one after another.
     enum Group: Equatable {
         case read, search, list, web, edit
+        /// One operation of a tool whose steps share a line, worded by the server.
+        case tool(operation: String, run: Step.RunTitle)
+
+        var isTool: Bool {
+            if case .tool = self { true } else { false }
+        }
 
         func title(count: Int, running: Bool) -> String {
             switch (self, running) {
@@ -346,6 +380,7 @@ public struct StepLine: Equatable, Sendable, Identifiable {
             case (.web, false): "Searched the web \(count) times"
             case (.edit, true): "Editing \(count) files"
             case (.edit, false): "Edited \(count) files"
+            case (.tool(_, let run), _): run.line(count: count, running: running)
             }
         }
     }
@@ -354,6 +389,9 @@ public struct StepLine: Equatable, Sendable, Identifiable {
         switch step.kind {
         case .webSearch: return .web
         case .fileChange: return .edit
+        case .tool:
+            guard let run = step.runTitle, let operation = step.operation else { return nil }
+            return .tool(operation: (step.capability ?? "") + " " + operation, run: run)
         case .command:
             let types = Set((step.actions ?? []).map(\.type))
             guard types.count == 1 else { return nil }
