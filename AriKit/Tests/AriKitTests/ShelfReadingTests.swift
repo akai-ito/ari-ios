@@ -17,9 +17,9 @@ struct ShelfReadingTests {
         // Eight pages imported together three days ago, then Ari touched two of them.
         var pages = (0..<8).map { page("Person\($0)", minutesAgo: 3 * 1_440 + Double($0)) }
         #expect(ShelfReading.lately(pages, now: now).isEmpty, "the import alone says nothing")
-        pages[2] = page("Janki", minutesAgo: 30)
-        pages[5] = page("Bora", minutesAgo: 600)
-        #expect(ShelfReading.lately(pages, now: now).map(\.title) == ["Janki", "Bora"])
+        pages[2] = page("Mira", minutesAgo: 30)
+        pages[5] = page("Leo", minutesAgo: 600)
+        #expect(ShelfReading.lately(pages, now: now).map(\.title) == ["Mira", "Leo"])
     }
 
     @Test("lately is the last two weeks, at most five, and only when it stands out")
@@ -36,26 +36,26 @@ struct ShelfReadingTests {
 
     @Test("everyone reads A to Z, numbers in order")
     func everyone() {
-        let pages = ["bora", "Ali Wilson", "Andrei", "page 10", "page 9"].map {
+        let pages = ["leo", "Ali Wilson", "Andrei", "page 10", "page 9"].map {
             page($0, minutesAgo: 1)
         }
         #expect(
             ShelfReading.everyone(pages).map(\.title) == [
-                "Ali Wilson", "Andrei", "bora", "page 9", "page 10",
+                "Ali Wilson", "Andrei", "leo", "page 9", "page 10",
             ])
     }
 
     @Test("people group by circle, closest first, those without one last")
     func circles() {
         let people = [
-            ("Bora", "friends"), ("Mum", "family"), ("Tess Harlow", "work"), ("Janki", "partner"),
+            ("Leo", "friends"), ("Mum", "family"), ("Tess Harlow", "work"), ("Mira", "partner"),
             ("Ayush", "friends"), ("Coach", "running"), ("Niwi", nil),
         ].map {
             PageSummary(address: PageAddress("memory:people/\($0.0)"), title: $0.0, circle: $0.1)
         }
         let circles = ShelfReading.circles(people)
         #expect(circles.map(\.circle) == ["partner", "family", "friends", "work", "running", nil])
-        #expect(circles[2].pages.map(\.title) == ["Ayush", "Bora"])
+        #expect(circles[2].pages.map(\.title) == ["Ayush", "Leo"])
     }
 
     @Test("journal days group by month, newest first")

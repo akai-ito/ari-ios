@@ -138,7 +138,7 @@ public struct Occasion: Sendable, Equatable, Decodable {
     /// Whether it takes whole days, such as a birthday, so no time shows. Its days are read in the
     /// device's calendar from `start` and `end`.
     public let allDay: Bool
-    /// Where it is, such as "Bright Smile Dental, 14 Upper Street". It's `where` on the wire, which
+    /// Where it is, such as "Fernside Dental, 3 Orchard Row". It's `where` on the wire, which
     /// is a Swift keyword.
     public let place: String?
     /// Who else is there.
@@ -180,7 +180,7 @@ public struct Occasion: Sendable, Equatable, Decodable {
     }
 
     public struct Person: Sendable, Equatable, Decodable {
-        /// Such as "Dr Shah".
+        /// Such as "Dr Rowe".
         public let name: String
         /// Their page in Kumo's memory.
         public let page: PageAddress?

@@ -14,9 +14,9 @@ struct SessionDeskTests {
         let bench = try Bench()
         defer { bench.close() }
         try await bench.open(
-            with: Self.snapshot("e_10", messages: [Self.message("u_1", "Janki's birthday", 1)]))
+            with: Self.snapshot("e_10", messages: [Self.message("u_1", "Mira's birthday", 1)]))
         let session = bench.session
-        #expect(session.conversation.entries.map(\.text) == ["Janki's birthday"])
+        #expect(session.conversation.entries.map(\.text) == ["Mira's birthday"])
         #expect(session.desk == Desk())
         #expect(session.onboarding == nil)
 

@@ -15,11 +15,11 @@ struct CallStreamTests {
         #expect(event(#"{"type":"state","state":"hearing"}"#) == .state(.hearing))
         #expect(event(#"{"type":"state","state":"turn_ended"}"#) == .state(.turnEnded))
         #expect(
-            event(#"{"type":"heard","text":"What did Bora","final":false}"#)
-                == .heard(text: "What did Bora", final: false, message: nil))
+            event(#"{"type":"heard","text":"What did Leo","final":false}"#)
+                == .heard(text: "What did Leo", final: false, message: nil))
         #expect(
-            event(#"{"type":"heard","text":"What did Bora say?","final":true,"message":"m1"}"#)
-                == .heard(text: "What did Bora say?", final: true, message: "m1"))
+            event(#"{"type":"heard","text":"What did Leo say?","final":true,"message":"m1"}"#)
+                == .heard(text: "What did Leo say?", final: true, message: "m1"))
         #expect(
             event(#"{"type":"saying","id":"s1","text":"She wants one more round."}"#)
                 == .saying(id: "s1", text: "She wants one more round."))

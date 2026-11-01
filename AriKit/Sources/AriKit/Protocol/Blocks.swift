@@ -46,7 +46,7 @@ public enum ReplyShape: Sendable, Equatable {
     }
 
     /// A compact line under a reply, when Ari starts or changes a thing in motion: "Florence with
-    /// Janki: booked the Uffizi". Tapping it opens the thing.
+    /// Mira: booked the Uffizi". Tapping it opens the thing.
     public struct MotionLine: Sendable, Equatable, Decodable {
         public let motion: MotionID
         /// The thing's version the line is about; its note says what changed.

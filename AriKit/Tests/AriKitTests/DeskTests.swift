@@ -194,7 +194,7 @@ struct DeskTests {
              "all_day": false, "location": "Teams", "calendar": {"name": "Home", "kumo": false},
              "leave_at": "2026-11-05T13:20:00.000Z", "motion": "job-search",
              "status": "confirmed"},
-            {"id": "florence", "uid": "florence@icloud.com", "title": "Florence with Janki",
+            {"id": "florence", "uid": "florence@icloud.com", "title": "Florence with Mira",
              "start": "2026-11-12", "end": "2026-11-15",
              "all_day": true, "calendar": {"name": "Home", "kumo": false},
              "motion": "florence", "status": "confirmed"}

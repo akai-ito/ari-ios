@@ -41,7 +41,7 @@
                 start: when(14, 0), end: when(15, 0), location: "Teams", calendar: home,
                 motion: "job-search"),
             CalendarItem(
-                id: "janki", uid: "janki@icloud", title: "Dinner with Janki", start: when(19, 30),
+                id: "mira", uid: "mira@icloud", title: "Dinner with Mira", start: when(19, 30),
                 end: when(21, 30), location: "Dishoom Shoreditch", calendar: home,
                 leaveAt: at(19, 5)),
             CalendarItem(
@@ -52,7 +52,7 @@
                 start: when(day: 2, 10),
                 end: when(day: 2, 11), calendar: kumo, status: .hold),
             CalendarItem(
-                id: "florence", uid: "florence@icloud", title: "Florence with Janki",
+                id: "florence", uid: "florence@icloud", title: "Florence with Mira",
                 start: allDay(7), end: allDay(10), allDay: true, calendar: home,
                 motion: "florence"),
         ]

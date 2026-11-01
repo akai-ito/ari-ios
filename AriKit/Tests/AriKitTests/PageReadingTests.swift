@@ -21,28 +21,28 @@ struct PageReadingTests {
 
     @Test("names link to their pages once, longest first, and never inside headings or links")
     func names() throws {
-        let bora = try #require(URL(string: "ari-page:memory:people/bora"))
+        let leo = try #require(URL(string: "ari-page:memory:people/leo"))
         let ali = try #require(URL(string: "ari-page:memory:people/ali"))
         let wilson = try #require(URL(string: "ari-page:memory:people/ali-wilson"))
         let document = ReplyDocument(
             markdown:
-                "## Bora\n\nYou paced bora to a sub-two; Bora was thrilled. Ali Wilson sent [Ali](https://x.y) a CV."
-        ).linking([(["Bora"], bora), (["Ali"], ali), (["Ali Wilson"], wilson)])
+                "## Leo\n\nYou paced leo to a sub-two; Leo was thrilled. Ali Wilson sent [Ali](https://x.y) a CV."
+        ).linking([(["Leo"], leo), (["Ali"], ali), (["Ali Wilson"], wilson)])
         #expect(document.blocks[0].runs.allSatisfy { $0.link == nil }, "not in a heading")
         let linked = document.blocks[1].runs.filter { $0.link != nil }
-        #expect(linked.map(\.text) == ["bora", "Ali Wilson", "Ali"])
-        #expect(linked.map(\.link) == [bora, wilson, URL(string: "https://x.y")])
+        #expect(linked.map(\.text) == ["leo", "Ali Wilson", "Ali"])
+        #expect(linked.map(\.link) == [leo, wilson, URL(string: "https://x.y")])
         #expect(
             text(document.blocks[1])
-                == "You paced bora to a sub-two; Bora was thrilled. Ali Wilson sent Ali a CV.")
+                == "You paced leo to a sub-two; Leo was thrilled. Ali Wilson sent Ali a CV.")
     }
 
     @Test("a page links once, by whichever of its names comes first")
     func aliases() throws {
-        let janki = try #require(URL(string: "ari-page:memory:people/janki"))
-        let document = ReplyDocument(markdown: "Janks booked Florence. Janki is thrilled.")
-            .linking([(["Janki", "Janks"], janki)])
+        let mira = try #require(URL(string: "ari-page:memory:people/mira"))
+        let document = ReplyDocument(markdown: "Mimi booked Florence. Mira is thrilled.")
+            .linking([(["Mira", "Mimi"], mira)])
         let linked = document.blocks[0].runs.filter { $0.link != nil }
-        #expect(linked.map(\.text) == ["Janks"], "once, at the first mention")
+        #expect(linked.map(\.text) == ["Mimi"], "once, at the first mention")
     }
 }

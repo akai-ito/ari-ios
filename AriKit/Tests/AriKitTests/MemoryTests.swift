@@ -60,17 +60,17 @@ struct MemoryTests {
         let server = TranscriptServer(
             transcript, only: { [.memoryRecent, .memoryPages, .memoryPage].contains($0) })
         let recent = try await server.client.recentChanges()
-        #expect(recent.changes.first?.note == "Florence with Janki")
+        #expect(recent.changes.first?.note == "Florence with Mira")
         #expect(recent.changes.first?.title == "27 October 2026")
         let journal = try await server.client.pages(on: "journal")
-        #expect(journal.pages.first?.gist == "Florence planned with Janki")
+        #expect(journal.pages.first?.gist == "Florence planned with Mira")
         let people = try await server.client.pages(on: "people")
         #expect(people.pages.first?.circle == "friends")
         let trip = try await server.client.page("memory:projects/florence-trip")
-        #expect(trip.gist == "With Janki, 6–9 November; nothing booked yet")
+        #expect(trip.gist == "With Mira, 6–9 November; nothing booked yet")
         #expect(
             trip.links == [
-                MemoryLink(address: "memory:people/janki", title: "Janki", aliases: ["Janks"])
+                MemoryLink(address: "memory:people/mira", title: "Mira", aliases: ["Mimi"])
             ])
         let mismatches = await server.mismatches
         #expect(mismatches.isEmpty, "\(mismatches)")

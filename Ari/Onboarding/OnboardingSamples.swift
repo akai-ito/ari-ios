@@ -34,7 +34,7 @@
 
         static let beliefs = [
             Belief(id: "halcyon", text: "You're in Halcyon's interview process."),
-            Belief(id: "florence", text: "Florence with Janki on the 12th."),
+            Belief(id: "florence", text: "Florence with Mira on the 12th."),
             Belief(id: "5k", text: "Training for a sub-20 5K."),
             Belief(id: "work", text: "You're settled at work, and looking for what's next."),
         ]
@@ -46,7 +46,7 @@
                     line: "Halcyon interviews · Northwind screened · Kestrel quiet",
                     symbol: "target"),
                 RevealMatter(
-                    id: "florence", title: "Florence with Janki",
+                    id: "florence", title: "Florence with Mira",
                     line: "12–15 Nov · hotel booked · 2 to book", symbol: "airplane"),
                 RevealMatter(
                     id: "5k", title: "Sub-20 5K", line: "4 weeks left · Saturday parkrun",

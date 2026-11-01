@@ -6,7 +6,7 @@ import Testing
 @Suite("In motion")
 @MainActor
 struct MotionTests {
-    private let florence: MotionID = "florence-with-janki"
+    private let florence: MotionID = "florence-with-mira"
     private let english = Locale(identifier: "en_GB")
 
     @Test("Scenario 62: a trip starts pinned, and the app lists it and opens it")
@@ -122,7 +122,7 @@ struct MotionTests {
         motions.apply(
             try JSONValue(
                 json:
-                    #"{"id":"e_9","type":"motion.removed","at":"2026-10-29T12:00:00Z","motion":"florence-with-janki"}"#
+                    #"{"id":"e_9","type":"motion.removed","at":"2026-10-29T12:00:00Z","motion":"florence-with-mira"}"#
             ).decode(Event.self))
         #expect(motions.all.isEmpty)
     }
@@ -138,9 +138,9 @@ struct MotionTests {
             TripReading.dates(.init(start: "2026-11-06", end: "2026-11-06"), locale: english)
                 == "6 Nov")
         let trip = Trip(
-            destination: "Florence", dates: november, timezone: "Europe/Rome", who: ["Janki"])
+            destination: "Florence", dates: november, timezone: "Europe/Rome", who: ["Mira"])
         #expect(
-            TripReading.subtitle(trip, locale: english) == "Fri 6 – Mon 9 November · You and Janki")
+            TripReading.subtitle(trip, locale: english) == "Fri 6 – Mon 9 November · You and Mira")
         #expect(
             TripReading.heading(of: .init(id: "fri", date: "2026-11-06"), locale: english)
                 == "Friday 6 November")
@@ -220,7 +220,7 @@ struct MotionTests {
     @Test("a reply's compact line names the thing and the version it's about")
     func compactLine() {
         let shape = ReplyShape(
-            language: "ari:motion", json: #"{"motion":"florence-with-janki","change":2}"#)
+            language: "ari:motion", json: #"{"motion":"florence-with-mira","change":2}"#)
         guard case .motion(let line) = shape else {
             Issue.record("not a motion line")
             return
@@ -258,7 +258,7 @@ struct MotionTests {
         try JSONValue(
             json: """
                 {"id":"e_\(version)","type":"\(type)","at":"2026-10-29T1\(version):00:00Z",
-                 "motion":{"id":"florence-with-janki","kind":"trip","title":"Florence with Janki",
+                 "motion":{"id":"florence-with-mira","kind":"trip","title":"Florence with Mira",
                   "summary":"6–9 Nov","status":"\(status)","pinned":true,"version":\(version),
                   "started_at":"2026-10-29T10:00:00Z","changed_at":"2026-10-29T1\(version):00:00Z",
                   "position":1},

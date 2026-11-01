@@ -147,7 +147,7 @@ public enum TripReading {
             + "\(calendar.component(.day, from: end)) \(month.string(from: end))"
     }
 
-    /// The dates in full, with who's going: "Fri 6 – Mon 9 November · You and Janki".
+    /// The dates in full, with who's going: "Fri 6 – Mon 9 November · You and Mira".
     public static func subtitle(_ trip: Trip, locale: Locale = .current) -> String {
         var parts: [String] = []
         if let start = day(trip.dates.start), let end = day(trip.dates.end) {

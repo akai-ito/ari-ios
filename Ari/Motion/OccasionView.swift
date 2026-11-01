@@ -137,7 +137,7 @@ struct OccasionView: View {
     private enum OccasionSample {
         static let dentist = Occasion(
             start: .day(13, at: 9, 30), end: .day(13, at: 10, 15),
-            place: "Bright Smile Dental, 14 Upper Street", people: [.init(name: "Dr Shah")],
+            place: "Fernside Dental, 3 Orchard Row", people: [.init(name: "Dr Rowe")],
             prep: [
                 .init(id: "forms", text: "Fill in the new-patient form"),
                 .init(id: "insurance", text: "Bring your Bupa card", done: true),
@@ -152,12 +152,12 @@ struct OccasionView: View {
             content: .occasion(dentist))
 
         static let birthday = Occasion(
-            start: .day(14, at: 0), allDay: true, people: [.init(name: "Janki")],
+            start: .day(14, at: 0), allDay: true, people: [.init(name: "Mira")],
             prep: [.init(id: "gift", text: "Pick up the print from the framer")], checkIn: true)
 
         static let birthdayDetail = MotionDetail(
             motion: Motion(
-                id: "janki-birthday", kind: .occasion, title: "Janki's birthday",
+                id: "mira-birthday", kind: .occasion, title: "Mira's birthday",
                 summary: "Sat 14 Nov", startedAt: .day(-3, at: 20)),
             content: .occasion(birthday))
     }

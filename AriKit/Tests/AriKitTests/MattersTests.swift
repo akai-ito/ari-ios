@@ -43,8 +43,8 @@ struct MattersTests {
         let occasion = try #require(Self.occasion(detail))
         #expect(occasion.start.rawValue == "2026-11-13T09:30")
         #expect(occasion.end?.rawValue == "2026-11-13T10:15")
-        #expect(occasion.place == "Bright Smile Dental, 14 Upper Street")
-        #expect(occasion.people == [Occasion.Person(name: "Dr Shah")])
+        #expect(occasion.place == "Fernside Dental, 3 Orchard Row")
+        #expect(occasion.people == [Occasion.Person(name: "Dr Rowe")])
         #expect(occasion.prep.map(\.done) == [false, true])
         #expect(occasion.checkIn && !occasion.allDay)
         #expect(detail.state[OccasionReading.prepList]?["forms"]?.done == true)
@@ -188,7 +188,7 @@ struct MattersTests {
         let line = OccasionReading.line(
             occasion, state: detail.state, now: thursday, calendar: london, locale: english)
         #expect(line.when == "Fri 13 Nov" && line.left == 0)
-        #expect(OccasionReading.people(occasion) == "With Dr Shah")
+        #expect(OccasionReading.people(occasion) == "With Dr Rowe")
         #expect(OccasionReading.progress(Occasion(start: occasion.start), state: [:]) == nil)
     }
 
@@ -399,7 +399,7 @@ struct MattersTests {
           "started_at":"2026-10-20T08:00:00.000Z","changed_at":"2026-10-28T18:20:00.000Z",
           "position":3},
          "content":{"start":"2026-11-13T09:30","end":"2026-11-13T10:15",
-          "where":"Bright Smile Dental, 14 Upper Street","people":[{"name":"Dr Shah"}],
+          "where":"Fernside Dental, 3 Orchard Row","people":[{"name":"Dr Rowe"}],
           "prep":[{"id":"forms","text":"Fill in the new-patient form"},
            {"id":"insurance","text":"Bring your Bupa card","done":true}],
           "check_in":true},
