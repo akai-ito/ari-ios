@@ -190,9 +190,14 @@ final class Rehearsal {
             Task { try? await session.answer(card, answer) }
         case .readMoment(let moment):
             Task { try? await session.readMoment(moment) }
+        case .answerMoment(let moment) where request.body?["skip"] != nil:
+            Task { try? await session.skipMoment(moment) }
         case .answerMoment(let moment):
             guard let answer = try? request.body?.decode(CardAnswer.self) else { return }
             Task { try? await session.answerMoment(moment, answer) }
+        case .answerGuess(let item):
+            guard let answer = try? request.body?.decode(GuessAnswer.self) else { return }
+            Task { try? await session.answerGuess(item, answer) }
         case .work:
             Task { _ = try? await session.work() }
         case .correct(let entry):

@@ -52,6 +52,9 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(CardResult.self).card.id == card, "\(place)")
                 case .answerMoment(let moment):
                     #expect(try body.decode(MomentResult.self).moment.id == moment, "\(place)")
+                case .answerGuess(let item):
+                    let answered = try body.decode(CalendarEventResult.self).event
+                    #expect(answered.id == item && answered.guess == nil, "\(place)")
                 case .work:
                     _ = try body.decode(KumoWork.self)
                 case .done:
@@ -159,8 +162,12 @@ struct ProtocolDecodingTests {
                     id: message.id, text: message.text, attachments: message.attachments ?? [],
                     done: message.done)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .answerMoment where body["skip"] != nil:
+                #expect(try JSONValue(encoding: body.decode(MomentSkip.self)) == body, "\(place)")
             case .answerCard, .answerMoment:
                 #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
+            case .answerGuess:
+                #expect(try JSONValue(encoding: body.decode(GuessAnswer.self)) == body, "\(place)")
             case .answerBelief:
                 let answer: BeliefAnswer =
                     body["correction"]?.string.map(BeliefAnswer.correction) ?? .confirmed

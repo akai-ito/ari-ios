@@ -46,6 +46,20 @@ public struct Desk: Sendable, Equatable, Decodable {
             handled: handled, lastMailAt: lastMailAt)
     }
 
+    /// The same Desk with one of Coming up's items as it is now, such as a guess you answered.
+    public func replacing(item: CalendarItem) -> Desk {
+        Desk(
+            moment: moment, comingUp: comingUp.map { $0.id == item.id ? item : $0 },
+            waiting: waiting, handled: handled, lastMailAt: lastMailAt)
+    }
+
+    /// The same Desk once Kumo's line has gone, such as the day's question you skipped.
+    public func withoutMoment(_ id: MomentID) -> Desk {
+        Desk(
+            moment: moment?.id == id ? nil : moment, comingUp: comingUp, waiting: waiting,
+            handled: handled, lastMailAt: lastMailAt)
+    }
+
     enum CodingKeys: String, CodingKey {
         case moment, waiting, handled
         case comingUp = "coming_up"
@@ -69,12 +83,17 @@ public struct Moment: Sendable, Equatable, Decodable, Identifiable {
     public let at: Timestamp
     /// One or two sentences, plain words.
     public let text: String
+    /// A quieter line under the words, such as the plan under a free day. The message holds it
+    /// too, after the words.
+    public let detail: String?
     /// The message in the conversation that holds the same words.
     public let message: MessageID
     /// Up to three short replies, such as "Ask me tonight". A tap answers Kumo, like a card.
     public let options: [Ask.Option]
     /// Whether a typed reply fits, for Reply.
     public let allowsText: Bool
+    /// What Reply says when words fit, such as "Note it"; Reply when `nil`.
+    public let replyLabel: String?
     /// When an app first showed it on the Desk. Once read, no notification goes out for it.
     public let readAt: Timestamp?
     /// `working` while Kumo acts on your answer.
@@ -83,17 +102,20 @@ public struct Moment: Sendable, Equatable, Decodable, Identifiable {
     public let answer: CardAnswer?
 
     public init(
-        id: MomentID, kind: MomentKind = .news, at: Timestamp, text: String, message: MessageID,
-        options: [Ask.Option] = [], allowsText: Bool = false, readAt: Timestamp? = nil,
+        id: MomentID, kind: MomentKind = .news, at: Timestamp, text: String,
+        detail: String? = nil, message: MessageID, options: [Ask.Option] = [],
+        allowsText: Bool = false, replyLabel: String? = nil, readAt: Timestamp? = nil,
         state: CardState? = nil, answer: CardAnswer? = nil
     ) {
         self.id = id
         self.kind = kind
         self.at = at
         self.text = text
+        self.detail = detail
         self.message = message
         self.options = options
         self.allowsText = allowsText
+        self.replyLabel = replyLabel
         self.readAt = readAt
         self.state = state
         self.answer = answer
@@ -103,8 +125,9 @@ public struct Moment: Sendable, Equatable, Decodable, Identifiable {
     public var isWorking: Bool { state == .working }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, at, text, message, options, state, answer
+        case id, kind, at, text, detail, message, options, state, answer
         case allowsText = "allows_text"
+        case replyLabel = "reply_label"
         case readAt = "read_at"
     }
 }
@@ -120,7 +143,20 @@ public struct MomentKind: OpenValue {
     public static let news = MomentKind(rawValue: "news")
     /// Your day changed.
     public static let change = MomentKind(rawValue: "change")
-    public static let known = [day, news, change]
+    /// A commitment you made, such as when you'd stop tonight, coming due.
+    public static let checkin = MomentKind(rawValue: "checkin")
+    /// Your week's time drifting from what matters.
+    public static let drift = MomentKind(rawValue: "drift")
+    /// The day's one small question, which you can skip.
+    public static let question = MomentKind(rawValue: "question")
+    public static let known = [day, news, change, checkin, drift, question]
+}
+
+/// The body that skips the day's question: it goes at once, and Kumo never asks it again.
+public struct MomentSkip: Sendable, Equatable, Codable {
+    public let skip: Bool
+
+    public init() { skip = true }
 }
 
 /// `POST /v0/desk/moment/{id}/answer`'s answer: Kumo's line, `working` with your answer.
@@ -495,11 +531,14 @@ public struct CalendarItem: Sendable, Equatable, Decodable, Identifiable {
     /// The thing in motion it belongs to, such as the Florence trip.
     public let motion: MotionID?
     public let status: CalendarStatus?
+    /// Only on Kumo's guesses at your day: what Kumo thinks you'll be doing, and why.
+    public let guess: Guess?
 
     public init(
         id: CalendarItemID, uid: String, title: String, start: When, end: When,
         allDay: Bool = false, location: String? = nil, calendar: CalendarName,
-        leaveAt: Timestamp? = nil, motion: MotionID? = nil, status: CalendarStatus? = nil
+        leaveAt: Timestamp? = nil, motion: MotionID? = nil, status: CalendarStatus? = nil,
+        guess: Guess? = nil
     ) {
         self.id = id
         self.uid = uid
@@ -512,12 +551,70 @@ public struct CalendarItem: Sendable, Equatable, Decodable, Identifiable {
         self.leaveAt = leaveAt
         self.motion = motion
         self.status = status
+        self.guess = guess
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, uid, title, start, end, location, calendar, motion, status
+        case id, uid, title, start, end, location, calendar, motion, status, guess
         case allDay = "all_day"
         case leaveAt = "leave_at"
+    }
+}
+
+/// Kumo's guess at what you're doing then, from your past weeks, what you've said and what it
+/// can see. Once you've answered it, it's yours rather than a guess.
+public struct Guess: Sendable, Equatable, Decodable {
+    public let activity: Activity
+    /// Why Kumo thinks so, such as "Your usual weekday at the desk, from the last four weeks."
+    public let why: String
+
+    public init(activity: Activity, why: String) {
+        self.activity = activity
+        self.why = why
+    }
+}
+
+/// What you're doing, in Kumo's picture of your day. One Ari doesn't know shows by its title.
+public struct Activity: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let working = Activity(rawValue: "working")
+    public static let building = Activity(rawValue: "building")
+    public static let training = Activity(rawValue: "training")
+    /// Seeing people.
+    public static let people = Activity(rawValue: "people")
+    public static let studying = Activity(rawValue: "studying")
+    public static let chilling = Activity(rawValue: "chilling")
+    /// Something else, named in the title.
+    public static let other = Activity(rawValue: "other")
+    public static let known = [working, building, training, people, studying, chilling, other]
+}
+
+/// Your answer to one of Kumo's guesses: it was right, the activity it really was, or a few words
+/// for something else, which become its title.
+public struct GuessAnswer: Sendable, Equatable, Codable {
+    public let right: Bool?
+    public let activity: Activity?
+    public let text: String?
+
+    /// The guess was right.
+    public static let right = GuessAnswer(right: true, activity: nil, text: nil)
+
+    /// It was something else you do.
+    public init(activity: Activity) {
+        self.init(right: nil, activity: activity, text: nil)
+    }
+
+    /// It was something else, in your words.
+    public init(text: String) {
+        self.init(right: nil, activity: nil, text: text)
+    }
+
+    private init(right: Bool?, activity: Activity?, text: String?) {
+        self.right = right
+        self.activity = activity
+        self.text = text
     }
 }
 

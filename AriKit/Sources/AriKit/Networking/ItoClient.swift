@@ -101,6 +101,28 @@ public struct ItoClient: Sendable, CustomStringConvertible {
                 body: try Self.json(answer)))
     }
 
+    /// `POST /v0/desk/moment/{id}/answer` with `skip`: skips the day's question. It goes at once,
+    /// and Kumo never asks it again.
+    public func skipMoment(_ id: MomentID) async throws(RequestError) -> MomentResult {
+        try await call(
+            HTTPRequest(
+                .post, "/v0/desk/moment/\(Self.segment(id.rawValue))/answer",
+                body: try Self.json(MomentSkip())))
+    }
+
+    /// `POST /v0/desk/guesses/{item}/answer`: says one of Kumo's guesses was right, or what it
+    /// really was. The answer is the item as it is now, no longer a guess.
+    public func answerGuess(_ item: CalendarItemID, _ answer: GuessAnswer)
+        async throws(RequestError)
+        -> CalendarItem
+    {
+        let result: CalendarEventResult = try await call(
+            HTTPRequest(
+                .post, "/v0/desk/guesses/\(Self.segment(item.rawValue))/answer",
+                body: try Self.json(answer)))
+        return result.event
+    }
+
     /// `GET /v0/work`: Kumo's work today, or on another local day, what it handled and what it
     /// cleared, with the trust ladder.
     public func work(day: String? = nil) async throws(RequestError) -> KumoWork {

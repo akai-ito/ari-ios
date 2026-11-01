@@ -37,6 +37,37 @@ struct DeskTests {
         #expect(desk.replacing(moment: working).handled == 9)
     }
 
+    @Test("a guess in Coming up, the plan under the day's line, and answers that change them")
+    func picture() throws {
+        var json = try JSONValue(json: Self.desk)
+        json["moment"]?["kind"] = .string("question")
+        json["moment"]?["detail"] = .string("Easy run · groceries · 2h prep")
+        json["moment"]?["reply_label"] = .string("Note it")
+        var items = try #require(json["coming_up"]?.array)
+        items[0]["guess"] = .object([
+            "activity": .string("chilling"), "why": .string("Sunday evenings you switch off."),
+        ])
+        json["coming_up"] = .array(items)
+        let desk = try json.decode(Desk.self)
+        let moment = try #require(desk.moment)
+        #expect(moment.kind == .question && moment.detail == "Easy run · groceries · 2h prep")
+        #expect(moment.replyLabel == "Note it")
+        let guessed = desk.comingUp[0]
+        #expect(guessed.guess == Guess(activity: .chilling, why: "Sunday evenings you switch off."))
+        let yours = CalendarItem(
+            id: guessed.id, uid: guessed.uid, title: "Building", start: guessed.start,
+            end: guessed.end, calendar: guessed.calendar)
+        #expect(desk.replacing(item: yours).comingUp[0] == yours)
+        #expect(desk.replacing(item: yours).comingUp[1] == desk.comingUp[1])
+        #expect(desk.withoutMoment(moment.id).moment == nil)
+        #expect(desk.withoutMoment("o_other").moment == moment)
+        #expect(try JSONValue(encoding: GuessAnswer.right) == JSONValue(json: #"{"right":true}"#))
+        #expect(
+            try JSONValue(encoding: GuessAnswer(activity: .people))
+                == JSONValue(json: #"{"activity":"people"}"#))
+        #expect(try JSONValue(encoding: MomentSkip()) == JSONValue(json: #"{"skip":true}"#))
+    }
+
     @Test("Kumo's work today: what it handled and what it cleared")
     func work() throws {
         let work = try JSONValue(

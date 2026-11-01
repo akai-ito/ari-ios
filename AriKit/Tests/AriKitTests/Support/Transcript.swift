@@ -280,6 +280,7 @@ enum Route: Equatable {
     case answerCard(CardID)
     case readMoment(MomentID)
     case answerMoment(MomentID)
+    case answerGuess(CalendarItemID)
     case work
     case addEvent
     case lead
@@ -358,6 +359,10 @@ enum Route: Equatable {
         case ("POST", 5)
         where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "moment" && parts[4] == "answer":
             self = .answerMoment(MomentID(parts[3]))
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "guesses"
+            && parts[4] == "answer":
+            self = .answerGuess(CalendarItemID(parts[3]))
         case ("GET", 2) where parts == ["v0", "work"]: self = .work
         case ("POST", 3) where parts == ["v0", "calendar", "events"]: self = .addEvent
         case ("PUT", 2) where parts == ["v0", "lead"]: self = .lead
