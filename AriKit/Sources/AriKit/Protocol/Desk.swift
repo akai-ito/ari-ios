@@ -101,7 +101,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public let motion: MotionID?
     /// When it began waiting, for "since Wed".
     public let at: Timestamp
-    /// One line, such as "Draft to Poppy".
+    /// One line, such as "Draft to Tess".
     public let title: String
     /// The buttons to draw, in order. Answering with one sends its label.
     public let options: [Ask.Option]
@@ -225,7 +225,7 @@ public struct InviteCard: Sendable, Equatable, Decodable {
 /// Times to check against your work calendar, which Kumo can't see. You answer with the ones that
 /// are clear.
 public struct TimesCard: Sendable, Equatable, Decodable {
-    /// What the times are for, such as "A call with Poppy".
+    /// What the times are for, such as "A call with Tess".
     public let purpose: String
     public let slots: [TimeSlot]
 
@@ -484,7 +484,7 @@ public struct JobID: OpaqueIdentifier {
 /// standing job it keeps doing. It moves itself if the moment is bad; to stop one, you tell Kumo.
 public struct Job: Sendable, Equatable, Decodable, Identifiable {
     public let id: JobID
-    /// Such as "Ask how the QRT interview went".
+    /// Such as "Ask how the Halcyon interview went".
     public let why: String
     /// When it's next due.
     public let at: Timestamp?

@@ -141,7 +141,7 @@ struct MotionLineText {
     let detail: String
     /// The to-dos left, when there's a list: a trip's, or an occasion's prep.
     let left: Int?
-    /// What's on today, such as "Intervals today", or what's next, such as "Citadel Tue 17 Nov".
+    /// What's on today, such as "Intervals today", or what's next, such as "Northwind Tue 17 Nov".
     let today: String?
     /// How much is done, from 0 to 1.
     let progress: Double?
@@ -164,7 +164,7 @@ struct MotionLineText {
             today = line.today
             progress = TrainingReading.progress(training, state: state)
         case .pursuit(let pursuit)?:
-            // "QRT: Awaiting answer · Citadel Tue 17 Nov".
+            // "Halcyon: Awaiting answer · Northwind Tue 17 Nov".
             let line = PursuitReading.line(pursuit)
             name = motion.title
             self.detail = line.detail ?? motion.summary

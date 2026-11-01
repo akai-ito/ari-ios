@@ -12,7 +12,7 @@ struct MattersTests {
         calendar.timeZone = TimeZone(identifier: "Europe/London")!
         return calendar
     }
-    /// Thursday 29 October, 8:00 in London, the day of the QRT technical.
+    /// Thursday 29 October, 8:00 in London, the day of the Halcyon technical.
     private let thursday = Timestamp("2026-10-29T08:00:00Z")!.date
 
     // MARK: - Decoding
@@ -24,17 +24,17 @@ struct MattersTests {
         let pursuit = try #require(Self.pursuit(detail))
         #expect(pursuit.after.hasPrefix("AI engineering or C++ HFT systems"))
         #expect(pursuit.play.count == 4)
-        #expect(pursuit.options.map(\.id) == ["qrt", "citadel", "optiver"])
-        let qrt = pursuit.options[0]
-        #expect(qrt.role == "Senior AI Engineer" && qrt.org == nil)
-        #expect(qrt.stages == ["Screened", "Interviews", "Awaiting answer", "Offer"])
-        #expect(qrt.people.first?.page == "memory:people/poppy")
-        #expect(qrt.next == NextStep(text: "Technical", at: LocalTime("2026-10-29T14:00")))
-        let citadel = pursuit.options[1]
-        #expect(citadel.waitingOn?.who == "them" && citadel.next == nil)
+        #expect(pursuit.options.map(\.id) == ["halcyon", "northwind", "kestrel"])
+        let halcyon = pursuit.options[0]
+        #expect(halcyon.role == "Senior AI Engineer" && halcyon.org == nil)
+        #expect(halcyon.stages == ["Screened", "Interviews", "Awaiting answer", "Offer"])
+        #expect(halcyon.people.first?.page == "memory:people/tess")
+        #expect(halcyon.next == NextStep(text: "Technical", at: LocalTime("2026-10-29T14:00")))
+        let northwind = pursuit.options[1]
+        #expect(northwind.waitingOn?.who == "them" && northwind.next == nil)
         // Stages, people and the rest can be left out.
-        let optiver = pursuit.options[2]
-        #expect(optiver.people.isEmpty && optiver.note == "The online test went well")
+        let kestrel = pursuit.options[2]
+        #expect(kestrel.people.isEmpty && kestrel.note == "The online test went well")
     }
 
     @Test("an occasion decodes, `where` and all, and prep Kumo hasn't ticked isn't done")
@@ -73,11 +73,14 @@ struct MattersTests {
     @Test("the server's own samples decode: local times, days, a firm in `org`, a time zone")
     func serverSamples() throws {
         let pursuit = try JSONValue(json: Self.serverJobSearch).decode(Pursuit.self)
-        let qrt = try #require(pursuit.options.first)
-        #expect(qrt.name == "Senior AI Engineer" && qrt.org == "QRT")
-        #expect(qrt.next?.at?.rawValue == "2026-11-04T14:00" && qrt.next?.at?.isDay == false)
-        #expect(qrt.waitingOn?.since.rawValue == "2026-10-30" && qrt.waitingOn?.since.isDay == true)
-        #expect(qrt.people.first?.role == "recruiter")
+        let halcyon = try #require(pursuit.options.first)
+        #expect(halcyon.name == "Senior AI Engineer" && halcyon.org == "Halcyon")
+        #expect(
+            halcyon.next?.at?.rawValue == "2026-11-04T14:00" && halcyon.next?.at?.isDay == false)
+        #expect(
+            halcyon.waitingOn?.since.rawValue == "2026-10-30"
+                && halcyon.waitingOn?.since.isDay == true)
+        #expect(halcyon.people.first?.role == "recruiter")
         #expect(pursuit.options.last?.people.isEmpty == true)
         let dinner = try JSONValue(json: Self.serverDinner).decode(Occasion.self)
         #expect(dinner.start.rawValue == "2026-11-14T19:30" && dinner.place == "Brat, Shoreditch")
@@ -116,13 +119,15 @@ struct MattersTests {
     @Test("an option's stage is where it sits in its stages, and the furthest along leads")
     func stages() throws {
         let pursuit = try #require(Self.pursuit(try JSONValue(json: Self.jobSearch).decode()))
-        let (qrt, citadel, optiver) = (pursuit.options[0], pursuit.options[1], pursuit.options[2])
-        #expect(PursuitReading.stage(of: qrt)! == (1, 4))
-        #expect(PursuitReading.progress(of: qrt) == 0.5)
-        #expect(PursuitReading.progress(of: citadel) == 0.25)
+        let (halcyon, northwind, kestrel) = (
+            pursuit.options[0], pursuit.options[1], pursuit.options[2]
+        )
+        #expect(PursuitReading.stage(of: halcyon)! == (1, 4))
+        #expect(PursuitReading.progress(of: halcyon) == 0.5)
+        #expect(PursuitReading.progress(of: northwind) == 0.25)
         // "test done" matches "Test done": case doesn't matter.
-        #expect(PursuitReading.stage(of: optiver)! == (0, 4))
-        #expect(PursuitReading.leading(in: pursuit) == ["qrt"])
+        #expect(PursuitReading.stage(of: kestrel)! == (0, 4))
+        #expect(PursuitReading.leading(in: pursuit) == ["halcyon"])
 
         let unmeasured = Pursuit.Option(id: "yc", name: "YC", stage: "Applied")
         #expect(PursuitReading.stage(of: unmeasured) == nil)
@@ -131,8 +136,8 @@ struct MattersTests {
         #expect(PursuitReading.progress(of: offStages) == nil)
         #expect(PursuitReading.leading(in: Pursuit(after: "", options: [unmeasured])).isEmpty)
         // Level options both lead.
-        let level = Pursuit(after: "", options: [citadel, optiver])
-        #expect(PursuitReading.leading(in: level) == ["citadel", "optiver"])
+        let level = Pursuit(after: "", options: [northwind, kestrel])
+        #expect(PursuitReading.leading(in: level) == ["northwind", "kestrel"])
     }
 
     @Test("an option's line is its next step, else who it's waiting on, else Kumo's note")
@@ -142,25 +147,25 @@ struct MattersTests {
             PursuitReading.line(
                 of: pursuit.options[index], now: thursday, calendar: london, locale: english)
         }
-        #expect(line(0) == "Technical · today 14:00 · Poppy")
+        #expect(line(0) == "Technical · today 14:00 · Tess")
         #expect(line(1) == "Waiting on them since 15 Oct")
         #expect(line(2) == "The online test went well")
         let later = Pursuit.Option(
-            id: "c", name: "Citadel", stage: "Interviews",
-            people: [.init(name: "Katia", role: "Recruiter")],
+            id: "c", name: "Northwind", stage: "Interviews",
+            people: [.init(name: "Freya", role: "Recruiter")],
             next: .init(text: "Second round", at: LocalTime("2026-11-17T14:00")))
         #expect(
             PursuitReading.line(of: later, now: thursday, calendar: london, locale: english)
-                == "Second round · Tue 17 Nov · Katia")
+                == "Second round · Tue 17 Nov · Freya")
     }
 
     @Test("a pursuit's line says the option furthest along and the soonest next step")
     func pursuitLine() throws {
         let pursuit = try #require(Self.pursuit(try JSONValue(json: Self.jobSearch).decode()))
         let line = PursuitReading.line(pursuit, now: thursday, calendar: london, locale: english)
-        #expect(line.detail == "QRT: Interviews")
+        #expect(line.detail == "Halcyon: Interviews")
         #expect(line.soon == "Technical today 14:00")
-        // The next day, QRT's technical is past, and nothing else is set.
+        // The next day, Halcyon's technical is past, and nothing else is set.
         let friday = Timestamp("2026-10-30T08:00:00Z")!.date
         #expect(
             PursuitReading.line(pursuit, now: friday, calendar: london, locale: english).soon
@@ -280,12 +285,12 @@ struct MattersTests {
         let since = LocalTime("2026-10-15T09:00")!
         #expect(
             MatterReading.waiting(
-                .init(who: "Poppy", since: since), now: thursday, calendar: london, locale: english)
-                == "Waiting on Poppy since 15 Oct")
+                .init(who: "Tess", since: since), now: thursday, calendar: london, locale: english)
+                == "Waiting on Tess since 15 Oct")
         #expect(
             MatterReading.waiting(
-                .init(who: "QRT", since: LocalTime("2026-10-29T07:00")!), now: thursday,
-                calendar: london, locale: english) == "Waiting on QRT since today")
+                .init(who: "Halcyon", since: LocalTime("2026-10-29T07:00")!), now: thursday,
+                calendar: london, locale: english) == "Waiting on Halcyon since today")
         #expect(
             MatterReading.day(
                 LocalTime("2025-12-01T09:00")!, now: thursday, calendar: london,
@@ -345,24 +350,24 @@ struct MattersTests {
         {"after":"A senior AI role in London that ships to real users, by January.",
          "play":["No firms that only want dashboards","Never below £140k base"],
          "options":[
-          {"id":"qrt","name":"Senior AI Engineer","org":"QRT","stage":"Screened",
-           "people":[{"name":"Poppy","role":"recruiter","page":"memory:people/poppy"}],
+          {"id":"halcyon","name":"Senior AI Engineer","org":"Halcyon","stage":"Screened",
+           "people":[{"name":"Tess","role":"recruiter","page":"memory:people/tess"}],
            "next":{"text":"First round with the team lead","at":"2026-11-04T14:00"},
-           "waiting_on":{"who":"Poppy","since":"2026-10-30"}},
+           "waiting_on":{"who":"Tess","since":"2026-10-30"}},
           {"id":"helsing","name":"ML Engineer","org":"Helsing","stage":"Applied","people":[]}]}
         """
 
     static let serverDinner = """
         {"start":"2026-11-14T19:30","timezone":"Europe/London","where":"Brat, Shoreditch",
-         "people":[{"name":"Poppy"}],
+         "people":[{"name":"Tess"}],
          "prep":[{"id":"book-table","text":"Book a table for four","done":false},
-          {"id":"buy-present","text":"Buy Poppy's present","done":false}],
+          {"id":"buy-present","text":"Buy Tess's present","done":false}],
          "check_in":true}
         """
 
     static let jobSearch = """
         {"motion":{"id":"job-search","kind":"pursuit","title":"Job search",
-          "summary":"QRT technical today · Citadel waiting","status":"active","pinned":true,
+          "summary":"Halcyon technical today · Northwind waiting","status":"active","pinned":true,
           "version":4,"started_at":"2026-10-01T09:00:00.000Z",
           "changed_at":"2026-10-28T18:00:00.000Z","position":12},
          "content":{
@@ -372,19 +377,19 @@ struct MattersTests {
            "Calls on WFH days; check work with you first.",
            "Off-target recruiters: a kind note on what you do want."],
           "options":[
-           {"id":"qrt","name":"QRT","role":"Senior AI Engineer","stage":"Interviews",
+           {"id":"halcyon","name":"Halcyon","role":"Senior AI Engineer","stage":"Interviews",
             "stages":["Screened","Interviews","Awaiting answer","Offer"],
-            "people":[{"name":"Poppy","role":"Recruiter","page":"memory:people/poppy"}],
+            "people":[{"name":"Tess","role":"Recruiter","page":"memory:people/tess"}],
             "next":{"text":"Technical","at":"2026-10-29T14:00"}},
-           {"id":"citadel","name":"Citadel","role":"AI Engineering, FI","stage":"Screened",
+           {"id":"northwind","name":"Northwind","role":"AI Engineering, FI","stage":"Screened",
             "stages":["Screened","Interviews","Awaiting answer","Offer"],
-            "people":[{"name":"Katia","role":"Recruiter"}],
+            "people":[{"name":"Freya","role":"Recruiter"}],
             "waiting_on":{"who":"them","since":"2026-10-15"}},
-           {"id":"optiver","name":"Optiver","role":"Software Engineer","stage":"test done",
+           {"id":"kestrel","name":"Kestrel","role":"Software Engineer","stage":"test done",
             "stages":["Test done","Interviews","Awaiting answer","Offer"],
             "note":"The online test went well"}]},
          "state":{},"changes":[{"version":4,"at":"2026-10-28T18:00:00.000Z",
-          "note":"QRT moved Thursday to 2pm","position":12}]}
+          "note":"Halcyon moved Thursday to 2pm","position":12}]}
         """
 
     /// A dentist appointment, with one prep item you ticked.

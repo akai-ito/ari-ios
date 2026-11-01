@@ -7,7 +7,7 @@ import Foundation
 
 /// Who a matter is waiting on, and since when, such as "them" since 15 October.
 public struct WaitingOn: Sendable, Equatable, Decodable {
-    /// Such as "Poppy", "them" or "the landlord".
+    /// Such as "Tess", "them" or "the landlord".
     public let who: String
     /// The day it started waiting.
     public let since: LocalTime
@@ -58,7 +58,7 @@ public struct Pursuit: Sendable, Equatable, Decodable {
     /// One option: a role at a firm, a flat, a candidate.
     public struct Option: Sendable, Equatable, Decodable, Identifiable {
         public let id: String
-        /// What you'd call it at a glance: the firm for a job ("QRT"), the flat for a flat hunt, the
+        /// What you'd call it at a glance: the firm for a job ("Halcyon"), the flat for a flat hunt, the
         /// person for a hire.
         public let name: String
         /// The organisation behind it when that isn't the name, such as the agency for a flat.

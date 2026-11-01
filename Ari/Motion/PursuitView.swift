@@ -144,16 +144,17 @@ private struct StageBar: View {
             ],
             options: [
                 .init(
-                    id: "qrt", name: "QRT", role: "Senior AI Engineer", stage: "Awaiting answer",
-                    stages: stages, people: [.init(name: "Poppy", role: "Recruiter")],
+                    id: "halcyon", name: "Halcyon", role: "Senior AI Engineer",
+                    stage: "Awaiting answer", stages: stages,
+                    people: [.init(name: "Tess", role: "Recruiter")],
                     note: "Technical done today"),
                 .init(
-                    id: "citadel", name: "Citadel", role: "AI Engineering, FI",
+                    id: "northwind", name: "Northwind", role: "AI Engineering, FI",
                     stage: "Interviews", stages: stages,
-                    people: [.init(name: "Katia", role: "Recruiter")],
+                    people: [.init(name: "Freya", role: "Recruiter")],
                     next: .init(text: "Second round", at: .day(17, at: 14))),
                 .init(
-                    id: "optiver", name: "Optiver", role: "Software Engineer", stage: "Test done",
+                    id: "kestrel", name: "Kestrel", role: "Software Engineer", stage: "Test done",
                     stages: ["Test done", "Interviews", "Awaiting answer", "Offer"],
                     waitingOn: .init(who: "them", since: .day(-43, at: 10))),
             ])
@@ -161,7 +162,8 @@ private struct StageBar: View {
         static let detail = MotionDetail(
             motion: Motion(
                 id: "job-search", kind: .pursuit, title: "Job search",
-                summary: "QRT awaiting answer · Citadel second round", startedAt: .day(-60, at: 9)
+                summary: "Halcyon awaiting answer · Northwind second round",
+                startedAt: .day(-60, at: 9)
             ),
             content: .pursuit(jobSearch))
     }

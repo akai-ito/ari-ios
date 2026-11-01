@@ -30,8 +30,8 @@ public enum PursuitReading {
     }
 
     /// What an option's card says under its name: the next step and who it's with, "Second round ·
-    /// Tue 17 Nov · Katia"; otherwise who it's waiting on, "Waiting on them since 18 Sep";
-    /// otherwise Kumo's note and who it's with, "Technical done today · Poppy".
+    /// Tue 17 Nov · Freya"; otherwise who it's waiting on, "Waiting on them since 18 Sep";
+    /// otherwise Kumo's note and who it's with, "Technical done today · Tess".
     public static func line(
         of option: Pursuit.Option, now: Date = .now, calendar: Calendar = .current,
         locale: Locale = .current
@@ -46,8 +46,8 @@ public enum PursuitReading {
         return option.note.map { $0 + with }
     }
 
-    /// What the pinned line and In motion say: the option furthest along and its stage, "QRT:
-    /// Awaiting answer", and the soonest next step to come, "Citadel Tue 17 Nov" ("Technical Thu
+    /// What the pinned line and In motion say: the option furthest along and its stage, "Halcyon:
+    /// Awaiting answer", and the soonest next step to come, "Northwind Tue 17 Nov" ("Technical Thu
     /// 14:00" when it's the same option's). Each `nil` when there's nothing to say.
     public static func line(
         _ pursuit: Pursuit, now: Date = .now, calendar: Calendar = .current,

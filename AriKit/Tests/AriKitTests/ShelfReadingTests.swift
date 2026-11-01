@@ -48,7 +48,7 @@ struct ShelfReadingTests {
     @Test("people group by circle, closest first, those without one last")
     func circles() {
         let people = [
-            ("Bora", "friends"), ("Mum", "family"), ("Poppy Walton", "work"), ("Janki", "partner"),
+            ("Bora", "friends"), ("Mum", "family"), ("Tess Harlow", "work"), ("Janki", "partner"),
             ("Ayush", "friends"), ("Coach", "running"), ("Niwi", nil),
         ].map {
             PageSummary(address: PageAddress("memory:people/\($0.0)"), title: $0.0, circle: $0.1)

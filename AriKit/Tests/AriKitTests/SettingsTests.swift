@@ -28,16 +28,16 @@ struct SettingsTests {
     func renamesTheLead() async throws {
         let server = ScriptedServer()
         let renaming = Task { [client = try client(server)] in
-            try await client.renameLead(to: "Poppy")
+            try await client.renameLead(to: "Tess")
         }
         let sent = try await request(from: server)
         #expect(sent.method == .put)
         #expect(sent.path == "/v0/lead")
         #expect(sent.headers["Content-Type"] == "application/json")
         #expect(sent.headers["Authorization"]?.hasPrefix("Bearer ") == true)
-        #expect(try json(sent) == JSONValue(json: #"{ "name": "Poppy" }"#))
-        try await server.answer(200, json: #"{ "name": "Poppy" }"#)
-        #expect(try await renaming.value == Lead(name: "Poppy"))
+        #expect(try json(sent) == JSONValue(json: #"{ "name": "Tess" }"#))
+        try await server.answer(200, json: #"{ "name": "Tess" }"#)
+        #expect(try await renaming.value == Lead(name: "Tess"))
     }
 
     @Test("the morning time goes as HH:mm, and comes back as saved")
@@ -80,11 +80,11 @@ struct SettingsTests {
     func checksTheVersion() async throws {
         let server = ScriptedServer()
         let renaming = Task { [client = try client(server)] in
-            try await client.renameLead(to: "Poppy")
+            try await client.renameLead(to: "Tess")
         }
         _ = try await request(from: server)
         try await server.answer(
-            200, headers: ["Ito-Protocol": "9.9"], json: #"{ "name": "Poppy" }"#)
+            200, headers: ["Ito-Protocol": "9.9"], json: #"{ "name": "Tess" }"#)
         do {
             _ = try await renaming.value
             Issue.record("a mismatched version was accepted")
@@ -101,9 +101,9 @@ struct SettingsTests {
                 """
                 { "name": "box", "version": "0.16.0", "protocol": "0.16", "agent": { "model": "gpt" },
                   "setup": { "notifications": true }, "capabilities": [],
-                  "lead": { "name": "Poppy" }, "briefing": { "not_before": "08:15" } }
+                  "lead": { "name": "Tess" }, "briefing": { "not_before": "08:15" } }
                 """.utf8))
-        #expect(info.leadName == "Poppy")
+        #expect(info.leadName == "Tess")
         #expect(info.briefing.time?.hour == 8 && info.briefing.time?.minute == 15)
     }
 

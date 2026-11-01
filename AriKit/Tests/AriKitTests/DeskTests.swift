@@ -14,8 +14,8 @@ struct DeskTests {
         #expect(briefing.at == Timestamp("2026-11-05T07:40:00.000Z"))
         #expect(briefing.handled == 9 && briefing.readAt == nil)
         #expect(briefing.lines.map(\.card) == [nil, "c_hotel"])
-        #expect(briefing.lines.first?.text.hasPrefix("Poppy sent the Teams link") == true)
-        #expect(desk.comingUp.map(\.id) == ["prep", "qrt", "florence"])
+        #expect(briefing.lines.first?.text.hasPrefix("Tess sent the Teams link") == true)
+        #expect(desk.comingUp.map(\.id) == ["prep", "halcyon", "florence"])
         #expect(desk.waiting.map(\.kind) == [.draft, .invite, .times, .question, .offer])
     }
 
@@ -25,13 +25,13 @@ struct DeskTests {
         let prep = items[0]
         #expect(prep.calendar == CalendarName(name: "Kumo", kumo: true))
         #expect(prep.status == .hold && prep.motion == "job-search")
-        let qrt = items[1]
-        #expect(qrt.uid == "040000008200E00074C5B7101A82E008")
-        #expect(qrt.location == "Teams" && !qrt.allDay && qrt.status == .confirmed)
-        #expect(qrt.leaveAt == Timestamp("2026-11-05T13:20:00.000Z"))
-        #expect(!qrt.calendar.kumo)
-        #expect(qrt.start.instant == Timestamp("2026-11-05T14:00:00.000Z")?.date)
-        #expect(qrt.start.day == nil)
+        let halcyon = items[1]
+        #expect(halcyon.uid == "040000008200E00074C5B7101A82E008")
+        #expect(halcyon.location == "Teams" && !halcyon.allDay && halcyon.status == .confirmed)
+        #expect(halcyon.leaveAt == Timestamp("2026-11-05T13:20:00.000Z"))
+        #expect(!halcyon.calendar.kumo)
+        #expect(halcyon.start.instant == Timestamp("2026-11-05T14:00:00.000Z")?.date)
+        #expect(halcyon.start.day == nil)
         let florence = items[2]
         #expect(florence.allDay && florence.location == nil && florence.leaveAt == nil)
         #expect(florence.start.day == DateComponents(year: 2026, month: 11, day: 12))
@@ -68,13 +68,13 @@ struct DeskTests {
         #expect(draft.inReplyTo == "confirm-48213@hotelorto.it")
 
         let invite = try #require(cards[1].invite)
-        #expect(invite.event.title == "Katia: Citadel, second round")
+        #expect(invite.event.title == "Freya: Northwind, second round")
         #expect(invite.clash?.title == "Dentist")
         #expect(cards[1].options.map(\.acts) == [true, false, false])
         #expect(cards[1].draft == nil)
 
         let times = try #require(cards[2].times)
-        #expect(times.purpose == "QRT technical interview")
+        #expect(times.purpose == "Halcyon technical interview")
         #expect(times.slots.map(\.note) == ["WFH", nil, "WFH"])
         #expect(cards[2].state == .working)
 
@@ -172,24 +172,24 @@ struct DeskTests {
 
     // MARK: Fixtures
 
-    /// `GET /v0/desk` on the Thursday of QRT.
+    /// `GET /v0/desk` on the Thursday of Halcyon.
     static let desk = """
         {
           "briefing": {
             "id": "b_0001", "kind": "morning", "at": "2026-11-05T07:40:00.000Z",
             "lines": [
-              {"text": "Poppy sent the Teams link for this afternoon; it's on the event."},
+              {"text": "Tess sent the Teams link for this afternoon; it's on the event."},
               {"text": "Hotel Orto confirmed Florence, but you land 22:10 and check-in closes 22:00. I drafted a note asking them to wait.",
                "card": "c_hotel"}
             ],
             "handled": 9
           },
           "coming_up": [
-            {"id": "prep", "uid": "prep-qrt@kumo", "title": "Prep: QRT technical",
+            {"id": "prep", "uid": "prep-halcyon@kumo", "title": "Prep: Halcyon technical",
              "start": "2026-11-05T13:00:00.000Z", "end": "2026-11-05T14:00:00.000Z",
              "all_day": false, "calendar": {"name": "Kumo", "kumo": true},
              "motion": "job-search", "status": "hold"},
-            {"id": "qrt", "uid": "040000008200E00074C5B7101A82E008", "title": "QRT technical",
+            {"id": "halcyon", "uid": "040000008200E00074C5B7101A82E008", "title": "Halcyon technical",
              "start": "2026-11-05T14:00:00.000Z", "end": "2026-11-05T15:00:00.000Z",
              "all_day": false, "location": "Teams", "calendar": {"name": "Home", "kumo": false},
              "leave_at": "2026-11-05T13:20:00.000Z", "motion": "job-search",
@@ -209,13 +209,13 @@ struct DeskTests {
                        "body": "Ciao! We land at 22:10, could you hold the room?\\n\\nGrazie,\\nDivy",
                        "message_id": "draft-7f3a91@divy.icloud.com",
                        "in_reply_to": "confirm-48213@hotelorto.it"}},
-            {"id": "c_citadel", "kind": "invite", "motion": "job-search",
-             "at": "2026-11-05T12:58:00.000Z", "title": "Invite: Citadel, second round",
+            {"id": "c_northwind", "kind": "invite", "motion": "job-search",
+             "at": "2026-11-05T12:58:00.000Z", "title": "Invite: Northwind, second round",
              "options": [{"label": "Accept", "acts": true}, {"label": "Maybe"}, {"label": "Decline"}],
              "allows_text": false,
              "invite": {
-               "event": {"id": "citadel", "uid": "citadel-2@citadel.com",
-                         "title": "Katia: Citadel, second round",
+               "event": {"id": "northwind", "uid": "northwind-2@northwind.example",
+                         "title": "Freya: Northwind, second round",
                          "start": "2026-11-17T16:00:00.000Z", "end": "2026-11-17T17:00:00.000Z",
                          "all_day": false, "location": "Zoom",
                          "calendar": {"name": "Kumo", "kumo": true}, "status": "hold"},
@@ -224,10 +224,10 @@ struct DeskTests {
                          "all_day": false, "calendar": {"name": "Home", "kumo": false},
                          "status": "confirmed"}}},
             {"id": "c_times", "kind": "times", "motion": "job-search",
-             "at": "2026-11-05T08:15:00.000Z", "title": "Times for QRT",
+             "at": "2026-11-05T08:15:00.000Z", "title": "Times for Halcyon",
              "options": [{"label": "Send these", "acts": true}], "allows_text": false,
              "state": "working",
-             "times": {"purpose": "QRT technical interview",
+             "times": {"purpose": "Halcyon technical interview",
                        "slots": [
                          {"start": "2026-11-09T10:00:00.000Z",
                           "end": "2026-11-09T11:00:00.000Z", "note": "WFH"},

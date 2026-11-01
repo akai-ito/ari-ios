@@ -33,7 +33,7 @@
         ]
 
         static let beliefs = [
-            Belief(id: "qrt", text: "You're in QRT's interview process."),
+            Belief(id: "halcyon", text: "You're in Halcyon's interview process."),
             Belief(id: "florence", text: "Florence with Janki on the 12th."),
             Belief(id: "5k", text: "Training for a sub-20 5K."),
             Belief(id: "work", text: "You're settled at work, and looking for what's next."),
@@ -43,7 +43,8 @@
             matters: [
                 RevealMatter(
                     id: "job-search", title: "Job search",
-                    line: "QRT interviews · Citadel screened · Optiver quiet", symbol: "target"),
+                    line: "Halcyon interviews · Northwind screened · Kestrel quiet",
+                    symbol: "target"),
                 RevealMatter(
                     id: "florence", title: "Florence with Janki",
                     line: "12–15 Nov · hotel booked · 2 to book", symbol: "airplane"),
@@ -55,7 +56,7 @@
                     symbol: "calendar"),
             ],
             added: [
-                AddedEvent(title: "QRT technical interview", when: "Thu 5 Nov · 14:00"),
+                AddedEvent(title: "Halcyon technical interview", when: "Thu 5 Nov · 14:00"),
                 AddedEvent(title: "Flight to Florence", when: "Thu 12 Nov · 19:05"),
                 AddedEvent(title: "Hotel Orto, Florence", when: "12–15 Nov"),
             ])
