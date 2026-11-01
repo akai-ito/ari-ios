@@ -58,7 +58,7 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(JobList.self)
                 case .addEvent:
                     _ = try body.decode(CalendarEventResult.self)
-                case .onboarding, .finishOnboarding:
+                case .onboarding, .finishOnboarding, .replayOnboarding:
                     _ = try body.decode(Onboarding.self)
                 case .lead, .briefingSettings, .readBriefing, .answerBelief:
                     // Settings' requests, a briefing read and a belief's answer, which have no

@@ -17,7 +17,8 @@ struct CapabilitiesTests {
           { "id": "time", "kind": "domain", "title": "Time", "summary": "Your calendar",
             "version": "0.1.0", "state": "needs_you", "detail": "iCloud rejected the password",
             "fields": [
-              { "name": "apple_id", "title": "Apple ID", "kind": "text", "value": "you@icloud.com" },
+              { "name": "apple_id", "title": "Email address", "kind": "text",
+                "placeholder": "you@icloud.com", "value": "divy@icloud.com" },
               { "name": "password", "title": "App-specific password", "kind": "secret", "set": false },
               { "name": "calendars", "title": "Calendars", "kind": "choice", "optional": true,
                 "options": [ { "value": "all", "label": "All" }, { "value": "home", "label": "Home" } ],
@@ -43,6 +44,8 @@ struct CapabilitiesTests {
         #expect(time.state == .needsYou)
         #expect(time.detail == "iCloud rejected the password")
         #expect(time.fields.map(\.kind) == [.text, .secret, .choice, .toggle])
+        #expect(time.fields[0].placeholder == "you@icloud.com")
+        #expect(time.fields[1].placeholder == nil)
         #expect(time.fields[2].required == false)
         #expect(time.fields[2].options.map(\.label) == ["All", "Home"])
         #expect(time.fields[3].value == .toggle(true))

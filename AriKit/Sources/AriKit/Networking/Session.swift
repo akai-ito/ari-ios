@@ -451,6 +451,12 @@ public final class Session {
         onboarding = try await client.finishOnboarding()
     }
 
+    /// You want to see getting started again. It opens here at once, from the start; Kumo asks
+    /// again and reads only an account you connect now.
+    public func replayOnboarding() async throws(RequestError) {
+        onboarding = try await client.replayOnboarding()
+    }
+
     // MARK: - The event stream
 
     private func runStream() async {

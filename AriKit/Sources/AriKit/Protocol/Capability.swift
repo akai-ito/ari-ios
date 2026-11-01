@@ -127,6 +127,8 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
     public let kind: SetupFieldKind
     /// A line of help under the field, such as where to make an app-specific password.
     public let help: String?
+    /// What the empty field shows, such as "you@icloud.com".
+    public let placeholder: String?
     public let required: Bool
     /// For a choice, what you can pick from.
     public let options: [Option]
@@ -180,13 +182,14 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
 
     public init(
         name: String, label: String, kind: SetupFieldKind, help: String? = nil,
-        required: Bool = true, options: [Option] = [], value: SetupValue? = nil, set: Bool = false,
-        connect: Connect? = nil
+        placeholder: String? = nil, required: Bool = true, options: [Option] = [],
+        value: SetupValue? = nil, set: Bool = false, connect: Connect? = nil
     ) {
         self.name = name
         self.label = label
         self.kind = kind
         self.help = help
+        self.placeholder = placeholder
         self.required = required
         self.options = options
         self.value = value
@@ -200,6 +203,7 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
         label = try container.decodeIfPresent(String.self, forKey: .label) ?? name
         kind = try container.decode(SetupFieldKind.self, forKey: .kind)
         help = try container.decodeIfPresent(String.self, forKey: .help)
+        placeholder = try container.decodeIfPresent(String.self, forKey: .placeholder)
         required = !(try container.decodeIfPresent(Bool.self, forKey: .optional) ?? false)
         options = try container.decodeIfPresent([Option].self, forKey: .options) ?? []
         value = try container.decodeIfPresent(SetupValue.self, forKey: .value)
@@ -213,6 +217,7 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
         try container.encode(label, forKey: .label)
         try container.encode(kind, forKey: .kind)
         try container.encodeIfPresent(help, forKey: .help)
+        try container.encodeIfPresent(placeholder, forKey: .placeholder)
         if !required { try container.encode(true, forKey: .optional) }
         if !options.isEmpty { try container.encode(options, forKey: .options) }
         if kind == .secret {
@@ -224,7 +229,7 @@ public struct SetupField: Sendable, Equatable, Identifiable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, kind, optional, options, value, set, connect
+        case name, kind, placeholder, optional, options, value, set, connect
         case label = "title"
         case help = "description"
     }
