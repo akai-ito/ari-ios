@@ -287,7 +287,9 @@ private struct StepDetails: View {
         case .webSearch: return step.query != nil || step.queries != nil || step.url != nil
         case .command: return step.command != nil
         case .fileChange: return !(step.files ?? []).isEmpty
-        case .tool: return step.capability != nil || step.arguments != nil || step.url != nil
+        case .tool:
+            return step.note != nil || step.arguments != nil || step.url != nil
+                || !(step.mails ?? []).isEmpty
         case .plan: return !(step.items ?? []).isEmpty
         case .imageView: return step.path != nil
         case .memory:
@@ -334,10 +336,13 @@ private struct StepDetails: View {
                 }
             }
         case .tool:
-            Caption([step.capability, step.operation].compactMap { $0 }.joined(separator: " · "))
+            // The title already says what it did; why, and what it was about, come under it.
+            if let note = step.note { Caption(note) }
+            // Only a capability's tools carry their arguments; Ito's own say it in words.
             if let arguments = step.arguments { CodeBox(text: arguments) }
             // What the tool made, such as the issue a gap report filed.
             if let url = step.url { WebLink(title: nil, address: url) }
+            if let mails = step.mails, !mails.isEmpty { MailList(mails: mails) }
         case .plan:
             if let explanation = step.explanation { Caption(explanation) }
             PlanChecklist(items: step.items ?? [])
@@ -440,6 +445,105 @@ private struct PlanChecklist: View {
         case .inProgress: "In progress"
         default: "To do"
         }
+    }
+}
+
+/// The mails a step was about. One it read opens onto its words, a few lines until you ask for all
+/// of them; a search's results are a line each: sender, subject, date.
+private struct MailList: View {
+    let mails: [Step.Mail]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(mails.enumerated()), id: \.offset) { _, mail in
+                if mail.text != nil {
+                    MailRead(mail: mail)
+                } else {
+                    MailRow(mail: mail)
+                }
+            }
+        }
+    }
+
+    /// When a mail was sent, as briefly as the day allows: the time today, the day this year.
+    static func when(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        let day = Date.FormatStyle().day().month(.abbreviated)
+        return calendar.isDate(date, equalTo: now, toGranularity: .year)
+            ? date.formatted(day) : date.formatted(day.year())
+    }
+}
+
+/// A mail found, in a line.
+private struct MailRow: View {
+    let mail: Step.Mail
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(verbatim: "\(mail.from) · \(mail.subject)")
+                .foregroundStyle(.ariSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+            Text(MailList.when(mail.date.date))
+                .foregroundStyle(.ariTertiary)
+                .fixedSize()
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A mail read, in a quiet box: who and when, the subject, then its words.
+private struct MailRead: View {
+    let mail: Step.Mail
+
+    @State private var isWhole = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(verbatim: mail.from)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.ariSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Text(MailList.when(mail.date.date))
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+                    .fixedSize()
+            }
+            Text(verbatim: mail.subject)
+                .font(.caption)
+                .foregroundStyle(.ariSecondary)
+            if let text = mail.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
+            {
+                Text(verbatim: isWhole && mail.cut == true ? text + " …" : text)
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+                    .lineLimit(isWhole ? nil : 4)
+                    .textSelection(.enabled)
+                    .padding(.top, 2)
+                if Self.isLong(text) || mail.cut == true {
+                    Button(isWhole ? "Show less" : "Show all") {
+                        withAnimation(.smooth(duration: 0.3)) { isWhole.toggle() }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.ariSecondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.ariSurface, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// More than the four lines it shows at first, roughly.
+    private static func isLong(_ text: String) -> Bool {
+        text.count > 240 || text.split(separator: "\n", omittingEmptySubsequences: false).count > 4
     }
 }
 

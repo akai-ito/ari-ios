@@ -49,8 +49,15 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
     /// The capability the tool belongs to, such as a server's name.
     public var capability: String?
     public var operation: String?
-    /// The arguments it was called with, as JSON text.
+    /// The arguments it was called with, as JSON text. Ito's own tools leave them out: their title
+    /// and mails say what they did.
     public var arguments: String?
+    /// What it did in a word or two, counted in a run of steps like it ("binned").
+    public var tally: String?
+    /// How a run of steps of the same operation reads as one line, with `{count}` for how many.
+    public var runTitle: RunTitle?
+    /// The mails it read, found or moved, so it opens onto them rather than their ids.
+    public var mails: [Mail]?
     // plan
     public var explanation: String?
     public var items: [PlanItem]?
@@ -71,8 +78,31 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
     public var motion: MotionID?
     /// The thing's version after the change.
     public var version: Int?
-    /// Ari's note on the change, such as "Booked the Uffizi, 8:15 Saturday".
+    /// Ari's note on the change, such as "Booked the Uffizi, 8:15 Saturday"; for a tool, why, such
+    /// as the reason a mail was binned.
     public var note: String?
+
+    /// A run's line, with `{count}` for how many: present while one runs, past once they're over.
+    public struct RunTitle: Hashable, Sendable, Decodable {
+        public var present: String
+        public var past: String
+
+        /// The line for this many steps, in the tense they're in.
+        public func line(count: Int, running: Bool) -> String {
+            (running ? present : past).replacingOccurrences(of: "{count}", with: String(count))
+        }
+    }
+
+    /// A mail a step was about: who sent it, its subject and date, and for one it read, its words.
+    public struct Mail: Hashable, Sendable, Decodable {
+        public var from: String
+        public var subject: String
+        public var date: Timestamp
+        /// The mail as plain text, for a mail the step read.
+        public var text: String?
+        /// The text stops short of the whole mail.
+        public var cut: Bool?
+    }
 
     public struct SearchResult: Hashable, Sendable, Decodable {
         public var title: String?
@@ -121,7 +151,8 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         case id, turn, kind, title, at, position, outcome, detail
         case heading, summary, query, queries, url, pattern, results
         case command, cwd, actions, output, files, capability, operation, arguments
-        case explanation, items, path, pages, change, motion, version, note
+        case explanation, items, path, pages, change, motion, version, note, tally, mails
+        case runTitle = "run_title"
         case memoryAction = "action"
         case endedAt = "ended_at"
         case durationMs = "duration_ms"
@@ -167,6 +198,9 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         motion = try c.decodeIfPresent(MotionID.self, forKey: .motion)
         version = try c.decodeIfPresent(Int.self, forKey: .version)
         note = try c.decodeIfPresent(String.self, forKey: .note)
+        tally = try c.decodeIfPresent(String.self, forKey: .tally)
+        runTitle = try c.decodeIfPresent(RunTitle.self, forKey: .runTitle)
+        mails = try c.decodeIfPresent([Mail].self, forKey: .mails)
     }
 }
 

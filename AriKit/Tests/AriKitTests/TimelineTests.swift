@@ -109,6 +109,47 @@ struct TimelineTests {
         #expect(!done.isFolded)
     }
 
+    @Test(
+        "a tool's steps share a counted line with what they did, wherever they came once it's over")
+    func toolRuns() throws {
+        var story = TrailStory()
+        story.mail("s_1", 2, "thread", "Read the thread “Intro call” with Clara Voss")
+        story.mail("s_2", 3, "file", "Binned “50% off” from Acme", tally: "binned")
+        story.mail("s_3", 4, "thread", "Read the thread “Rent” with Mira")
+        story.mail("s_4", 5, "file", "Archived “Receipt” from Quillfield Dental", tally: "archived")
+        story.mail(
+            "s_5", 6, "file", "Binned “Last chance” from Acme", tally: "binned", ended: false)
+        let running = try #require(trails(caughtUp(try story.build())).first?.parts.first?.run)
+        // While it runs, only steps in a row share a line, so the newest stays last.
+        #expect(
+            running.lines.map(\.title) == [
+                "Read the thread “Intro call” with Clara Voss", "Binned “50% off” from Acme",
+                "Read the thread “Rent” with Mira", "Sorting 2 mails · 1 archived",
+            ])
+        #expect(running.lines.last?.specifics == nil)
+
+        story.endMail("s_5", 6, "file", "Binned “Last chance” from Acme", tally: "binned")
+        story.endTurn()
+        let done = try #require(trails(caughtUp(try story.build())).first?.parts.first?.run)
+        #expect(
+            done.lines.map(\.title) == ["Read 2 threads", "Sorted 3 mails · 2 binned, 1 archived"])
+        #expect(done.lines[1].steps.map(\.note) == ["Promotion", "Promotion", "Promotion"])
+        #expect(done.isFolded)
+        #expect(done.summary == "Read 2 threads, sorted 3 mails")
+    }
+
+    @Test("a mail step carries the mails it read, and no arguments")
+    func mailStep() throws {
+        var story = TrailStory()
+        story.mail("s_1", 2, "read", "Read “Intro call” from Clara Voss")
+        let step = try #require(try story.build().steps.first)
+        #expect(step.arguments == nil)
+        #expect(step.runTitle?.line(count: 3, running: false) == "Read 3 mails")
+        let mail = try #require(step.mails?.first)
+        #expect(mail.from == "Clara Voss" && mail.subject == "Intro call")
+        #expect(mail.text == "Would Thursday work?" && mail.cut == true)
+    }
+
     @Test("a long note stands as a message of its own, and the trail carries on after it")
     func longNote() throws {
         var story = TrailStory()
@@ -206,6 +247,40 @@ private struct TrailStory {
         let length = text.replacingOccurrences(of: #"\n"#, with: "\n").utf16.count
         add(
             #""type":"message.ended","message":"\#(id)","outcome":"completed","length":\#(length)"#
+        )
+    }
+
+    /// How the server words a run of each mail operation's steps.
+    private static let runs = [
+        "read": #"{"present":"Reading {count} mails","past":"Read {count} mails"}"#,
+        "thread": #"{"present":"Reading {count} threads","past":"Read {count} threads"}"#,
+        "file": #"{"present":"Sorting {count} mails","past":"Sorted {count} mails"}"#,
+    ]
+
+    /// A step of one of Ito's own mail tools, worded by the server.
+    mutating func mail(
+        _ id: String, _ position: Int, _ operation: String, _ title: String, tally: String? = nil,
+        ended: Bool = true
+    ) {
+        let run = Self.runs[operation] ?? "null"
+        let starting = operation == "file" ? "Filing a mail" : "Reading a mail"
+        add(
+            #""type":"step.started","step":{"id":"\#(id)","turn":"t_1","kind":"tool","title":"\#(starting)","at":"\#(at)","position":\#(position),"capability":"mail","operation":"\#(operation)","run_title":\#(run)}"#
+        )
+        if ended { endMail(id, position, operation, title, tally: tally) }
+    }
+
+    mutating func endMail(
+        _ id: String, _ position: Int, _ operation: String, _ title: String, tally: String? = nil
+    ) {
+        let run = Self.runs[operation] ?? "null"
+        let counted = tally.map { #","tally":"\#($0)","note":"Promotion""# } ?? ""
+        let mails =
+            operation == "read"
+            ? #","mails":[{"from":"Clara Voss","subject":"Intro call","date":"\#(at)","text":"Would Thursday work?","cut":true}]"#
+            : ""
+        add(
+            #""type":"step.ended","step":{"id":"\#(id)","turn":"t_1","kind":"tool","title":"\#(title)","at":"\#(at)","position":\#(position),"capability":"mail","operation":"\#(operation)","run_title":\#(run),"outcome":"completed","ended_at":"\#(at)"\#(counted)\#(mails)}"#
         )
     }
 
