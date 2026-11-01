@@ -140,6 +140,10 @@ Coming up (`ARI_GUESS` shows the first guess `open`, or with what it really was,
 a week that drifted. `ARI_SKETCH` opens the app on a sketch of one of Kumo's moments from samples,
 without a server, such as `sunday`, `quiet`, `wrong` or `work`.
 
+Ito is also a Focus filter: in the Settings app, open Focus, choose one, then Add Filter › Ito and
+say what that Focus is for. iOS then tells Ari whenever it turns on or off, and Ari tells your box,
+even from the background; Settings › Your Focus shows what it last said.
+
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy
 `Config/Local.xcconfig.example` to `Config/Local.xcconfig`, which git ignores, and set your Apple

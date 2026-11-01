@@ -38,6 +38,7 @@ struct SettingsView: View {
                     server
                     KumoSettings(model: model, client: client)
                     MorningSettings(model: model, client: client)
+                    FocusSettings(model: model)
                     capabilitiesSection
                     GettingStartedAgain(session: session) { dismiss() }
                     MemoryBackupSection(

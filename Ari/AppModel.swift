@@ -200,6 +200,20 @@ final class AppModel {
         session?.setLooking(looking, device: notifications.deviceID)
     }
 
+    /// What Ari last told the box about your Focus, for Settings: the Focus, or none, and when.
+    var focusTold: (focus: FocusKind?, at: Date)? {
+        guard let at = defaults.object(forKey: "focusToldAt") as? Date else { return nil }
+        return (defaults.string(forKey: "focusTold").map(FocusKind.init(rawValue:)), at)
+    }
+
+    /// A Focus with Ito in it turned on, or off: the box hears it now, even with Ari in the
+    /// background, or once Ari next runs.
+    func tellFocus(_ focus: FocusKind?) async {
+        defaults.set(focus?.rawValue, forKey: "focusTold")
+        defaults.set(Date.now, forKey: "focusToldAt")
+        await session?.setFocus(focus, device: notifications.deviceID)
+    }
+
     /// The event stream is live again.
     func reconnected() {
         if isLooking { setLooking(true) }

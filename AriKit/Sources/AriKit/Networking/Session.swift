@@ -85,6 +85,8 @@ public final class Session {
     @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
     /// Whether Ari is on screen here, as the server should next hear it.
     @ObservationIgnored private var presenceRequest: (device: String, looking: Bool)?
+    /// Your phone's latest Focus, still to reach the box after it couldn't at the time.
+    @ObservationIgnored private var statusRequest: (device: String, status: DeviceStatus)?
     /// Attachments still to upload, in the order you attached them.
     @ObservationIgnored private var uploadQueue: [PendingAttachment] = []
 
@@ -173,6 +175,7 @@ public final class Session {
                 Task { await self.runCancels() },
                 Task { await self.runDevice() },
                 Task { await self.runPresence() },
+                Task { await self.runStatus() },
                 Task { await self.runUploads() },
                 Task { await self.runCalls() },
             ]
@@ -306,6 +309,21 @@ public final class Session {
     public func setLooking(_ looking: Bool, device: String) {
         presenceRequest = (device, looking)
         wake(.presence)
+    }
+
+    /// Your phone's Focus turned on or off, with Ito part of it. It goes at once, even while Ari is
+    /// in the background; if the box can't be reached, it goes once Ari next runs, unless a newer
+    /// one replaced it.
+    public func setFocus(_ focus: FocusKind?, device: String) async {
+        let status = DeviceStatus(focus: focus)
+        statusRequest = nil
+        do throws(RequestError) {
+            try await client.setStatus(device, status)
+        } catch {
+            guard error.isTemporary, statusRequest == nil else { return }
+            statusRequest = (device, status)
+            wake(.status)
+        }
     }
 
     /// You started a call: it starts on the server as soon as it can. Returns its id, for its
@@ -802,6 +820,16 @@ public final class Session {
         }
     }
 
+    private func runStatus() async {
+        await runLane(.status) {
+            statusRequest
+        } send: { request throws(RequestError) in
+            try await client.setStatus(request.device, request.status)
+        } done: { request in
+            if statusRequest?.status == request.status { statusRequest = nil }
+        }
+    }
+
     /// Sends a lane's requests one at a time: each goes when there's a network, again after a short
     /// wait if it failed for a passing reason, and leaves once the server has it or refuses it.
     private func runLane<Request>(
@@ -848,6 +876,7 @@ public final class Session {
         static let presence = Wake(rawValue: 1 << 7)
         static let upload = Wake(rawValue: 1 << 8)
         static let call = Wake(rawValue: 1 << 9)
+        static let status = Wake(rawValue: 1 << 10)
     }
 
     /// A call to start, end, or delete the audio of, in the order you asked.
