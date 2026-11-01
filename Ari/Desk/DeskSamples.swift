@@ -2,7 +2,7 @@
     import AriKit
     import Foundation
 
-    /// The Desk on the Thursday of QRT, from the milestone's design record, for previews: times are
+    /// The Desk on the Thursday of Halcyon, from the milestone's design record, for previews: times are
     /// relative to now, so "Today" stays today.
     enum DeskSamples {
         // MARK: Briefings
@@ -11,7 +11,7 @@
             id: "b-morning", kind: .morning, at: at(7, 40),
             lines: [
                 BriefingLine(
-                    text: "Poppy sent the Teams link for this afternoon; it's on the event."),
+                    text: "Tess sent the Teams link for this afternoon; it's on the event."),
                 BriefingLine(
                     text:
                         "Hotel Orto confirmed Florence, but you land 22:10 and check-in closes "
@@ -25,32 +25,34 @@
             id: "b-since", kind: .since, at: at(13, 10),
             lines: [
                 BriefingLine(
-                    text: "Katia invited you to Citadel's second round. It's held in my calendar.",
-                    card: "citadel-invite")
+                    text:
+                        "Freya invited you to Northwind's second round. It's held in my calendar.",
+                    card: "northwind-invite")
             ])
 
         // MARK: Coming up
 
         static let comingUp: [CalendarItem] = [
             CalendarItem(
-                id: "prep", uid: "prep@kumo", title: "Prep: QRT technical", start: when(13, 0),
+                id: "prep", uid: "prep@kumo", title: "Prep: Halcyon technical", start: when(13, 0),
                 end: when(14, 0), calendar: kumo, motion: "job-search"),
             CalendarItem(
-                id: "qrt", uid: "qrt@icloud", title: "QRT technical", start: when(14, 0),
-                end: when(15, 0), location: "Teams", calendar: home, motion: "job-search"),
+                id: "halcyon", uid: "halcyon@icloud", title: "Halcyon technical",
+                start: when(14, 0), end: when(15, 0), location: "Teams", calendar: home,
+                motion: "job-search"),
             CalendarItem(
-                id: "janki", uid: "janki@icloud", title: "Dinner with Janki", start: when(19, 30),
+                id: "mira", uid: "mira@icloud", title: "Dinner with Mira", start: when(19, 30),
                 end: when(21, 30), location: "Dishoom Shoreditch", calendar: home,
                 leaveAt: at(19, 5)),
             CalendarItem(
                 id: "parkrun", uid: "parkrun@icloud", title: "Parkrun", start: when(day: 1, 9, 0),
                 end: when(day: 1, 9, 45), location: "Burgess Park", calendar: home),
             CalendarItem(
-                id: "hold-mon", uid: "hold-mon@kumo", title: "Hold: QRT final",
+                id: "hold-mon", uid: "hold-mon@kumo", title: "Hold: Halcyon final",
                 start: when(day: 2, 10),
                 end: when(day: 2, 11), calendar: kumo, status: .hold),
             CalendarItem(
-                id: "florence", uid: "florence@icloud", title: "Florence with Janki",
+                id: "florence", uid: "florence@icloud", title: "Florence with Mira",
                 start: allDay(7), end: allDay(10), allDay: true, calendar: home,
                 motion: "florence"),
         ]
@@ -72,23 +74,23 @@
                     """,
                 messageID: "draft-7f3a91@divy.icloud.com"))
 
-        static let poppyDraft = DeskCard(
-            id: "poppy", kind: .draft, motion: "job-search",
+        static let tessDraft = DeskCard(
+            id: "tess", kind: .draft, motion: "job-search",
             at: at(day: -1, 18, 4),
-            title: "Draft to Poppy Walton",
+            title: "Draft to Tess Harlow",
             draft: DraftCard(
-                account: "iCloud", from: "divy@icloud.com", to: ["Poppy Walton"],
-                subject: "QRT: technical interview slots",
+                account: "iCloud", from: "divy@icloud.com", to: ["Tess Harlow"],
+                subject: "Halcyon: technical interview slots",
                 body:
-                    "Hey Poppy! Mon 10 or Fri 10 both work my end, whatever's easier for the panel "
+                    "Hey Tess! Mon 10 or Fri 10 both work my end, whatever's easier for the panel "
                     + ":) CV attached in case they want the latest.",
                 messageID: "draft-2c91@divy.icloud.com"))
 
-        static let qrtTimes = DeskCard(
-            id: "qrt-times", kind: .times, motion: "job-search", at: at(8, 15),
-            title: "Times for QRT's final round",
+        static let halcyonTimes = DeskCard(
+            id: "halcyon-times", kind: .times, motion: "job-search", at: at(8, 15),
+            title: "Times for Halcyon's final round",
             times: TimesCard(
-                purpose: "for Poppy's draft",
+                purpose: "for Tess's draft",
                 slots: [
                     TimeSlot(start: at(day: 4, 10), end: at(day: 4, 11), note: "WFH"),
                     TimeSlot(start: at(day: 4, 14), end: at(day: 4, 15), note: "WFH"),
@@ -96,17 +98,17 @@
                     TimeSlot(start: at(day: 8, 10), end: at(day: 8, 11), note: "WFH"),
                 ]))
 
-        static let citadelInvite = DeskCard(
-            id: "citadel-invite", kind: .invite, motion: "job-search",
-            at: at(12, 58), title: "Invite: Citadel, second round",
+        static let northwindInvite = DeskCard(
+            id: "northwind-invite", kind: .invite, motion: "job-search",
+            at: at(12, 58), title: "Invite: Northwind, second round",
             options: [
                 Ask.Option(label: "Accept", acts: true), Ask.Option(label: "Maybe"),
                 Ask.Option(label: "Decline"),
             ],
             invite: InviteCard(
                 event: CalendarItem(
-                    id: "citadel", uid: "citadel-2@citadel.com",
-                    title: "Katia: Citadel, second round", start: when(day: 5, 16),
+                    id: "northwind", uid: "northwind-2@northwind.example",
+                    title: "Freya: Northwind, second round", start: when(day: 5, 16),
                     end: when(day: 5, 17), location: "Zoom", calendar: kumo, status: .hold)))
 
         static let revolutQuestion = DeskCard(
@@ -127,9 +129,11 @@
             id: "future", kind: CardKind(rawValue: "parcel"), at: at(10, 0),
             title: "Your DPD parcel arrives between 14:00 and 15:00")
 
-        static let waiting = [hotelDraft, revolutQuestion, citadelInvite, qrtTimes, futureCard]
+        static let waiting = [
+            hotelDraft, revolutQuestion, northwindInvite, halcyonTimes, futureCard,
+        ]
         static let allCards = [
-            poppyDraft, qrtTimes, citadelInvite, revolutQuestion, outlookOffer, futureCard,
+            tessDraft, halcyonTimes, northwindInvite, revolutQuestion, outlookOffer, futureCard,
         ]
 
         static func context(_ card: DeskCard) -> String? {
@@ -159,7 +163,7 @@
                 DoneEntry(
                     id: "d3", at: at(8, 40), text: "Council tax: due 1 Dec, reminder on the 24th"),
                 DoneEntry(
-                    id: "q3", at: at(8, 12), text: "Poppy: “thanks!”",
+                    id: "q3", at: at(8, 12), text: "Tess: “thanks!”",
                     reason: "a thank-you, no action", quiet: true),
                 DoneEntry(
                     id: "q4", at: at(7, 3), text: "Medium Daily", reason: "you rarely open these",
@@ -179,7 +183,7 @@
         static let olderDone = [
             DoneEntry(
                 id: "d6", at: at(day: -3, 16, 40),
-                text: "Citadel: Katia's reply → Job search, waiting on them"),
+                text: "Northwind: Freya's reply → Job search, waiting on them"),
             DoneEntry(
                 id: "q6", at: at(day: -3, 8, 0), text: "Strava weekly summary",
                 reason: "nothing new", quiet: true),

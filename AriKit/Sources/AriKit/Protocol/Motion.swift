@@ -1,6 +1,6 @@
 import Foundation
 
-/// A thing's id: readable, chosen by Ari, unique on the server, such as `florence-with-janki`.
+/// A thing's id: readable, chosen by Ari, unique on the server, such as `florence-with-mira`.
 public struct MotionID: OpaqueIdentifier {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -12,7 +12,7 @@ public struct Motion: Sendable, Equatable, Decodable, Identifiable {
     public let id: MotionID
     /// Which widget draws it. A kind Ari doesn't know shows as a plain card.
     public let kind: MotionKind
-    /// Such as "Florence with Janki".
+    /// Such as "Florence with Mira".
     public let title: String
     /// Where it stands, in one line, as Ari last wrote it, such as "6–9 Nov · 3 to book".
     public let summary: String

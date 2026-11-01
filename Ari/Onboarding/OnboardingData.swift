@@ -40,7 +40,7 @@ struct KumoQuestion: Hashable, Identifiable, Sendable {
     var choices: [String] = []
 }
 
-/// Something Kumo already believes about you, for someone who comes with memory: "You're in QRT's
+/// Something Kumo already believes about you, for someone who comes with memory: "You're in Halcyon's
 /// interview process".
 struct Belief: Equatable, Identifiable, Sendable {
     let id: String
@@ -53,7 +53,7 @@ struct RevealMatter: Equatable, Identifiable, Sendable {
     let id: String
     /// Such as "Job search".
     let title: String
-    /// Where it stands, such as "QRT awaiting · Citadel Tue 17".
+    /// Where it stands, such as "Halcyon awaiting · Northwind Tue 17".
     let line: String
     /// Its SF Symbol, as In motion draws its kind.
     let symbol: String

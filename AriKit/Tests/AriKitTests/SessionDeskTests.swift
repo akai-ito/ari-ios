@@ -14,19 +14,19 @@ struct SessionDeskTests {
         let bench = try Bench()
         defer { bench.close() }
         try await bench.open(
-            with: Self.snapshot("e_10", messages: [Self.message("u_1", "Janki's birthday", 1)]))
+            with: Self.snapshot("e_10", messages: [Self.message("u_1", "Mira's birthday", 1)]))
         let session = bench.session
-        #expect(session.conversation.entries.map(\.text) == ["Janki's birthday"])
+        #expect(session.conversation.entries.map(\.text) == ["Mira's birthday"])
         #expect(session.desk == Desk())
         #expect(session.onboarding == nil)
 
         let desk = #"{"coming_up":[],"waiting":[\#(Self.question("k_1"))]}"#
         try await bench.push(
             Self.snapshot(
-                "e_20", messages: [Self.message("u_2", "QRT on Thursday", 4)], desk: desk,
+                "e_20", messages: [Self.message("u_2", "Halcyon on Thursday", 4)], desk: desk,
                 onboarding: #"{"state":"reading","progress":{"mails_read":3,"mails_total":90}}"#))
 
-        #expect(session.conversation.entries.map(\.text) == ["QRT on Thursday"])
+        #expect(session.conversation.entries.map(\.text) == ["Halcyon on Thursday"])
         #expect(session.conversation.cursor == "e_20")
         #expect(session.desk?.waiting.map(\.id) == ["k_1"])
         #expect(session.onboarding?.state == .reading)
@@ -43,14 +43,14 @@ struct SessionDeskTests {
         try await bench.open(with: Self.snapshot("e_10"))
 
         let desk = #"""
-            {"briefing":{"id":"b_1","kind":"morning","at":"2026-11-10T07:40:00.000Z","lines":[{"text":"QRT moved to 2pm."}],"handled":3},
+            {"briefing":{"id":"b_1","kind":"morning","at":"2026-11-10T07:40:00.000Z","lines":[{"text":"Halcyon moved to 2pm."}],"handled":3},
              "coming_up":[],"waiting":[\#(Self.question("k_1"))]}
             """#
         try await bench.push(
             #"{"id":"e_11","type":"desk.changed","at":"2026-11-10T07:40:00.000Z","desk":\#(desk)}"#)
 
         let session = bench.session
-        #expect(session.desk?.briefing?.lines.map(\.text) == ["QRT moved to 2pm."])
+        #expect(session.desk?.briefing?.lines.map(\.text) == ["Halcyon moved to 2pm."])
         #expect(session.desk?.waiting.map(\.id) == ["k_1"])
         #expect(session.conversation.cursor == "e_11")
 
@@ -118,11 +118,12 @@ struct SessionDeskTests {
         try await bench.server.answer(
             200,
             json:
-                #"{"jobs":[{"id":"j_1","why":"Ask how the QRT interview went","after_event":{"uid":"qrt@icloud.com","title":"QRT technical"}}]}"#
+                #"{"jobs":[{"id":"j_1","why":"Ask how the Halcyon interview went","after_event":{"uid":"halcyon@icloud.com","title":"Halcyon technical"}}]}"#
         )
         let job = try #require(try await looking.value.first)
         #expect(
-            job.why == "Ask how the QRT interview went" && job.afterEvent?.title == "QRT technical")
+            job.why == "Ask how the Halcyon interview went"
+                && job.afterEvent?.title == "Halcyon technical")
 
         let reading = Task { try await session.readBriefing("b_1") }
         let read = try await bench.nextRequest()
@@ -231,7 +232,7 @@ struct SessionDeskTests {
         first.session.start()
         #expect(try await first.nextRequest().path == "/v0/events")
         // The stream never opens, so both wait.
-        first.session.send("Prep me for QRT", id: "00000000-0000-4000-8000-000000000001")
+        first.session.send("Prep me for Halcyon", id: "00000000-0000-4000-8000-000000000001")
         first.session.send("Book the tickets", id: "00000000-0000-4000-8000-000000000002")
         await first.settle()
         #expect(await first.server.takeRequest() == nil)
@@ -241,7 +242,7 @@ struct SessionDeskTests {
         defer { second.close() }
         second.session.start()
         let waiting = second.session.conversation.entries
-        #expect(waiting.map(\.text) == ["Prep me for QRT", "Book the tickets"])
+        #expect(waiting.map(\.text) == ["Prep me for Halcyon", "Book the tickets"])
         #expect(waiting.allSatisfy { $0.delivery == .sending })
 
         #expect(try await second.nextRequest().path == "/v0/events")
@@ -253,11 +254,11 @@ struct SessionDeskTests {
         #expect(firstSend.path == "/v0/messages")
         #expect(
             try firstSend.body.map { try JSONValue(data: $0) }?["text"]?.string
-                == "Prep me for QRT")
+                == "Prep me for Halcyon")
         try await second.server.answer(
             201,
             json:
-                #"{"message":{"id":"00000000-0000-4000-8000-000000000001","role":"user","text":"Prep me for QRT","at":"2026-11-10T08:00:01.000Z","position":1}}"#
+                #"{"message":{"id":"00000000-0000-4000-8000-000000000001","role":"user","text":"Prep me for Halcyon","at":"2026-11-10T08:00:01.000Z","position":1}}"#
         )
         let secondSend = try await second.nextRequest()
         #expect(secondSend.path == "/v0/messages")

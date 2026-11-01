@@ -49,7 +49,7 @@ public enum MatterReading {
         format("jjmm", calendar: calendar, locale: locale).string(from: time.date(in: calendar))
     }
 
-    /// Who it's waiting on and since when: "Waiting on Poppy since 15 Oct".
+    /// Who it's waiting on and since when: "Waiting on Tess since 15 Oct".
     public static func waiting(
         _ waiting: WaitingOn, now: Date = .now, calendar: Calendar = .current,
         locale: Locale = .current

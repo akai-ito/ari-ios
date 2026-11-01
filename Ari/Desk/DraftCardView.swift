@@ -143,7 +143,7 @@ struct DraftCardView: View {
     #Preview("Draft") {
         ScrollView {
             VStack(spacing: 14) {
-                DraftCardView(card: DeskSamples.poppyDraft, context: "Career · Job search") { _ in
+                DraftCardView(card: DeskSamples.tessDraft, context: "Career · Job search") { _ in
                     try await Task.sleep(for: .seconds(1))
                 }
                 DraftCardView(card: DeskSamples.hotelDraft, context: "Home & admin · Florence") {

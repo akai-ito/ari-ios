@@ -150,7 +150,7 @@ extension PinnedLine {
 }
 
 /// The quiet line under a reply when Ari starts or changes a thing in motion: "Started · Florence
-/// with Janki", or "Florence with Janki · Booked the Uffizi, 8:15 Saturday". Tap it to open the
+/// with Mira", or "Florence with Mira · Booked the Uffizi, 8:15 Saturday". Tap it to open the
 /// thing.
 struct CompactMotionLine: View {
     let line: ReplyShape.MotionLine

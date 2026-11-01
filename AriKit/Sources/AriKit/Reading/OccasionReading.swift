@@ -71,7 +71,7 @@ public enum OccasionReading {
             + "\(text("EEE d MMM" + year, end.date(in: calendar))), \(clock(end))"
     }
 
-    /// Who's there besides you: "With Dr Shah", "With Janki and Poppy"; `nil` for no one.
+    /// Who's there besides you: "With Dr Rowe", "With Mira and Tess"; `nil` for no one.
     public static func people(_ occasion: Occasion) -> String? {
         guard !occasion.people.isEmpty else { return nil }
         return "With " + ListFormatter.localizedString(byJoining: occasion.people.map(\.name))

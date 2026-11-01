@@ -121,7 +121,7 @@ struct TimesCardView: View {
 #if DEBUG
     #Preview("Times") {
         ScrollView {
-            TimesCardView(card: DeskSamples.qrtTimes, context: nil) { _ in
+            TimesCardView(card: DeskSamples.halcyonTimes, context: nil) { _ in
                 try await Task.sleep(for: .seconds(1))
             }
             .padding(16)

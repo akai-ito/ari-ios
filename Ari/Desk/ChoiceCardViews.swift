@@ -203,7 +203,7 @@ struct CardOptions: View {
     #Preview("Invite, question, offer") {
         ScrollView {
             VStack(spacing: 14) {
-                InviteCardView(card: DeskSamples.citadelInvite, context: "Career · Job search") {
+                InviteCardView(card: DeskSamples.northwindInvite, context: "Career · Job search") {
                     _ in
                     try await Task.sleep(for: .seconds(1))
                 }
