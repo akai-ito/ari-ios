@@ -63,8 +63,8 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     public struct Setup: Sendable, Equatable, Codable {
         /// `ito push setup` has run.
         public let notifications: Bool
-        /// Memory is backed up: `ito memory remote` has set where to push it, and the last day's
-        /// pushes went through.
+        /// Memory is backed up: it has somewhere to go, through GitHub or `ito memory remote`, and
+        /// the last day's pushes went through.
         public let memoryBackup: Bool?
 
         enum CodingKeys: String, CodingKey {

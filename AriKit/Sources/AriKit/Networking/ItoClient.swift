@@ -254,7 +254,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.put, "/v0/agent", body: try Self.json(choice)))
     }
 
-    // MARK: - Memory, read-only
+    // MARK: - Memory: read it, and back it up
 
     /// `GET /v0/memory/in-mind`: Portrait, Now and How to help you, in full.
     public func inMind() async throws(RequestError) -> MemoryPages {
@@ -286,6 +286,22 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     /// `GET /v0/memory/changes/{change}`: what one update did to a page.
     public func change(_ change: String) async throws(RequestError) -> PageChange {
         try await call(HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"))
+    }
+
+    /// `GET /v0/memory/backup`: where memory is backed up, and how that's going.
+    public func memoryBackup() async throws(RequestError) -> MemoryBackup {
+        try await call(HTTPRequest(.get, "/v0/memory/backup"))
+    }
+
+    /// `POST /v0/memory/backup`: starts backing up to GitHub, with a code to enter there. The
+    /// server takes it from there; read the backup to follow along.
+    public func backUpMemory() async throws(RequestError) -> MemoryBackup {
+        try await call(HTTPRequest(.post, "/v0/memory/backup"))
+    }
+
+    /// `DELETE /v0/memory/backup`: the server forgets its GitHub tokens. The repository stays.
+    public func stopMemoryBackup() async throws(RequestError) -> MemoryBackup {
+        try await call(HTTPRequest(.delete, "/v0/memory/backup"))
     }
 
     // MARK: - In motion

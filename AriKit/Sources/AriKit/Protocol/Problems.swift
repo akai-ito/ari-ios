@@ -1,5 +1,5 @@
 // What's wrong on the server that needs you: notifications it can't send, a mail or calendar
-// account that keeps failing, a capability that needs setting up. Each shows until it's fixed, when
+// account that keeps failing, a capability that needs setting up, memory not reaching its backup. Each shows until it's fixed, when
 // it clears on its own; a blip that sorts itself out never shows.
 
 /// One thing wrong on the server, with how to fix it.
@@ -32,7 +32,9 @@ public struct ProblemArea: OpenValue {
     public static let mail = ProblemArea(rawValue: "mail")
     public static let calendar = ProblemArea(rawValue: "calendar")
     public static let capabilities = ProblemArea(rawValue: "capabilities")
-    public static let known = [notifications, mail, calendar, capabilities]
+    /// Memory isn't reaching its backup.
+    public static let memory = ProblemArea(rawValue: "memory")
+    public static let known = [notifications, mail, calendar, capabilities, memory]
 }
 
 /// What's wrong on the server changed: all of it, empty once nothing is.
