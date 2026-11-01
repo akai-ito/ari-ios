@@ -76,6 +76,13 @@ enum SettingsRoute: Hashable {
     case model
     /// Ari's voice on a call.
     case voice
+    /// Backing memory up to GitHub, a step at a time.
+    case memoryBackup
+}
+
+/// Places in Settings' own list to scroll to.
+enum SettingsAnchor: Hashable {
+    case memory
 }
 
 /// A capability's row: its symbol, title and summary (or why it needs you), and its state.

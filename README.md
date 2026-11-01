@@ -88,7 +88,10 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   you say whether it's an idea, in the plan or not for you), and travel; what Ari changed is behind
   a button at the top.
 - **What Kumo knows.** You shows Kumo's memory: In mind, shelves of pages (each with its glyph
-  in Ari's dots; people by circle), and the journal, all in the device's search.
+  in Ari's dots; people by circle), and the journal, all in the device's search. Settings › Memory
+  backs it up to GitHub: approve a code, install Ito Memory on just your private `ito-thread`, and
+  your server pushes after each change; it says when that stops, and Disconnect keeps the
+  repository.
 - **Talk.** A call with Kumo through CallKit: your voice goes to your server, and Kumo's comes back
   with captions as each line is heard.
 - **Capabilities.** What Kumo can reach, switched on in Settings, and connected through the

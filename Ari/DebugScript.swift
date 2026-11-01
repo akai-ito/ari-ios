@@ -10,7 +10,7 @@ import SwiftUI
     /// there (with `ARI_MOTION_TAB` on one of a trip's sections, such as `Map`,
     /// `ARI_MOTION_PLACE` on a place's page,
     /// `ARI_MOTION_PIN` with a map pin's callout up (a stop's id), or `ARI_MOTION_CHANGES` showing what changed), `ARI_SETTINGS` opens Settings (or, with
-    /// `capabilities`, `capability:<id>`, `setup:<id>`, `model` or `voice`, goes on to that place),
+    /// `capabilities`, `capability:<id>`, `setup:<id>`, `model`, `voice` or `backup`, goes on to that place, or with `memory` scrolls to it),
     /// `ARI_TOPICS` opens the conversation's topics, `ARI_KUMOS_WORK` opens Kumo's work on the Desk, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
     /// `ARI_SHELF` opens a shelf (`people`, or `journal` and with `ARI_CALENDAR` its calendar), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
@@ -48,12 +48,18 @@ import SwiftUI
             case "capabilities": return [.capabilities]
             case "model": return [.model]
             case "voice": return [.voice]
+            case "backup": return [.memoryBackup]
             case "capability" where parts.count == 2:
                 return [.capabilities, .capability(CapabilityID(parts[1]))]
             case "setup" where parts.count == 2:
                 return [.capabilities, .capability(CapabilityID(parts[1]), setup: true)]
             default: return []
             }
+        }
+
+        /// Where `ARI_SETTINGS` scrolls Settings' own list to: `memory`.
+        static var settingsAnchor: SettingsAnchor? {
+            environment["ARI_SETTINGS"] == "memory" ? .memory : nil
         }
 
         /// Adopts the test's notification key, so `xcrun simctl push` can send a sealed push.

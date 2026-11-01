@@ -23,7 +23,6 @@ struct SetupSheet: View {
     /// Asking the box for a code.
     @State private var starting = false
     @ScaledMetric(relativeTo: .footnote) private var stepSize: CGFloat = 24
-    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 38
 
     /// The capability as the server last said, so a connected field shows as set.
     private var current: Capability { capabilities.capability(capability.id) ?? capability }
@@ -244,32 +243,8 @@ struct SetupSheet: View {
         }
     }
 
-    /// The code to enter, large, in a card; a spinner until there is one.
     private func code(_ code: String?) -> some View {
-        VStack(spacing: 12) {
-            if let code {
-                Text(code)
-                    .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
-                    .kerning(2)
-                    .foregroundStyle(.ariText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .speechSpellsOutCharacters()
-                    .textSelection(.enabled)
-                Label("Copied", systemImage: "doc.on.doc")
-                    .font(.footnote)
-                    .foregroundStyle(.ariTertiary)
-            } else {
-                ProgressView().frame(minHeight: codeSize * 1.8)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 26)
-        .padding(.horizontal, 16)
-        .background(.ariSurface, in: .rect(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.ariLine.opacity(0.7)))
+        DeviceCodeCard(code: code)
     }
 
     /// What went wrong, or what *Test connection* found.
@@ -421,8 +396,42 @@ struct SetupSheet: View {
     }
 }
 
+/// The code to enter on a provider's page, large, in a card, and copied; a spinner until there is
+/// one.
+struct DeviceCodeCard: View {
+    let code: String?
+    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 38
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if let code {
+                Text(code)
+                    .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
+                    .kerning(2)
+                    .foregroundStyle(.ariText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .speechSpellsOutCharacters()
+                    .textSelection(.enabled)
+                Label("Copied", systemImage: "doc.on.doc")
+                    .font(.footnote)
+                    .foregroundStyle(.ariTertiary)
+            } else {
+                ProgressView().frame(minHeight: codeSize * 1.8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 26)
+        .padding(.horizontal, 16)
+        .background(.ariSurface, in: .rect(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.ariLine.opacity(0.7)))
+    }
+}
+
 /// A capsule button: soft white and filled for the main thing to do, outlined otherwise.
-private struct SetupPill: ButtonStyle {
+struct SetupPill: ButtonStyle {
     var primary = false
 
     func makeBody(configuration: Configuration) -> some View {
