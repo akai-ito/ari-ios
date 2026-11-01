@@ -21,6 +21,8 @@ final class AppModel {
     private(set) var offersNotifications = false
     /// A reply to open the conversation at, from a tapped notification.
     var opening: MessageID?
+    /// Kumo's line, from a tapped notification: the Desk opens, where it is.
+    var opensDesk = false
     /// Where in the chat to go, from a thing in motion's "What changed".
     var openingPosition: Int?
     /// Whether the conversation is on screen here.

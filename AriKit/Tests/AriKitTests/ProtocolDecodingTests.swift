@@ -50,6 +50,10 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(Desk.self)
                 case .answerCard(let card):
                     #expect(try body.decode(CardResult.self).card.id == card, "\(place)")
+                case .answerMoment(let moment):
+                    #expect(try body.decode(MomentResult.self).moment.id == moment, "\(place)")
+                case .work:
+                    _ = try body.decode(KumoWork.self)
                 case .done:
                     _ = try body.decode(DonePage.self)
                 case .undo(let entry):
@@ -62,9 +66,9 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(Onboarding.self)
                 case .problems:
                     _ = try body.decode(ProblemList.self)
-                case .lead, .briefingSettings, .readBriefing, .answerBelief:
-                    // Settings' requests, a briefing read and a belief's answer, which have no
-                    // answer to read.
+                case .lead, .morningSettings, .readMoment, .answerBelief:
+                    // Settings' requests, a line read on the Desk and a belief's answer, which have
+                    // no answer to read.
                     continue
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
@@ -149,13 +153,13 @@ struct ProtocolDecodingTests {
                     id: message.id, text: message.text, attachments: message.attachments ?? [],
                     done: message.done)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
-            case .answerCard:
+            case .answerCard, .answerMoment:
                 #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
             case .answerBelief:
                 let answer: BeliefAnswer =
                     body["correction"]?.string.map(BeliefAnswer.correction) ?? .confirmed
                 #expect(try JSONValue(encoding: answer) == body, "\(place)")
-            case .briefingSettings, .lead:
+            case .morningSettings, .lead:
                 // Settings' requests.
                 continue
             case .stop:
@@ -217,7 +221,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 17) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 18) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }

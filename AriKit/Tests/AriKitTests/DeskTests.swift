@@ -2,21 +2,55 @@ import AriKit
 import Foundation
 import Testing
 
-/// The Desk as the box sends it: the morning card, what's coming up, what's waiting on you, and
-/// Done, read from JSON written as the 0.16 contract has it.
+/// The Desk as the box sends it: Kumo's line for the moment, what's coming up, what's waiting on
+/// you, and Done, read from JSON written as the 0.17 contract has it.
 @Suite("Desk")
 struct DeskTests {
-    @Test("the Desk decodes whole: briefing, coming up and waiting")
+    @Test("the Desk decodes whole: Kumo's line, coming up, waiting, handled and the last mail")
     func desk() throws {
         let desk = try JSONValue(json: Self.desk).decode(Desk.self)
-        let briefing = try #require(desk.briefing)
-        #expect(briefing.id == "b_0001" && briefing.kind == .morning)
-        #expect(briefing.at == Timestamp("2026-11-05T07:40:00.000Z"))
-        #expect(briefing.handled == 9 && briefing.readAt == nil)
-        #expect(briefing.lines.map(\.card) == [nil, "c_hotel"])
-        #expect(briefing.lines.first?.text.hasPrefix("Tess sent the Teams link") == true)
+        let moment = try #require(desk.moment)
+        #expect(moment.id == "o_0001" && moment.kind == .news && moment.message == "m_0042")
+        #expect(moment.at == Timestamp("2026-11-05T15:20:00.000Z"))
+        #expect(moment.text.hasPrefix("How did the call with Northwind go?"))
+        #expect(moment.options.map(\.label) == ["Ask me tonight"] && moment.allowsText)
+        #expect(moment.readAt == nil && !moment.isWorking && moment.answer == nil)
+        #expect(desk.handled == 9)
+        #expect(desk.lastMailAt == Timestamp("2026-11-05T15:18:00.000Z"))
         #expect(desk.comingUp.map(\.id) == ["prep", "halcyon", "florence"])
         #expect(desk.waiting.map(\.kind) == [.draft, .invite, .times, .question, .offer])
+        #expect(desk.waiting[0].changedAt == Timestamp("2026-11-05T09:30:00.000Z"))
+        #expect(desk.waiting[1].changedAt == nil)
+    }
+
+    @Test("Kumo's line at work on your answer, and the same Desk with it")
+    func workingMoment() throws {
+        var json = try JSONValue(json: Self.desk)
+        json["moment"]?["state"] = .string("working")
+        json["moment"]?["answer"] = .object(["option": .string("Ask me tonight")])
+        json["moment"]?["read_at"] = .string("2026-11-05T15:20:02.000Z")
+        let working = try #require(try json.decode(Desk.self).moment)
+        #expect(working.isWorking && working.answer == CardAnswer(option: "Ask me tonight"))
+        #expect(working.readAt == Timestamp("2026-11-05T15:20:02.000Z"))
+        let desk = try JSONValue(json: Self.desk).decode(Desk.self)
+        #expect(desk.replacing(moment: working).moment == working)
+        #expect(desk.replacing(moment: working).handled == 9)
+    }
+
+    @Test("Kumo's work today: what it handled and what it cleared")
+    func work() throws {
+        let work = try JSONValue(
+            json: """
+                {"day":"2026-11-05",
+                 "handled":[{"id":"d1","at":"2026-11-05T15:02:00.000Z","text":"Electricity bill → Admin",
+                             "reason":"A bill with a date on it","undo":true,"quiet":false}],
+                 "cleared":[{"id":"q1","at":"2026-11-05T08:10:00.000Z","text":"Bank statement",
+                             "reason":"routine, nothing due","undo":false,"quiet":true}]}
+                """
+        ).decode(KumoWork.self)
+        #expect(work.day == "2026-11-05")
+        #expect(work.handled.map(\.id) == ["d1"] && work.handled[0].undo)
+        #expect(work.cleared.map(\.id) == ["q1"] && work.cleared[0].quiet)
     }
 
     @Test("a calendar item reads its calendar, travel, status and all-day days")
@@ -112,12 +146,12 @@ struct DeskTests {
     @Test("values Ari doesn't know decode and keep their text")
     func unknownValues() throws {
         var json = try JSONValue(json: Self.desk)
-        json["briefing"]?["kind"] = .string("evening")
+        json["moment"]?["kind"] = .string("evening")
         var item = try #require(json["coming_up"]?.array?.first)
         item["status"] = .string("pencilled")
         json["coming_up"] = .array([item])
         let desk = try json.decode(Desk.self)
-        #expect(desk.briefing?.kind.rawValue == "evening" && desk.briefing?.kind.isKnown == false)
+        #expect(desk.moment?.kind.rawValue == "evening" && desk.moment?.kind.isKnown == false)
         #expect(desk.comingUp.first?.status?.rawValue == "pencilled")
     }
 
@@ -134,7 +168,8 @@ struct DeskTests {
 
     @Test("a quiet Desk has nothing on it")
     func quietDesk() throws {
-        let desk = try JSONValue(json: #"{"coming_up":[],"waiting":[]}"#).decode(Desk.self)
+        let desk = try JSONValue(json: #"{"coming_up":[],"waiting":[],"handled":0}"#)
+            .decode(Desk.self)
         #expect(desk == Desk())
     }
 
@@ -175,15 +210,13 @@ struct DeskTests {
     /// `GET /v0/desk` on the Thursday of Halcyon.
     static let desk = """
         {
-          "briefing": {
-            "id": "b_0001", "kind": "morning", "at": "2026-11-05T07:40:00.000Z",
-            "lines": [
-              {"text": "Tess sent the Teams link for this afternoon; it's on the event."},
-              {"text": "Hotel Orto confirmed Florence, but you land 22:10 and check-in closes 22:00. I drafted a note asking them to wait.",
-               "card": "c_hotel"}
-            ],
-            "handled": 9
+          "moment": {
+            "id": "o_0001", "kind": "news", "at": "2026-11-05T15:20:00.000Z",
+            "text": "How did the call with Northwind go? Tell me and I'll draft the thank-you.",
+            "message": "m_0042", "options": [{"label": "Ask me tonight"}], "allows_text": true
           },
+          "handled": 9,
+          "last_mail_at": "2026-11-05T15:18:00.000Z",
           "coming_up": [
             {"id": "prep", "uid": "prep-halcyon@kumo", "title": "Prep: Halcyon technical",
              "start": "2026-11-05T13:00:00.000Z", "end": "2026-11-05T14:00:00.000Z",
@@ -201,7 +234,8 @@ struct DeskTests {
           ],
           "waiting": [
             {"id": "c_hotel", "kind": "draft", "motion": "florence",
-             "at": "2026-11-05T07:02:00.000Z", "title": "Draft to Hotel Orto",
+             "at": "2026-11-05T07:02:00.000Z", "changed_at": "2026-11-05T09:30:00.000Z",
+             "title": "Draft to Hotel Orto",
              "options": [{"label": "Drop it"}], "allows_text": true,
              "draft": {"account": "icloud", "from": "divy@icloud.com",
                        "to": ["Hotel Orto <info@hotelorto.it>"],

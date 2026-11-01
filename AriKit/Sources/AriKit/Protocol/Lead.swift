@@ -1,6 +1,6 @@
 import Foundation
 
-// The settings you make for Kumo itself: what it's called, and when the morning card may come.
+// The settings you make for Kumo itself: what it's called, and when your morning starts.
 
 /// The lead you talk to: Kumo until you choose another name. `GET /v0/server`'s `lead`, and the
 /// body and answer of `PUT /v0/lead`.
@@ -10,14 +10,15 @@ public struct Lead: Sendable, Equatable, Codable {
     public init(name: String) { self.name = name }
 }
 
-/// The earliest the morning card may come, as `HH:mm` on a 24-hour clock in the box's time.
-/// `GET /v0/server`'s `briefing`, and the body and answer of `PUT /v0/briefing`.
-public struct BriefingTime: Sendable, Equatable, Codable {
+/// When your morning starts: the earliest Kumo's first line of the day may come, as `HH:mm` on a
+/// 24-hour clock in the box's time. `GET /v0/server`'s `morning`, and the body and answer of
+/// `PUT /v0/morning`.
+public struct MorningTime: Sendable, Equatable, Codable {
     /// Such as "07:30".
     public let notBefore: String
 
     /// Half past seven, until you choose another time.
-    public static let standard = BriefingTime(hour: 7, minute: 30)
+    public static let standard = MorningTime(hour: 7, minute: 30)
 
     public init(notBefore: String) { self.notBefore = notBefore }
 

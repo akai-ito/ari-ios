@@ -23,8 +23,8 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     public let protocolVersion: ProtocolVersion
     /// Who leads: Kumo, until you choose another name.
     public let lead: Lead
-    /// The earliest the morning briefing may come.
-    public let briefing: BriefingTime
+    /// When your morning starts: the earliest Kumo's first line of the day may come.
+    public let morning: MorningTime
     public let agent: Agent
 
     /// The lead's name, as Settings shows it.
@@ -79,7 +79,7 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, version, lead, briefing, agent, setup, capabilities
+        case name, version, lead, morning, agent, setup, capabilities
         case protocolVersion = "protocol"
     }
 }

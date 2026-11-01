@@ -146,7 +146,7 @@ struct CapabilitiesTests {
             from: Data(
                 """
                 { "name": "box", "version": "0.5.0", "protocol": "0.5", "lead": { "name": "Kumo" },
-                  "briefing": { "not_before": "07:30" }, "agent": {},
+                  "morning": { "not_before": "07:30" }, "agent": {},
                   "setup": { "notifications": true },
                   "capabilities": [ { "id": "reports", "version": "0.1.0" } ] }
                 """.utf8))

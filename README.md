@@ -62,15 +62,20 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
   send answers it, from a notification too. An approval shows what it would do, and any pictures
   it would make public, such as a report's screenshots.
-- **The Desk.** Where Ito opens, and home for everything admin, so mail never floods the chat: the
-  morning card (at the first calm moment, folding once read), what's coming up (opening in Apple's
+- **The Desk.** Where Ito opens, and home for everything admin, so mail never floods the chat. At
+  the top, Kumo speaks for the moment: a line or two that changes only when the moment does (the
+  first calm moment after your morning, something that matters arriving, a change to your day),
+  with replies to tap and Reply, and otherwise all quiet. Shown here, it's read in the chat too, so
+  no notification follows. Under Kumo's face a tiny line says it's reading, with the last mail, or
+  "Something's wrong ›", and the face looks a little off. Then what's coming up (opening in Apple's
   own event view), what's waiting on you (drafts to open in Mail, invites, times to check against
-  your work calendar, questions Kumo wasn't sure about), and everything Kumo did, which you can
-  correct. Your answer shows on its card while Kumo acts on it, and then a line says what followed.
-  While something on the server needs you, such as notifications it can't send or a mail account
-  that keeps refusing its sign-in, a quiet line says so at the top, opening how to fix it; Settings
-  lists it first too, and both clear on their own once it's fixed. Tell Kumo talks into the chat,
-  with the reply on the Desk.
+  your work calendar, questions Kumo wasn't sure about), each with a dot when it's new or changed
+  since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's work: today's
+  ledger, each thing with its reason and Undo, and everything before. Your answer shows on its card
+  while Kumo acts on it, and then a line says what followed. While something on the server needs
+  you, such as notifications it can't send or a mail account that keeps refusing its sign-in, a
+  quiet line says so too, opening how to fix it; Settings lists it first, and both clear on their
+  own once it's fixed. Tell Kumo talks into the chat, with the reply on the Desk.
 - **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
   questions while Kumo reads three months of mail (or "still true?" for what it already knows), the
   morning and notifications, then what's in motion. Kumo's questions can offer answers to tap.
@@ -122,7 +127,9 @@ further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal'
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
-*times* and *briefing* put cards and a morning card on the Desk.
+*times*, *invite* and *mail* put cards on the Desk, and Kumo's line follows them, and *moment*
+writes Kumo's first line of the day at once. `ARI_SKETCH` opens the app on a sketch of one of
+Kumo's moments from samples, without a server, such as `sunday`, `quiet`, `wrong` or `work`.
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy

@@ -166,6 +166,11 @@ struct MainView: View {
         .onChange(of: model.opening) { _, message in
             if message != nil { place = .chat }
         }
+        .onChange(of: model.opensDesk) { _, opens in
+            guard opens else { return }
+            place = .desk
+            model.opensDesk = false
+        }
         #if DEBUG
             .task {
                 place =

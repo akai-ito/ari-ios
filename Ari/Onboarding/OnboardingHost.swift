@@ -85,7 +85,7 @@ struct OnboardingHost: View {
     // MARK: - To the box
 
     private func makeModel() -> OnboardingModel {
-        let morning = app.server?.briefing.time ?? (hour: 7, minute: 30)
+        let morning = app.server?.morning.time ?? (hour: 7, minute: 30)
         return OnboardingModel(
             sources: Self.sources,
             morning: DateComponents(hour: morning.hour, minute: morning.minute),
@@ -103,8 +103,8 @@ struct OnboardingHost: View {
                 },
                 setMorning: { parts in
                     guard let client = app.client() else { return }
-                    let time = BriefingTime(hour: parts.hour ?? 7, minute: parts.minute ?? 30)
-                    _ = try await client.setBriefing(time)
+                    let time = MorningTime(hour: parts.hour ?? 7, minute: parts.minute ?? 30)
+                    _ = try await client.setMorning(time)
                     app.refreshServer()
                 },
                 allowNotifications: { await app.turnOnNotifications() },

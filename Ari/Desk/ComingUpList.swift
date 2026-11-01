@@ -11,10 +11,19 @@ struct ComingUpList: View {
     var symbol: (CalendarItem) -> String? = { _ in nil }
     /// Opens the event, in Apple's own event view.
     let open: (CalendarItem) -> Void
+    /// Why Kumo guessed a block, for its guesses at your day (working, building, seeing people,
+    /// chilling); `nil` for anything that isn't a guess.
+    var guess: (CalendarItem) -> String? = { _ in nil }
+    /// You said a guess was right, or not.
+    var answerGuess: (CalendarItem, _ right: Bool) -> Void = { _, _ in }
+    /// A guess shown open from the start, for previews.
+    var unfoldedGuess: CalendarItemID?
+
+    @State private var unfolded: CalendarItemID?
 
     @Environment(\.calendar) private var calendar
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .footnote) private var dayWidth: CGFloat = 62
+    @ScaledMetric(relativeTo: .footnote) private var dayWidth: CGFloat = 74
     @ScaledMetric(relativeTo: .subheadline) private var timeWidth: CGFloat = 48
 
     var body: some View {
@@ -27,6 +36,7 @@ struct ComingUpList: View {
                     }
                 }
             }
+            .onAppear { if unfolded == nil { unfolded = unfoldedGuess } }
         }
     }
 
@@ -50,7 +60,87 @@ struct ComingUpList: View {
         }
     }
 
+    @ViewBuilder
     private func row(_ item: CalendarItem, dayLabel: String, showsDay: Bool) -> some View {
+        if let why = guess(item) {
+            guessRow(item, why: why, dayLabel: dayLabel, showsDay: showsDay)
+        } else {
+            eventRow(item, dayLabel: dayLabel, showsDay: showsDay)
+        }
+    }
+
+    /// One of Kumo's guesses at your day: its title in a dashed outline, marked "guess". A tap
+    /// unfolds why Kumo thinks so, with Right and Not right?.
+    private func guessRow(_ item: CalendarItem, why: String, dayLabel: String, showsDay: Bool)
+        -> some View
+    {
+        let isOpen = unfolded == item.id
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.smooth(duration: 0.3)) { unfolded = isOpen ? nil : item.id }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    if !stacked {
+                        Text(showsDay ? dayLabel : "")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.ariSecondary)
+                            .frame(width: dayWidth, alignment: .leading)
+                            .accessibilityHidden(!showsDay)
+                    }
+                    Text(item.start.date, format: DeskTime.time)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.ariTertiary)
+                        .frame(minWidth: timeWidth, alignment: .leading)
+                        .padding(.trailing, 8)
+                    Text(item.title)
+                        .font(.subheadline)
+                        .foregroundStyle(.ariSecondary)
+                        .background {
+                            Capsule()
+                                .strokeBorder(
+                                    Color.ariTertiary.opacity(0.8),
+                                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                                )
+                                .padding(.horizontal, -7)
+                                .padding(.vertical, -2.5)
+                        }
+                        .layoutPriority(1)
+                    Text("  ·  guess").font(.footnote).foregroundStyle(.ariTertiary)
+                    Spacer(minLength: 0)
+                }
+                .lineLimit(stacked ? nil : 1)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                "\(LeadName.current)'s guess: \(item.title), \(item.start.date.formatted(DeskTime.time))"
+            )
+            .accessibilityValue(isOpen ? "Shown" : "")
+            .accessibilityHint(isOpen ? "Folds it" : "Shows why, and lets you correct it")
+            if isOpen {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(why)
+                        .font(.footnote)
+                        .foregroundStyle(.ariSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 18) {
+                        Button("Right") { answerGuess(item, true) }
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.ariBone)
+                        Button("Not right?") { answerGuess(item, false) }
+                            .foregroundStyle(.ariSecondary)
+                    }
+                    .font(.footnote)
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, stacked ? 0 : dayWidth + timeWidth + 8)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func eventRow(_ item: CalendarItem, dayLabel: String, showsDay: Bool) -> some View {
         let quiet = Self.isKumos(item)
         return Button {
             open(item)

@@ -139,12 +139,9 @@ struct Replay {
         case .desk:
             desk = try body.decode(Desk.self)
         case .answerCard:
-            let card = try body.decode(CardResult.self).card
-            if let desk {
-                self.desk = Desk(
-                    briefing: desk.briefing, comingUp: desk.comingUp,
-                    waiting: desk.waiting.map { $0.id == card.id ? card : $0 })
-            }
+            desk = desk?.replacing(card: try body.decode(CardResult.self).card)
+        case .answerMoment:
+            desk = desk?.replacing(moment: try body.decode(MomentResult.self).moment)
         default:
             break
         }

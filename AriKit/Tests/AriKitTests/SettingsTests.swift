@@ -44,11 +44,11 @@ struct SettingsTests {
     func setsTheMorning() async throws {
         let server = ScriptedServer()
         let setting = Task { [client = try client(server)] in
-            try await client.setBriefing(BriefingTime(hour: 6, minute: 5))
+            try await client.setMorning(MorningTime(hour: 6, minute: 5))
         }
         let sent = try await request(from: server)
         #expect(sent.method == .put)
-        #expect(sent.path == "/v0/briefing")
+        #expect(sent.path == "/v0/morning")
         #expect(try json(sent) == JSONValue(json: #"{ "not_before": "06:05" }"#))
         try await server.answer(200, json: #"{ "not_before": "06:05" }"#)
         let saved = try await setting.value
@@ -99,19 +99,19 @@ struct SettingsTests {
             ServerInfo.self,
             from: Data(
                 """
-                { "name": "box", "version": "0.16.0", "protocol": "0.16", "agent": { "model": "gpt" },
+                { "name": "box", "version": "0.17.0", "protocol": "0.17", "agent": { "model": "gpt" },
                   "setup": { "notifications": true }, "capabilities": [],
-                  "lead": { "name": "Tess" }, "briefing": { "not_before": "08:15" } }
+                  "lead": { "name": "Tess" }, "morning": { "not_before": "08:15" } }
                 """.utf8))
         #expect(info.leadName == "Tess")
-        #expect(info.briefing.time?.hour == 8 && info.briefing.time?.minute == 15)
+        #expect(info.morning.time?.hour == 8 && info.morning.time?.minute == 15)
     }
 
     @Test("a morning time that isn't HH:mm reads as no time")
     func oddTimes() {
-        #expect(BriefingTime(notBefore: "7:30").time?.hour == 7)
-        #expect(BriefingTime(notBefore: "24:00").time == nil)
-        #expect(BriefingTime(notBefore: "soon").time == nil)
-        #expect(BriefingTime.standard.notBefore == "07:30")
+        #expect(MorningTime(notBefore: "7:30").time?.hour == 7)
+        #expect(MorningTime(notBefore: "24:00").time == nil)
+        #expect(MorningTime(notBefore: "soon").time == nil)
+        #expect(MorningTime.standard.notBefore == "07:30")
     }
 }
