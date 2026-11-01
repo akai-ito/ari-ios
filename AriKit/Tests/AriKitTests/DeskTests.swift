@@ -51,6 +51,45 @@ struct DeskTests {
         #expect(work.day == "2026-11-05")
         #expect(work.handled.map(\.id) == ["d1"] && work.handled[0].undo)
         #expect(work.cleared.map(\.id) == ["q1"] && work.cleared[0].quiet)
+        #expect(work.trust.isEmpty)
+    }
+
+    @Test("Kumo's work carries the trust ladder, and each call its kind of work")
+    func trust() throws {
+        let work = try JSONValue(
+            json: """
+                {"day":"2026-11-05",
+                 "handled":[{"id":"d1","at":"2026-11-05T15:02:00.000Z","text":"Undone: Binned a mail",
+                             "undo":false,"quiet":false,"work":"sorting",
+                             "corrected_at":"2026-11-05T16:00:00.000Z"}],
+                 "cleared":[],
+                 "trust":[{"work":"sorting","title":"Sorting mail","step":"spot_checks",
+                           "line":"You said it was wrong.","since":"2026-11-05T16:00:00.000Z"},
+                          {"work":"filing","title":"Filing","step":"climbing",
+                           "line":"Something new.","since":"2026-11-01T09:00:00.000Z"}]}
+                """
+        ).decode(KumoWork.self)
+        #expect(work.handled[0].work == .sorting && work.handled[0].isCorrected)
+        #expect(work.trust.map(\.step.rung) == [1, 0])
+        #expect(work.trust.map(\.work.isKnown) == [true, false])
+        #expect(work.trust[0].title == "Sorting mail")
+    }
+
+    @Test("a card to glance at a day's calls opens Kumo's work with its first option")
+    func review() throws {
+        let card = try JSONValue(
+            json: """
+                {"id":"k1","kind":"question","at":"2026-11-06T07:30:00.000Z",
+                 "title":"Yesterday I sorted 44 mails. Glance?",
+                 "options":[{"label":"Glance","acts":true},{"label":"Looks fine"}],
+                 "allows_text":false,"quiet":true,"question":{"text":"I'm still learning."},
+                 "review":{"day":"2026-11-05","work":["sorting"]}}
+                """
+        ).decode(DeskCard.self)
+        #expect(card.review == ReviewCard(day: "2026-11-05", work: [.sorting]))
+        #expect(card.glances(CardAnswer(option: "Glance")))
+        #expect(!card.glances(CardAnswer(option: "Looks fine")))
+        #expect(CorrectDone(text: "  ").text == nil && CorrectDone(text: " Mine ").text == "Mine")
     }
 
     @Test("a calendar item reads its calendar, travel, status and all-day days")

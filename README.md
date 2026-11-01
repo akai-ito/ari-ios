@@ -71,7 +71,10 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   own event view), what's waiting on you (drafts to open in Mail, invites, times to check against
   your work calendar, questions Kumo wasn't sure about), each with a dot when it's new or changed
   since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's work: today's
-  ledger, each thing with its reason and Undo, and everything before. Your answer shows on its card
+  ledger, each thing with its reason, Undo and "That was wrong" (a word, a tap on a usual word, or
+  just the tap), everything before, and how much Kumo checks with you for each kind of work, on a
+  three-step ladder with "Show me everything again". While Kumo is learning a kind, a quiet card
+  each morning offers yesterday's calls to glance at. Your answer shows on its card
   while Kumo acts on it, and then a line says what followed. While something on the server needs
   you, such as notifications it can't send or a mail account that keeps refusing its sign-in, a
   quiet line says so too, opening how to fix it; Settings lists it first, and both clear on their

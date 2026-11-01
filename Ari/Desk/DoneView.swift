@@ -11,8 +11,8 @@ struct DoneView: View {
     /// Whether there are older ones. With no entries yet, the first page loads through `loadMore`.
     let hasMore: Bool
     let undo: (DoneEntry) async throws -> Void
-    /// Tells Kumo it got an entry wrong, in your words.
-    let correct: (DoneEntry, String) async throws -> Void
+    /// Tells Kumo it got an entry wrong, in your words or none.
+    let correct: (DoneEntry, String?) async throws -> Void
     /// Loads the next, older page.
     let loadMore: () async throws -> Void
 
@@ -42,7 +42,7 @@ struct DoneView: View {
                     dayView(day).padding(.top, index == 0 ? 0 : 10)
                 }
                 if hasMore { more }
-                Text("Reply to any line to tell Kumo it got it wrong.")
+                Text("Tap any line to tell Kumo it got it wrong.")
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)
                     .multilineTextAlignment(.center)
@@ -58,7 +58,7 @@ struct DoneView: View {
         .navigationTitle("Done")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $correcting) { entry in
-            CorrectionSheet(entry: entry) { words in try await correct(entry, words) }
+            ThatWasWrong(entry: entry) { words in try await correct(entry, words) }
         }
     }
 
@@ -263,70 +263,6 @@ struct DoneView: View {
 
 /// Telling Kumo it got one line of Done wrong, in your words. It goes to the space as a message
 /// quoting the line, and Kumo keeps it as a preference.
-private struct CorrectionSheet: View {
-    let entry: DoneEntry
-    let send: (String) async throws -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var words = ""
-    @State private var sending = DeskSending()
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Tell Kumo it got this wrong").font(.headline).foregroundStyle(.ariText)
-                Spacer(minLength: 8)
-                Button("Cancel") { dismiss() }
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Cancel")
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.text).font(.subheadline).foregroundStyle(.ariSecondary)
-                if let reason = entry.reason {
-                    Text(reason).font(.footnote).foregroundStyle(.ariTertiary)
-                }
-            }
-            .padding(.leading, 12)
-            .overlay(alignment: .leading) { Rectangle().fill(Color.ariLine).frame(width: 2) }
-            .accessibilityElement(children: .combine)
-            TextField(
-                entry.quiet ? "Such as: this one needed me" : "What should Kumo have done?",
-                text: $words, axis: .vertical
-            )
-            .font(.subheadline)
-            .foregroundStyle(.ariText)
-            .lineLimit(2...6)
-            .focused($focused)
-            .padding(12)
-            .background(.ariField, in: .rect(cornerRadius: 14, style: .continuous))
-            if let problem = sending.problem { DeskProblemLine(text: problem) }
-            HStack {
-                Spacer()
-                DeskPill(
-                    title: "Send", acts: true, busy: sending.isSending,
-                    label: "Send it to Kumo"
-                ) {
-                    let text = words.trimmingCharacters(in: .whitespacesAndNewlines)
-                    Task {
-                        if await sending.send("send", { try await send(text) }) { dismiss() }
-                    }
-                }
-                .disabled(
-                    words.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || sending.isSending)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(22)
-        .presentationDetents([.medium, .large])
-        .presentationBackground(.ariSurface)
-        .onAppear { focused = true }
-    }
-}
-
 #if DEBUG
     #Preview("Done") {
         @Previewable @State var page = DeskSamples.donePage

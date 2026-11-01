@@ -13,8 +13,11 @@ struct KumoLedger: Equatable {
     let handled: [DoneEntry]
     /// What Kumo cleared with nothing needed, each with its reason.
     let cleared: [DoneEntry]
-    /// How much Kumo checks with you, for each kind of work; none until the ladder exists.
+    /// How much Kumo checks with you, for each kind of work it has done.
     var trust: [Trust] = []
+    /// Set when the ledger shows only some of a day's calls, such as yesterday's sorting to glance
+    /// at while Kumo is learning: the day's name, such as "Yesterday".
+    var focus: String?
 
     /// How far Kumo has come on one kind of work: Learning, then Spot checks, then Trusted. A
     /// correction steps it back one.
@@ -25,6 +28,8 @@ struct KumoLedger: Equatable {
         let step: Step
         /// Kumo's line on where it stands, such as "Two weeks without a correction on sorting."
         let line: String
+        /// The kind of work, for "Show me everything again".
+        var work: WorkKind?
 
         enum Step: Int, CaseIterable {
             case learning, spotChecks, trusted
@@ -45,7 +50,43 @@ extension KumoLedger {
     init(work: KumoWork, waiting: [DeskCard]) {
         self.init(
             came: waiting.count + work.handled.count + work.cleared.count, needYou: waiting,
-            handled: work.handled, cleared: work.cleared)
+            handled: work.handled, cleared: work.cleared, trust: work.trust.map(Trust.init))
+    }
+
+    /// A day's calls of some kinds of work only, to glance at: nothing waiting, and the ladder for
+    /// those kinds alone.
+    init(work: KumoWork, only kinds: [WorkKind], focus: String) {
+        let handled = work.handled.filter { $0.work.map(kinds.contains) == true }
+        let cleared = work.cleared.filter { $0.work.map(kinds.contains) == true }
+        self.init(
+            came: handled.count + cleared.count, needYou: [], handled: handled, cleared: cleared,
+            trust: work.trust.filter { kinds.contains($0.work) }.map(Trust.init), focus: focus)
+    }
+
+    /// Whether the cleared mail opens unfolded: while Kumo is still learning to sort, or when
+    /// you're glancing at a day's calls.
+    var showsClearedAtFirst: Bool {
+        focus != nil || trust.contains { $0.work == .sorting && $0.step == .learning }
+    }
+}
+
+extension KumoLedger.Trust {
+    /// A kind of work on the ladder, as the box sends it.
+    init(_ rung: TrustRung) {
+        self.init(
+            kind: rung.title, symbol: Self.symbol(for: rung.work),
+            step: Step(rawValue: rung.step.rung) ?? .learning, line: rung.line, work: rung.work)
+    }
+
+    /// Each kind of work's symbol, and a plain one for a kind Ari doesn't know yet.
+    static func symbol(for work: WorkKind) -> String {
+        switch work {
+        case .sorting: "tray"
+        case .calendar: "calendar"
+        case .drafts: "envelope"
+        case .contacts: "person.crop.circle"
+        default: "circle.dashed"
+        }
     }
 }
 
@@ -53,8 +94,10 @@ struct KumosWorkView: View {
     let ledger: KumoLedger
     var openCard: (DeskCard) -> Void = { _ in }
     var undo: (DoneEntry) -> Void = { _ in }
-    /// "That was wrong", which Kumo learns from; hidden until it exists.
+    /// "That was wrong", which Kumo learns from.
     var wrong: ((DoneEntry) -> Void)?
+    /// "Show me everything again", for one kind of work on the ladder.
+    var showEverything: ((WorkKind) -> Void)?
     /// Opens everything Kumo has done, back before today.
     var openAll: (() -> Void)?
     /// An undo that didn't go through.
@@ -65,7 +108,7 @@ struct KumosWorkView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .footnote) private var timeWidth: CGFloat = 44
-    @State private var showsCleared = false
+    @State private var showsCleared: Bool?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -100,10 +143,18 @@ struct KumosWorkView: View {
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 8) {
-            DeskSectionLabel("Today")
-            Text(
-                "\(count(ledger.came)) in: \(count(ledger.needYou.count)) need you, \(count(ledger.handled.count)) handled, \(count(ledger.cleared.count)) cleared."
-            )
+            DeskSectionLabel(ledger.focus ?? "Today")
+            Group {
+                if ledger.focus != nil {
+                    Text(
+                        "\(count(ledger.handled.count)) handled, \(count(ledger.cleared.count)) cleared. Tap That was wrong on any I got wrong."
+                    )
+                } else {
+                    Text(
+                        "\(count(ledger.came)) in: \(count(ledger.needYou.count)) need you, \(count(ledger.handled.count)) handled, \(count(ledger.cleared.count)) cleared."
+                    )
+                }
+            }
             .font(.system(.title3, design: .serif))
             .foregroundStyle(.ariText)
             .lineSpacing(4)
@@ -190,7 +241,13 @@ struct KumosWorkView: View {
                         .foregroundStyle(.ariTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if entry.undo || wrong != nil {
+                if entry.isCorrected {
+                    Label("Noted. I'll do it differently.", systemImage: "checkmark")
+                        .font(.footnote)
+                        .foregroundStyle(.ariTertiary)
+                        .labelStyle(NotedLabelStyle())
+                        .padding(.top, 4)
+                } else if entry.undo || wrong != nil {
                     HStack(spacing: 18) {
                         if entry.undo {
                             Button("Undo") { undo(entry) }
@@ -215,24 +272,25 @@ struct KumosWorkView: View {
 
     /// The cleared mail, folded: with sorting trusted, it stays out of the way unless you look.
     private var cleared: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let isOpen = showsCleared ?? ledger.showsClearedAtFirst
+        return VStack(alignment: .leading, spacing: 12) {
             DeskSectionLabel("Cleared", trailing: "\(ledger.cleared.count)")
             Button {
-                withAnimation(.smooth(duration: 0.3)) { showsCleared.toggle() }
+                withAnimation(.smooth(duration: 0.3)) { showsCleared = !isOpen }
             } label: {
                 HStack(spacing: 6) {
                     Text("\(ledger.cleared.count) read, nothing needed")
                         .font(.subheadline)
                         .foregroundStyle(.ariSecondary)
-                    Chevron(isOpen: showsCleared)
+                    Chevron(isOpen: isOpen)
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityValue(showsCleared ? "Shown" : "Folded")
-            .accessibilityHint(showsCleared ? "Folds them" : "Shows each, with why")
-            if showsCleared {
+            .accessibilityValue(isOpen ? "Shown" : "Folded")
+            .accessibilityHint(isOpen ? "Folds them" : "Shows each, with why")
+            if isOpen {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(ledger.cleared) { entry in
                         HStack(alignment: .firstTextBaseline) {
@@ -242,11 +300,16 @@ struct KumosWorkView: View {
                             .font(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 8)
-                            if let wrong {
+                            if entry.isCorrected {
+                                Text("Noted")
+                                    .font(.footnote)
+                                    .foregroundStyle(.ariTertiary)
+                            } else if let wrong {
                                 Button("That was wrong") { wrong(entry) }
                                     .font(.footnote)
                                     .foregroundStyle(.ariTertiary)
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel("That was wrong: \(entry.text)")
                             }
                         }
                     }
@@ -266,7 +329,7 @@ struct KumosWorkView: View {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(Array(ledger.trust.enumerated()), id: \.element.id) { index, trust in
                     if index > 0 { Divider().overlay(Color.ariLine) }
-                    TrustRow(trust: trust)
+                    TrustRow(trust: trust, showEverything: showEverything)
                 }
             }
             .deskCard()
@@ -284,36 +347,56 @@ struct KumosWorkView: View {
 /// and Kumo's line on why.
 private struct TrustRow: View {
     let trust: KumoLedger.Trust
+    var showEverything: ((WorkKind) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(trust.kind, systemImage: trust.symbol)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.ariText)
-                    .labelStyle(TrustLabelStyle())
-                Spacer(minLength: 8)
-                Text(trust.step.name)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.ariBone)
-            }
-            HStack(spacing: 4) {
-                ForEach(KumoLedger.Trust.Step.allCases, id: \.self) { step in
-                    Capsule()
-                        .fill(step.rawValue <= trust.step.rawValue ? Color.ariBone : .ariLine)
-                        .opacity(step.rawValue <= trust.step.rawValue ? 0.85 : 1)
-                        .frame(height: 4)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(trust.kind, systemImage: trust.symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.ariText)
+                        .labelStyle(TrustLabelStyle())
+                    Spacer(minLength: 8)
+                    Text(trust.step.name)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.ariBone)
                 }
+                HStack(spacing: 4) {
+                    ForEach(KumoLedger.Trust.Step.allCases, id: \.self) { step in
+                        Capsule()
+                            .fill(step.rawValue <= trust.step.rawValue ? Color.ariBone : .ariLine)
+                            .opacity(step.rawValue <= trust.step.rawValue ? 0.85 : 1)
+                            .frame(height: 4)
+                    }
+                }
+                .accessibilityHidden(true)
+                Text(trust.line)
+                    .font(.system(.subheadline, design: .serif))
+                    .foregroundStyle(.ariText)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .accessibilityHidden(true)
-            Text(trust.line)
-                .font(.system(.subheadline, design: .serif))
-                .foregroundStyle(.ariText)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(trust.kind): \(trust.step.name). \(trust.line)")
+            if let showEverything, let work = trust.work, trust.step != .learning {
+                Button("Show me everything again") { showEverything(work) }
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("\(trust.kind) goes back to Learning")
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(trust.kind): \(trust.step.name). \(trust.line)")
+    }
+}
+
+/// A small tick beside "Noted", in the tertiary colour.
+private struct NotedLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon.imageScale(.small)
+            configuration.title
+        }
     }
 }
 
@@ -327,20 +410,37 @@ private struct TrustLabelStyle: LabelStyle {
     }
 }
 
-/// Kumo's work today, from the box: it loads when it opens, and again after an Undo. A card that
-/// needs you opens in place; everything Kumo has done before today is a step further.
+/// Kumo's work today, from the box: it loads when it opens, and again after an Undo, a "That was
+/// wrong" or "Show me everything again". A card that needs you opens in place; everything Kumo has
+/// done before today is a step further. With a review card's day and kinds, it shows just those
+/// calls to glance at.
 struct KumosWorkScreen: View {
     let session: Session
+    var review: ReviewCard?
+    /// Opens scrolled down to how much Kumo checks with you.
+    var opensAtTrust = false
+    /// Opens with "That was wrong" asked of the first thing Kumo did, for a still.
+    var asksWrongAtFirst = false
 
     @State private var work: KumoWork?
     @State private var problem: String?
     @State private var openedCard: DeskCard?
     @State private var showsAll = false
+    @State private var correcting: DoneEntry?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         content
-            .task { await load() }
+            .task {
+                await load()
+                if asksWrongAtFirst { correcting = work?.handled.first }
+            }
+            .sheet(item: $correcting) { entry in
+                ThatWasWrong(entry: entry) { words in
+                    try await session.correct(entry.id, text: words)
+                    await load()
+                }
+            }
             .navigationDestination(
                 isPresented: Binding(
                     get: { openedCard != nil }, set: { if !$0 { openedCard = nil } })
@@ -354,10 +454,12 @@ struct KumosWorkScreen: View {
     private var content: some View {
         if let work {
             KumosWorkView(
-                ledger: KumoLedger(work: work, waiting: session.desk?.waiting ?? []),
-                openCard: { openedCard = $0 },
+                ledger: ledger(work), openCard: { openedCard = $0 },
                 undo: { entry in Task { await undo(entry) } },
-                openAll: { showsAll = true }, problem: problem)
+                wrong: { correcting = $0 },
+                showEverything: { kind in Task { await showEverything(kind) } },
+                openAll: review == nil ? { showsAll = true } : nil, problem: problem,
+                opensAtTrust: opensAtTrust)
         } else {
             VStack(spacing: 12) {
                 if let problem {
@@ -380,12 +482,30 @@ struct KumosWorkScreen: View {
         }
     }
 
+    private func ledger(_ work: KumoWork) -> KumoLedger {
+        guard let review else {
+            return KumoLedger(work: work, waiting: session.desk?.waiting ?? [])
+        }
+        let day = LocalTime(review.day).map { DayLabel.describe($0.date, time: false) }
+        return KumoLedger(work: work, only: review.work, focus: day ?? review.day)
+    }
+
     private func load() async {
         do {
-            work = try await session.work()
+            work = try await session.work(day: review?.day)
             problem = nil
         } catch {
-            problem = "Couldn't load today's work: \(DeskSending.words(for: error))"
+            problem =
+                "Couldn't load \(review == nil ? "today's" : "that day's") work: \(DeskSending.words(for: error))"
+        }
+    }
+
+    private func showEverything(_ kind: WorkKind) async {
+        do {
+            try await session.resetTrust(kind)
+            await load()
+        } catch {
+            problem = "Couldn't change that: \(DeskSending.words(for: error))"
         }
     }
 

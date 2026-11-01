@@ -118,6 +118,54 @@ struct SessionDeskTests {
         #expect(work.method == .get && work.path == "/v0/work")
         try await bench.server.answer(200, json: #"{"day":"2026-11-10","handled":[],"cleared":[]}"#)
         #expect(try await looking.value == KumoWork(day: "2026-11-10"))
+
+        let yesterday = Task { try await session.work(day: "2026-11-09") }
+        #expect(try await bench.nextRequest().path == "/v0/work?day=2026-11-09")
+        try await bench.server.answer(200, json: #"{"day":"2026-11-09","handled":[],"cleared":[]}"#)
+        #expect(try await yesterday.value.day == "2026-11-09")
+    }
+
+    @Test("That was wrong, with or without words, and show me everything again")
+    func corrections() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        try await bench.open(with: Self.snapshot("e_10"))
+        let session = bench.session
+
+        let correcting = Task { try await session.correct("d1", text: "I needed it") }
+        let correct = try await bench.nextRequest()
+        #expect(correct.method == .post && correct.path == "/v0/done/d1/wrong")
+        #expect(
+            try correct.body.map { try JSONValue(data: $0) }
+                == JSONValue(json: #"{"text":"I needed it"}"#))
+        try await bench.server.answer(
+            200,
+            json:
+                #"{"entry":{"id":"d1","at":"2026-11-05T09:14:00.000Z","text":"Undone: Binned a mail","undo":false,"quiet":false,"work":"sorting","corrected_at":"2026-11-05T10:00:00.000Z"}}"#
+        )
+        #expect(try await correcting.value.isCorrected)
+
+        let tapped = Task { try await session.correct("d2") }
+        #expect(
+            try await bench.nextRequest().body.map { try JSONValue(data: $0) }
+                == JSONValue(json: "{}"))
+        try await bench.server.answer(
+            200,
+            json:
+                #"{"entry":{"id":"d2","at":"2026-11-05T09:14:00.000Z","text":"Moved the dentist","undo":false,"quiet":false,"work":"calendar","corrected_at":"2026-11-05T10:00:00.000Z"}}"#
+        )
+        #expect(try await tapped.value.work == .calendar)
+
+        let resetting = Task { try await session.resetTrust(.calendar) }
+        let reset = try await bench.nextRequest()
+        #expect(
+            reset.method == .post && reset.path == "/v0/trust/calendar/reset" && reset.body == nil)
+        try await bench.server.answer(
+            200,
+            json:
+                #"{"trust":{"work":"calendar","title":"Calendar","step":"learning","line":"You asked to see everything again.","since":"2026-11-05T10:01:00.000Z"}}"#
+        )
+        #expect(try await resetting.value.step == .learning)
     }
 
     @Test("Done, jobs and a calendar event are plain requests")

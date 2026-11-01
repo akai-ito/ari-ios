@@ -128,20 +128,108 @@ public struct MomentResult: Sendable, Equatable, Decodable {
     public let moment: Moment
 }
 
-/// `GET /v0/work`: Kumo's work today, for "47 in: 3 need you, 6 handled, 38 cleared". What needs
-/// you is the Desk's `waiting`.
+/// `GET /v0/work`: Kumo's work for a day, for "47 in: 3 need you, 6 handled, 38 cleared", and how
+/// much it checks with you. What needs you is the Desk's `waiting`.
 public struct KumoWork: Sendable, Equatable, Decodable {
-    /// Today, local time, such as `2026-11-05`.
+    /// The local day, such as `2026-11-05`: today, unless you asked for another.
     public let day: String
-    /// What Kumo did without you today, newest first.
+    /// What Kumo did without you that day, newest first.
     public let handled: [DoneEntry]
-    /// The mail Kumo read and left alone today, newest first.
+    /// The mail Kumo read and left alone that day, newest first.
     public let cleared: [DoneEntry]
+    /// The trust ladder: each kind of work Kumo has done, on its rung, in a fixed order.
+    public let trust: [TrustRung]
 
-    public init(day: String, handled: [DoneEntry] = [], cleared: [DoneEntry] = []) {
+    public init(
+        day: String, handled: [DoneEntry] = [], cleared: [DoneEntry] = [], trust: [TrustRung] = []
+    ) {
         self.day = day
         self.handled = handled
         self.cleared = cleared
+        self.trust = trust
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        day = try container.decode(String.self, forKey: .day)
+        handled = try container.decode([DoneEntry].self, forKey: .handled)
+        cleared = try container.decode([DoneEntry].self, forKey: .cleared)
+        trust = try container.decodeIfPresent([TrustRung].self, forKey: .trust) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case day, handled, cleared, trust
+    }
+}
+
+/// A kind of Kumo's work, each with its own rung on the trust ladder. A kind Ari doesn't know shows
+/// by the title Kumo's work gives it.
+public struct WorkKind: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// The mail Kumo files, bins and clears.
+    public static let sorting = WorkKind(rawValue: "sorting")
+    /// What Kumo puts on, moves or takes off your calendars.
+    public static let calendar = WorkKind(rawValue: "calendar")
+    /// The replies Kumo writes for you.
+    public static let drafts = WorkKind(rawValue: "drafts")
+    /// What Kumo changes in your contacts.
+    public static let contacts = WorkKind(rawValue: "contacts")
+    public static let known = [sorting, calendar, drafts, contacts]
+}
+
+/// How much Kumo checks with you for one kind of work: Learning, then Spot checks, then Trusted. It
+/// climbs after a clean stretch, and a "That was wrong" steps it back one.
+public struct TrustRung: Sendable, Equatable, Decodable, Identifiable {
+    public var id: WorkKind { work }
+    public let work: WorkKind
+    /// Its name, such as "Sorting mail".
+    public let title: String
+    public let step: TrustStep
+    /// Kumo's line on where it stands and why, such as "Two weeks without a correction on sorting."
+    public let line: String
+    /// When its current stretch began: its first call, a climb, a correction or a reset.
+    public let since: Timestamp
+
+    public init(work: WorkKind, title: String, step: TrustStep, line: String, since: Timestamp) {
+        self.work = work
+        self.title = title
+        self.step = step
+        self.line = line
+        self.since = since
+    }
+}
+
+/// A rung on the trust ladder. One Ari doesn't know shows as Learning.
+public struct TrustStep: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Kumo shows you its calls, with a card a day to glance at them.
+    public static let learning = TrustStep(rawValue: "learning")
+    /// About one call in five may get a quiet "Was this right?" card.
+    public static let spotChecks = TrustStep(rawValue: "spot_checks")
+    /// Only what needs you.
+    public static let trusted = TrustStep(rawValue: "trusted")
+    public static let known = [learning, spotChecks, trusted]
+
+    /// Where it stands, from 0 for Learning to 2 for Trusted.
+    public var rung: Int { Self.known.firstIndex(of: self) ?? 0 }
+}
+
+/// `POST /v0/trust/{work}/reset`'s answer: the kind, back to Learning.
+public struct TrustResult: Sendable, Equatable, Decodable {
+    public let trust: TrustRung
+}
+
+/// The body of `POST /v0/done/{entry}/wrong`: what was wrong in your words, or nothing.
+public struct CorrectDone: Sendable, Equatable, Codable {
+    public let text: String?
+
+    public init(text: String? = nil) {
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.text = trimmed?.isEmpty == false ? trimmed : nil
     }
 }
 
@@ -177,6 +265,9 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public let times: TimesCard?
     public let question: QuestionCard?
     public let offer: OfferCard?
+    /// On a question: Kumo is still learning, so it asks you to glance at a day's calls. Its first
+    /// option opens Kumo's work for that day, showing only these kinds of work.
+    public let review: ReviewCard?
 
     public init(
         id: CardID, kind: CardKind, motion: MotionID? = nil, at: Timestamp,
@@ -184,7 +275,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         allowsText: Bool = false,
         state: CardState? = nil, answer: CardAnswer? = nil, draft: DraftCard? = nil,
         invite: InviteCard? = nil, times: TimesCard? = nil, question: QuestionCard? = nil,
-        offer: OfferCard? = nil
+        offer: OfferCard? = nil, review: ReviewCard? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -201,11 +292,17 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         self.times = times
         self.question = question
         self.offer = offer
+        self.review = review
+    }
+
+    /// Whether answering with this option opens Kumo's work to glance at a day's calls.
+    public func glances(_ answer: CardAnswer) -> Bool {
+        review != nil && answer.option != nil && answer.option == options.first?.label
     }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, motion, at, title, options, state, answer, draft, invite, times, question
-        case offer
+        case offer, review
         case allowsText = "allows_text"
         case changedAt = "changed_at"
     }
@@ -310,6 +407,18 @@ public struct TimeSlot: Sendable, Equatable, Decodable {
         self.start = start
         self.end = end
         self.note = note
+    }
+}
+
+/// A day of Kumo's calls to glance at while it's learning: the day, for `GET /v0/work?day=`, and
+/// the kinds of work to show.
+public struct ReviewCard: Sendable, Equatable, Decodable {
+    public let day: String
+    public let work: [WorkKind]
+
+    public init(day: String, work: [WorkKind]) {
+        self.day = day
+        self.work = work
     }
 }
 
@@ -460,8 +569,8 @@ public struct DoneID: OpaqueIdentifier {
     public init(rawValue: String) { self.rawValue = rawValue }
 }
 
-/// One thing Kumo did without you. A message replying to it, with its id as `done`,
-/// corrects it, and the correction becomes a preference.
+/// One thing Kumo did without you. "That was wrong" on it undoes it where it can, and Kumo keeps
+/// what to do differently as a preference.
 public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
     public let id: DoneID
     public let at: Timestamp
@@ -478,11 +587,15 @@ public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
     public let undo: Bool
     /// A mail Kumo read and left alone, "read, nothing needed": folded into one line a day.
     public let quiet: Bool
+    /// The kind of work, when it was one of Kumo's own calls: what the trust ladder counts.
+    public let work: WorkKind?
+    /// When you said it was wrong.
+    public let correctedAt: Timestamp?
 
     public init(
         id: DoneID, at: Timestamp, text: String, reason: String? = nil, mail: DoneMail? = nil,
         event: CalendarItem? = nil, motion: MotionID? = nil, undo: Bool = false,
-        quiet: Bool = false
+        quiet: Bool = false, work: WorkKind? = nil, correctedAt: Timestamp? = nil
     ) {
         self.id = id
         self.at = at
@@ -493,6 +606,16 @@ public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
         self.motion = motion
         self.undo = undo
         self.quiet = quiet
+        self.work = work
+        self.correctedAt = correctedAt
+    }
+
+    /// Whether you've said it was wrong.
+    public var isCorrected: Bool { correctedAt != nil }
+
+    enum CodingKeys: String, CodingKey {
+        case id, at, text, reason, mail, event, motion, undo, quiet, work
+        case correctedAt = "corrected_at"
     }
 }
 
