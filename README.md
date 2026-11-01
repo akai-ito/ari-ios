@@ -134,8 +134,11 @@ further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal'
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
 *times*, *invite* and *mail* put cards on the Desk, and Kumo's line follows them, and *moment*
-writes Kumo's first line of the day at once. `ARI_SKETCH` opens the app on a sketch of one of
-Kumo's moments from samples, without a server, such as `sunday`, `quiet`, `wrong` or `work`.
+writes Kumo's first line of the day at once. *plan* lays out a day of Kumo's plan and guesses in
+Coming up (`ARI_GUESS` shows the first guess `open`, or with what it really was, `correct`);
+*tonight*, *line* and *past* show the evening check-ins, *question* the day's question and *drift*
+a week that drifted. `ARI_SKETCH` opens the app on a sketch of one of Kumo's moments from samples,
+without a server, such as `sunday`, `quiet`, `wrong` or `work`.
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy

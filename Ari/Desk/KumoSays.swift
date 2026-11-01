@@ -29,12 +29,15 @@ extension KumoMoment {
     /// Reply, which opens a field for words when Kumo's line takes them.
     static let reply = Action(title: "Reply", opens: true)
 
-    /// Kumo's line as the box sends it: its options as short replies, and Reply when words fit.
+    /// Kumo's line as the box sends it: its quieter line under it, its options as short replies,
+    /// and Reply, or what the box calls it, when words fit. The day's question can be skipped.
     init(_ moment: Moment) {
+        let reply = moment.replyLabel.map { Action(title: $0, opens: true) } ?? Self.reply
         self.init(
-            id: moment.id.rawValue, text: moment.text,
+            id: moment.id.rawValue, text: moment.text, detail: moment.detail,
             actions: moment.options.map { Action(title: $0.label) }
-                + (moment.allowsText ? [Self.reply] : []),
+                + (moment.allowsText ? [reply] : []),
+            asks: moment.kind == .question,
             answered: moment.isWorking ? (moment.answer?.option ?? moment.answer?.text ?? "") : nil)
     }
 

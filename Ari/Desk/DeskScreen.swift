@@ -41,7 +41,7 @@ struct DeskScreen: View {
                     moment: kumoMoment, liveness: liveness,
                     openWork: { showsWork = true }, openSettings: openSettings,
                     openProblem: { openedProblem = session.problems.first },
-                    act: act(_:), sending: sending
+                    act: act(_:), skip: skip, sending: sending
                 )
                 .task(id: unread) { await read() }
                 if !session.problems.isEmpty {
@@ -55,7 +55,14 @@ struct DeskScreen: View {
                 if let items = session.desk?.comingUp, !items.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         DeskSectionLabel("Coming up")
-                        ComingUpList(items: items, symbol: symbol(for:)) { openedItem = $0 }
+                        ComingUpList(
+                            items: items, symbol: symbol(for:), open: { openedItem = $0 },
+                            guess: { $0.guess?.why },
+                            answerGuess: { item, answer in
+                                try await session.answerGuess(item.id, answer)
+                            },
+                            unfoldedGuess: shownGuess(items, "open"),
+                            correctingGuess: shownGuess(items, "correct"))
                     }
                 }
                 if let cards = session.desk?.waiting, !cards.isEmpty {
@@ -205,6 +212,24 @@ struct DeskScreen: View {
         }
     }
 
+    /// The first guess, shown open or with its choices from `ARI_GUESS`, in debug builds.
+    private func shownGuess(_ items: [CalendarItem], _ wanted: String) -> CalendarItemID? {
+        #if DEBUG
+            guard DebugScript.guess == wanted else { return nil }
+            return items.first { $0.guess != nil }?.id
+        #else
+            return nil
+        #endif
+    }
+
+    /// Skip, on the day's question: it goes at once, and Kumo never asks it again.
+    private func skip() {
+        guard let moment = session.desk?.moment else { return }
+        Task {
+            await sending.send("Skip") { try await session.skipMoment(moment.id) }
+        }
+    }
+
     /// The cards that are new or changed since you last left the Desk.
     private func changed(_ cards: [DeskCard]) -> Set<CardID> {
         Set(cards.filter { ($0.changedAt ?? $0.at).date > lastLook }.map(\.id))
@@ -299,7 +324,7 @@ private struct MomentReply: View {
             }
             .padding(20)
             .background(.ariBackground)
-            .navigationTitle("Reply to \(LeadName.current)")
+            .navigationTitle(moment.replyLabel ?? "Reply to \(LeadName.current)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
