@@ -1,9 +1,10 @@
 import AriKit
 import SwiftUI
 
-/// Where Ito opens, and home for everything admin: Kumo, the morning card, what's coming up, what's
-/// waiting on you, and Tell Kumo. It rolls and never resets: each part keeps its own clock. Talking
-/// lives in the chat; a quick word told here goes there, and Kumo's reply shows here too.
+/// Where Ito opens, and home for everything admin: Kumo's line for the moment, what's coming up,
+/// what's waiting on you, how much Kumo handled, and Tell Kumo. It rolls and never resets: each part
+/// keeps its own clock. Talking lives in the chat; a quick word told here goes there, and Kumo's
+/// reply shows here too.
 struct DeskScreen: View {
     let session: Session
     let openChat: () -> Void
@@ -15,22 +16,32 @@ struct DeskScreen: View {
     @State private var draft = ""
     /// The message you last told Kumo here, for the card that shows Kumo's reply.
     @State private var told: MessageID?
-    @State private var briefingFolded = false
-    /// The morning card you've already seen: it folds to one line from then on.
-    @AppStorage("readBriefing") private var readBriefing = ""
     @State private var openedItem: CalendarItem?
     @State private var openedCard: DeskCard?
-    @State private var showsDone = false
-    @State private var presence = PoseHistory()
+    @State private var showsWork = false
+    /// Words for Kumo's line, from its Reply.
+    @State private var replying: Moment?
+    /// Your answer to Kumo's line on its way.
+    @State private var sending = DeskSending()
     /// What followed an answer Kumo has just acted on, from Done, for a minute after its card left.
     @State private var followed: DoneEntry?
     /// A problem on the server, opened to see how to fix it.
     @State private var openedProblem: ServerProblem?
+    /// When you last left the Desk; cards that changed after it carry a dot while you're here.
+    @AppStorage("deskLookedAt") private var lookedAt = 0.0
+    @State private var lastLook = Date.now
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                header
+                KumoSays(
+                    moment: kumoMoment, liveness: liveness,
+                    openWork: { showsWork = true }, openSettings: openSettings,
+                    openProblem: { openedProblem = session.problems.first },
+                    act: act(_:), sending: sending
+                )
+                .task(id: unread) { await read() }
                 if !session.problems.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(session.problems) { problem in
@@ -38,13 +49,6 @@ struct DeskScreen: View {
                         }
                     }
                     .padding(.horizontal, 4)
-                }
-                if let briefing = session.desk?.briefing {
-                    BriefingCard(
-                        briefing: briefing, folded: $briefingFolded,
-                        open: open(_:), openHandled: { showsDone = true }
-                    )
-                    .task(id: briefing.id) { await seen(briefing) }
                 }
                 if let items = session.desk?.comingUp, !items.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
@@ -55,29 +59,21 @@ struct DeskScreen: View {
                 if let cards = session.desk?.waiting, !cards.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         DeskSectionLabel("Waiting on you", trailing: "\(cards.count)")
-                        WaitingList(cards: cards, context: context(for:)) {
-                            openedCard = $0
-                        } answer: {
-                            card, answer in
-                            try await session.answer(card.id, answer)
-                        }
+                        WaitingList(
+                            cards: cards, context: context(for:), open: { openedCard = $0 },
+                            answer: { card, answer in try await session.answer(card.id, answer) },
+                            changed: changed(cards))
                     }
                 }
                 if let followed {
-                    FollowedLine(entry: followed) { showsDone = true }
+                    FollowedLine(entry: followed) { showsWork = true }
                         .task(id: followed.id) {
                             try? await Task.sleep(for: .seconds(60))
                             if !Task.isCancelled { self.followed = nil }
                         }
                 }
-                if let desk = session.desk, desk.briefing == nil, desk.comingUp.isEmpty,
-                    desk.waiting.isEmpty, session.problems.isEmpty
-                {
-                    Text("Nothing needs you.")
-                        .font(.ariBody)
-                        .foregroundStyle(.ariSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                if let desk = session.desk {
+                    DeskDoneLine(handled: desk.handled) { showsWork = true }
                 }
             }
             .padding(.horizontal, 18)
@@ -102,8 +98,15 @@ struct DeskScreen: View {
             }
             .presentationDetents([.large])
         }
-        .sheet(isPresented: $showsDone) {
-            NavigationStack { AllDoneView(session: session) }
+        .sheet(isPresented: $showsWork) {
+            NavigationStack { KumosWorkScreen(session: session) }
+                .presentationDetents([.large])
+        }
+        .sheet(item: $replying) { moment in
+            MomentReply(moment: moment) { words in
+                try await session.answerMoment(moment.id, CardAnswer(text: words))
+            }
+            .presentationDetents([.medium])
         }
         .sheet(item: $openedProblem) { problem in
             NavigationStack {
@@ -117,8 +120,76 @@ struct DeskScreen: View {
             let settled = before.filter { now[$0.key] == nil }.map(\.value)
             if !settled.isEmpty { Task { await showFollowed(settled) } }
         }
+        .onAppear { startLook() }
+        #if DEBUG
+            .task {
+                try? await Task.sleep(for: .seconds(1))
+                if DebugScript.opensKumosWork { showsWork = true }
+            }
+        #endif
+        .onDisappear { endLook() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { startLook() } else { endLook() }
+        }
         .animation(.smooth(duration: 0.35), value: followed)
         .animation(.smooth(duration: 0.35), value: session.problems)
+    }
+
+    /// Kumo's line from the box, or all quiet in the app's own words.
+    private var kumoMoment: KumoMoment? {
+        guard let desk = session.desk else { return nil }
+        guard let moment = desk.moment else {
+            return .quiet(handled: desk.handled, waiting: !desk.waiting.isEmpty)
+        }
+        return KumoMoment(moment)
+    }
+
+    private var liveness: KumoLiveness {
+        KumoLiveness(lastMail: session.desk?.lastMailAt, hasProblems: !session.problems.isEmpty)
+    }
+
+    /// Kumo's line while nobody has said it was read, and Ito is in front.
+    private var unread: MomentID? {
+        guard scenePhase == .active, let moment = session.desk?.moment, moment.readAt == nil
+        else { return nil }
+        return moment.id
+    }
+
+    /// Kumo's line on screen for a moment counts as read, in the chat too, so no notification
+    /// goes out for it.
+    private func read() async {
+        guard let unread else { return }
+        try? await Task.sleep(for: .seconds(1.5))
+        guard !Task.isCancelled else { return }
+        try? await session.readMoment(unread)
+    }
+
+    /// A tap on one of Kumo's replies answers it, as a card's option does; Reply opens a field.
+    private func act(_ action: KumoMoment.Action) {
+        guard let moment = session.desk?.moment else { return }
+        if action.opens {
+            replying = moment
+            return
+        }
+        Task {
+            await sending.send(action.title) {
+                try await session.answerMoment(moment.id, CardAnswer(option: action.title))
+            }
+        }
+    }
+
+    /// The cards that are new or changed since you last left the Desk.
+    private func changed(_ cards: [DeskCard]) -> Set<CardID> {
+        Set(cards.filter { ($0.changedAt ?? $0.at).date > lastLook }.map(\.id))
+    }
+
+    /// A visit begins: the dots compare with the end of the last one, or none on the first.
+    private func startLook() {
+        lastLook = lookedAt > 0 ? Date(timeIntervalSince1970: lookedAt) : .now
+    }
+
+    private func endLook() {
+        lookedAt = Date.now.timeIntervalSince1970
     }
 
     /// The cards the box is acting on, by id, with their titles.
@@ -136,22 +207,6 @@ struct DeskScreen: View {
         }) {
             followed = entry
         }
-    }
-
-    private var header: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(spacing: 4) {
-                PresenceView(history: presence, size: 38)
-                    .padding(.bottom, 4)
-                Text(LeadName.current).font(.ariName).foregroundStyle(.ariText)
-                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                    .font(.footnote)
-                    .foregroundStyle(.ariTertiary)
-            }
-            .frame(maxWidth: .infinity)
-            SettingsButton(action: openSettings)
-        }
-        .padding(.top, 12)
     }
 
     /// Tell Kumo, and above it, the last thing you told it with Kumo's reply as it comes.
@@ -175,22 +230,6 @@ struct DeskScreen: View {
         draft = ""
     }
 
-    private func open(_ line: BriefingLine) {
-        guard let card = line.card else { return }
-        openedCard = session.desk?.waiting.first { $0.id == card }
-    }
-
-    /// A morning card you've seen before comes folded; one on screen for a few seconds counts as
-    /// read, which lets the box make a "since this morning" one later.
-    private func seen(_ briefing: Briefing) async {
-        briefingFolded = readBriefing == briefing.id.rawValue || briefing.readAt != nil
-        guard !briefingFolded else { return }
-        try? await Task.sleep(for: .seconds(3))
-        guard !Task.isCancelled else { return }
-        readBriefing = briefing.id.rawValue
-        try? await session.readBriefing(briefing.id)
-    }
-
     /// The card's corner: the thing in motion it's about, such as "Job search".
     private func context(for card: DeskCard) -> String? {
         guard let motion = card.motion else { return nil }
@@ -199,6 +238,65 @@ struct DeskScreen: View {
 
     private func symbol(for item: CalendarItem) -> String? {
         item.allDay && item.motion != nil ? "airplane" : nil
+    }
+}
+
+/// Words for Kumo's line, from its Reply: the line, a field, and Send. Kumo acts on them in the
+/// background, as on a card's typed answer.
+private struct MomentReply: View {
+    let moment: Moment
+    let send: (String) async throws -> Void
+
+    @State private var words = ""
+    @State private var sending = DeskSending()
+    @FocusState private var focused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(moment.text)
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(.ariSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("Your answer", text: $words, axis: .vertical)
+                    .font(.ariBody)
+                    .foregroundStyle(.ariText)
+                    .lineLimit(2...6)
+                    .focused($focused)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
+                if let problem = sending.problem { DeskProblemLine(text: problem) }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(.ariBackground)
+            .navigationTitle("Reply to \(LeadName.current)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.foregroundStyle(.ariText)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") { submit() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.ariText)
+                        .disabled(trimmed.isEmpty || sending.isSending)
+                }
+            }
+            .onAppear { focused = true }
+        }
+    }
+
+    private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func submit() {
+        let text = trimmed
+        guard !text.isEmpty else { return }
+        Task {
+            if await sending.send("text", { try await send(text) }) { dismiss() }
+        }
     }
 }
 
@@ -300,8 +398,8 @@ private struct FollowedLine: View {
     }
 }
 
-/// Everything Kumo did: "Also handled 9 small things" opens it.
-private struct AllDoneView: View {
+/// Everything Kumo has done, every day, from Kumo's work: a reply to a line corrects it.
+struct AllDoneView: View {
     let session: Session
 
     @State private var entries: [DoneEntry] = []

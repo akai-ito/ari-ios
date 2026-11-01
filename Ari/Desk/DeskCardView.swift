@@ -196,18 +196,25 @@ struct WaitingList: View {
     /// Opens a folded card in full.
     let open: (DeskCard) -> Void
     let answer: (DeskCard, CardAnswer) async throws -> Void
+    /// The cards that changed since you last looked, each marked with a small dot in the margin.
+    var changed: Set<CardID> = []
 
     var body: some View {
         if !cards.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
                     if index > 0 { Divider().overlay(Color.ariLine) }
-                    if Self.folds(card) {
-                        DeskCardRow(card: card) { open(card) }
-                    } else {
-                        DeskCardView(
-                            card: card, context: context(card), presentation: .inline
-                        ) { try await answer(card, $0) }
+                    Group {
+                        if Self.folds(card) {
+                            DeskCardRow(card: card) { open(card) }
+                        } else {
+                            DeskCardView(
+                                card: card, context: context(card), presentation: .inline
+                            ) { try await answer(card, $0) }
+                        }
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if changed.contains(card.id) { ChangedDot() }
                     }
                 }
             }
@@ -219,6 +226,20 @@ struct WaitingList: View {
     /// want a proper look before you answer.
     static func folds(_ card: DeskCard) -> Bool {
         card.kind == .draft || card.kind == .times || !card.kind.isKnown
+    }
+}
+
+/// A card changed since you last looked: a small bone dot in the card's margin, beside its symbol.
+struct ChangedDot: View {
+    @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 22
+
+    var body: some View {
+        Circle()
+            .fill(Color.ariBone)
+            .frame(width: 6, height: 6)
+            .frame(height: lineHeight)
+            .offset(x: -11)
+            .accessibilityLabel("Changed")
     }
 }
 

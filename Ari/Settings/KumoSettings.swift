@@ -38,22 +38,22 @@ struct KumoSettings: View {
     }
 }
 
-/// Settings › Morning: the earliest the morning card may come.
+/// Settings › Morning: when your morning starts, the earliest Kumo's first line of the day may come.
 struct MorningSettings: View {
     let model: AppModel
     let client: ItoClient?
 
     @State private var time: Date
     /// What the box has, so a choice is sent only when it differs.
-    @State private var saved: BriefingTime
+    @State private var saved: MorningTime
     @State private var problem: String?
 
     init(model: AppModel, client: ItoClient?) {
         self.model = model
         self.client = client
-        let briefing = model.server?.briefing ?? .standard
-        _saved = State(initialValue: briefing)
-        _time = State(initialValue: Self.date(briefing))
+        let morning = model.server?.morning ?? .standard
+        _saved = State(initialValue: morning)
+        _time = State(initialValue: Self.date(morning))
     }
 
     var body: some View {
@@ -61,7 +61,7 @@ struct MorningSettings: View {
             DatePicker("Not before", selection: $time, displayedComponents: .hourAndMinute)
                 .disabled(client == nil)
                 // A pause first, so turning the wheel sends only where it stops.
-                .task(id: Self.briefing(time)) { await save(Self.briefing(time)) }
+                .task(id: Self.morning(time)) { await save(Self.morning(time)) }
         } header: {
             Text("Morning")
         } footer: {
@@ -69,14 +69,15 @@ struct MorningSettings: View {
                 Text(problem)
             } else {
                 Text(
-                    "Kumo brings the morning card at the first calm moment after this time: when "
-                        + "you open Ito, or the first gap in your calendar.")
+                    "\(LeadName.current)'s first line of the day comes at the first calm moment "
+                        + "after this time, however late: when you open Ito, or the first gap in "
+                        + "your calendar.")
             }
         }
         .listRowBackground(Color.ariSurface)
     }
 
-    private func save(_ chosen: BriefingTime) async {
+    private func save(_ chosen: MorningTime) async {
         guard chosen != saved, let client else { return }
         do {
             try await Task.sleep(for: .milliseconds(700))
@@ -84,7 +85,7 @@ struct MorningSettings: View {
             return
         }
         do throws(RequestError) {
-            saved = try await client.setBriefing(chosen)
+            saved = try await client.setMorning(chosen)
             problem = nil
             model.refreshServer()
         } catch {
@@ -92,15 +93,15 @@ struct MorningSettings: View {
         }
     }
 
-    private static func date(_ briefing: BriefingTime) -> Date {
-        let time = briefing.time ?? BriefingTime.standard.time ?? (7, 30)
+    private static func date(_ morning: MorningTime) -> Date {
+        let time = morning.time ?? MorningTime.standard.time ?? (7, 30)
         return Calendar.current.date(
             bySettingHour: time.hour, minute: time.minute, second: 0, of: .now) ?? .now
     }
 
-    private static func briefing(_ date: Date) -> BriefingTime {
+    private static func morning(_ date: Date) -> MorningTime {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return BriefingTime(hour: parts.hour ?? 7, minute: parts.minute ?? 30)
+        return MorningTime(hour: parts.hour ?? 7, minute: parts.minute ?? 30)
     }
 }
 

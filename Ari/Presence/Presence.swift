@@ -23,6 +23,8 @@ enum Pose: Equatable {
     case offline
     /// You tapped Ari while it rested: it wakes and looks at you with a little wiggle.
     case noticed
+    /// Something's wrong on the server: awake but a little off, head tilted and one eye lower.
+    case unwell
 
     init(kind: StatusKind) {
         switch kind {
@@ -60,6 +62,7 @@ enum Pose: Equatable {
         switch self {
         case .resting: 0
         case .offline: 0.45
+        case .unwell: 0.7
         default: 1
         }
     }
@@ -126,6 +129,7 @@ struct PresenceView: View {
         var awake = 0.0
         var glow = 0.0
         var lids = 0.0
+        var off = 0.0
         for (index, change) in changes.enumerated() {
             glow += change.pose.level * slow[index]
             guard weights[index] > 0 else { continue }
@@ -136,6 +140,7 @@ struct PresenceView: View {
             gaze.y += look.y * weights[index]
             awake += change.pose.level * weights[index]
             lids += Self.openness(change.pose, since: reduceMotion ? 1 : since) * weights[index]
+            off += (change.pose == .unwell ? 1 : 0) * weights[index]
         }
 
         let scale = size / 40
@@ -153,7 +158,7 @@ struct PresenceView: View {
             x: area.width / 2 + gaze.x * 0.2 * scale,
             y: area.height / 2 + (gaze.y * 0.15 - awake * 0.8) * scale)
         canvas.scaleBy(x: scale, y: scale)
-        canvas.rotate(by: .degrees(gaze.x * 0.8))
+        canvas.rotate(by: .degrees(gaze.x * 0.8 - 7 * off))
         // Swelling a little with the voice, and lighter, as if drawing breath.
         let breath = reduceMotion ? 0 : (self.breath?() ?? 0)
         canvas.scaleBy(x: 1 + 0.08 * breath, y: 1 + 0.08 * breath)
@@ -164,9 +169,12 @@ struct PresenceView: View {
         let height = (5.6 + 0.5 * awake) * open
         let shown = eyesShown(at: t, starts: starts)
         for side in [-1.0, 1.0] {
+            // A little off: the right eye smaller and lower than the left.
+            let lopsided = side > 0 ? off : 0
+            let eyeHeight = height * (1 - 0.35 * lopsided)
             let eye = CGRect(
-                x: side * 6.4 + gaze.x - 2.3, y: -1 + gaze.y - height / 2, width: 4.6,
-                height: height)
+                x: side * 6.4 + gaze.x - 2.3, y: -1 + gaze.y + 0.9 * lopsided - eyeHeight / 2,
+                width: 4.6, height: eyeHeight)
             canvas.fill(Path(ellipseIn: eye), with: .color(Color.ariBackground.opacity(shown)))
         }
     }
@@ -202,7 +210,7 @@ struct PresenceView: View {
                 continue
             }
             if previous == .resting { blinks.append((starts[index] + 0.07, 0.16)) }
-            if change.pose == .stopping || change.pose == .offline { continue }
+            if [.stopping, .offline, .unwell].contains(change.pose) { continue }
             var at = starts[index] + 2.5
             var cycle = 0.0
             while at < min(end, t + 1) {
@@ -244,6 +252,7 @@ struct PresenceView: View {
         // Down toward you and the composer, with a slow, patient sway.
         case .asking: CGPoint(x: 0.9 * sin(t * 0.55), y: 3.6 + 0.25 * sin(t * 0.9))
         case .offline: CGPoint(x: 0, y: 1.6)
+        case .unwell: CGPoint(x: -0.8, y: 1.4)
         // Straight at you, with a quick happy wiggle that settles.
         case .noticed: CGPoint(x: 1.8 * sin(since * 15) * max(0, 1 - since / 0.75), y: 3.0)
         }
@@ -260,6 +269,7 @@ struct PresenceView: View {
         // Wide, pleased to see you.
         case .noticed: 1.15
         case .offline: 0.5
+        case .unwell: 0.8
         case .stopping:
             since < 0.1
                 ? 1 - 8.5 * since
@@ -312,7 +322,7 @@ struct PresenceView: View {
 #Preview("Poses") {
     let poses: [Pose] = [
         .resting, .thinking, .webSearch, .reading, .running, .editing, .planning, .waiting,
-        .writing, .tidying, .asking, .adjusting, .stopping, .offline,
+        .writing, .tidying, .asking, .adjusting, .stopping, .offline, .unwell,
     ]
     let start = Date.now.addingTimeInterval(-10)
     return LazyVGrid(columns: Array(repeating: GridItem(), count: 4), spacing: 24) {

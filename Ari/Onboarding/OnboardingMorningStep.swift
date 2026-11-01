@@ -18,7 +18,7 @@ struct OnboardingMorningStep: View {
                         .foregroundStyle(.ariText)
                         .deskCard(padding: 14, cornerRadius: 16)
                     Text(
-                        "Kumo brings the morning card at the first calm moment after this: when you open Ito, or the first gap in your calendar."
+                        "Kumo's first line of the day comes at the first calm moment after this, however late: when you open Ito, or the first gap in your calendar."
                     )
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)

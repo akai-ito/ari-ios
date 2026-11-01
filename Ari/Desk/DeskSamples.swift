@@ -5,31 +5,6 @@
     /// The Desk on the Thursday of Halcyon, from the milestone's design record, for previews: times are
     /// relative to now, so "Today" stays today.
     enum DeskSamples {
-        // MARK: Briefings
-
-        static let morning = Briefing(
-            id: "b-morning", kind: .morning, at: at(7, 40),
-            lines: [
-                BriefingLine(
-                    text: "Tess sent the Teams link for this afternoon; it's on the event."),
-                BriefingLine(
-                    text:
-                        "Hotel Orto confirmed Florence, but you land 22:10 and check-in closes "
-                        + "22:00. I drafted a note asking them to wait.",
-                    card: "hotel-orto"),
-                BriefingLine(text: "Easy 30 minutes or rest today; big afternoon."),
-            ],
-            handled: 9)
-
-        static let since = Briefing(
-            id: "b-since", kind: .since, at: at(13, 10),
-            lines: [
-                BriefingLine(
-                    text:
-                        "Freya invited you to Northwind's second round. It's held in my calendar.",
-                    card: "northwind-invite")
-            ])
-
         // MARK: Coming up
 
         static let comingUp: [CalendarItem] = [
