@@ -30,6 +30,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Form {
+                ServerProblems(problems: session.problems)
                 server
                 KumoSettings(model: model, client: client)
                 MorningSettings(model: model, client: client)
@@ -358,5 +359,38 @@ private struct GettingStartedAgain: View {
             problem = "Couldn't open getting started: \(error.plainWords)"
         }
         opening = false
+    }
+}
+
+/// What's wrong on the server, at the top of Settings until it's fixed: each problem, what it means
+/// and how to fix it.
+private struct ServerProblems: View {
+    let problems: [ServerProblem]
+
+    var body: some View {
+        if !problems.isEmpty {
+            Section {
+                ForEach(problems) { problem in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(problem.title, systemImage: ProblemLook.symbol(problem.area))
+                            .font(.body.weight(.semibold))
+                        Text(problem.detail)
+                            .font(.subheadline)
+                            .foregroundStyle(.ariSecondary)
+                        Text(problem.fix)
+                            .font(.subheadline)
+                            .foregroundStyle(.ariText)
+                            .textSelection(.enabled)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
+                }
+            } header: {
+                Text("Needs you")
+            } footer: {
+                Text("Each goes away by itself once it's fixed.")
+            }
+            .listRowBackground(Color.ariSurface)
+        }
     }
 }

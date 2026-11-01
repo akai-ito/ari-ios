@@ -20,6 +20,7 @@ struct OnboardingHost: View {
         .task {
             if model == nil { model = makeModel() }
             if capabilities == nil { capabilities = app.client().map(Capabilities.init(client:)) }
+            model?.serverSends = app.server?.setup?.notifications ?? true
             // Accounts already connected, such as when getting started runs again, show so.
             await refreshSources()
         }

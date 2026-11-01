@@ -36,6 +36,17 @@ struct OnboardingMorningStep: View {
                         .font(.footnote)
                         .foregroundStyle(.ariTertiary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if !model.serverSends {
+                        // Said plainly: allowing them here is still worth it, but nothing arrives
+                        // until the server can send.
+                        Label(
+                            "Your server can't send notifications yet: it needs an Apple push key (ito push setup on the server). Allow them now, and they'll start once it's set up.",
+                            systemImage: "bell.slash"
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.ariSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let choice = model.notifications {
                         chosen(choice).transition(.opacity)
                     }

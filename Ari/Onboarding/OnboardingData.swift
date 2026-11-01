@@ -166,6 +166,8 @@ final class OnboardingModel {
     var morning: DateComponents
     /// `nil` until you've chosen, or already decided if iOS has an answer.
     var notifications: NotificationsChoice?
+    /// Whether the server can send notifications yet; `false` until it has an Apple push key.
+    var serverSends = true
     /// What Kumo found; `nil` while it's still catching up.
     var reveal: OnboardingReveal?
 
