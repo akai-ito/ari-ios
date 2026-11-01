@@ -69,7 +69,7 @@ struct SpecCoverageTests {
                 .compactMap(\.string)
         }
         #expect(try values(of: "Card", "kind") == CardKind.known.map(\.rawValue))
-        #expect(try values(of: "Briefing", "kind") == BriefingKind.known.map(\.rawValue))
+        #expect(try values(of: "Moment", "kind") == MomentKind.known.map(\.rawValue))
         #expect(try values(of: "CalendarItem", "status") == CalendarStatus.known.map(\.rawValue))
         let state = spec.definitions["Card"]?["properties"]?["state"]?["const"]?.string
         #expect([state] == CardState.known.map(\.rawValue))

@@ -490,7 +490,8 @@ extension ConversationTranscriptTests {
             Expected(
                 id: MessageID(id), text: String(decoding: message.text, as: UTF16.self),
                 outcome: message.outcome.map(Outcome.init(rawValue:)),
-                shown: message.role == "user" || message.kind == "reply" || message.kind == "post",
+                shown: message.role == "user"
+                    || ["reply", "post", "moment"].contains(message.kind),
                 attachments: message.attachments)
         }
     }

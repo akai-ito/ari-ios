@@ -1,7 +1,7 @@
 import Foundation
 
-// Settings for Kumo itself: its name, and when the morning card may come. Both are read with
-// `server()`, as `lead` and `briefing`.
+// Settings for Kumo itself: its name, and when your morning starts. Both are read with `server()`,
+// as `lead` and `morning`.
 
 extension ItoClient {
     /// `PUT /v0/lead`: renames the lead, from its next message. The answer is the lead as saved.
@@ -9,9 +9,10 @@ extension ItoClient {
         try await exchange(HTTPRequest(.put, "/v0/lead", body: try Self.encoded(Lead(name: name))))
     }
 
-    /// `PUT /v0/briefing`: the earliest the morning card may come. The answer is the time as saved.
-    public func setBriefing(_ time: BriefingTime) async throws(RequestError) -> BriefingTime {
-        try await exchange(HTTPRequest(.put, "/v0/briefing", body: try Self.encoded(time)))
+    /// `PUT /v0/morning`: when your morning starts, the earliest Kumo's first line of the day may
+    /// come. The answer is the time as saved.
+    public func setMorning(_ time: MorningTime) async throws(RequestError) -> MorningTime {
+        try await exchange(HTTPRequest(.put, "/v0/morning", body: try Self.encoded(time)))
     }
 
     // MARK: - Plumbing

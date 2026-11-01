@@ -43,14 +43,15 @@ struct SessionDeskTests {
         try await bench.open(with: Self.snapshot("e_10"))
 
         let desk = #"""
-            {"briefing":{"id":"b_1","kind":"morning","at":"2026-11-10T07:40:00.000Z","lines":[{"text":"Halcyon moved to 2pm."}],"handled":3},
-             "coming_up":[],"waiting":[\#(Self.question("k_1"))]}
+            {"moment":\#(Self.moment),
+             "coming_up":[],"waiting":[\#(Self.question("k_1"))],"handled":3}
             """#
         try await bench.push(
             #"{"id":"e_11","type":"desk.changed","at":"2026-11-10T07:40:00.000Z","desk":\#(desk)}"#)
 
         let session = bench.session
-        #expect(session.desk?.briefing?.lines.map(\.text) == ["Halcyon moved to 2pm."])
+        #expect(session.desk?.moment?.text == "Sam moved climbing to 8, so I moved your prep to 6.")
+        #expect(session.desk?.handled == 3)
         #expect(session.desk?.waiting.map(\.id) == ["k_1"])
         #expect(session.conversation.cursor == "e_11")
 
@@ -84,7 +85,42 @@ struct SessionDeskTests {
         #expect(session.desk?.waiting.first?.state == .working)
     }
 
-    @Test("Done, jobs, a briefing read and a calendar event are plain requests")
+    @Test(
+        "answering Kumo's line shows it at work at once; reading it and today's work are requests")
+    func answerMoment() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        let desk = #"{"moment":\#(Self.moment),"coming_up":[],"waiting":[],"handled":3}"#
+        try await bench.open(with: Self.snapshot("e_10", desk: desk))
+        let session = bench.session
+
+        let reading = Task { try await session.readMoment("o_1") }
+        let read = try await bench.nextRequest()
+        #expect(read.method == .post && read.path == "/v0/desk/moment/o_1/read" && read.body == nil)
+        try await bench.server.answer(204)
+        try await reading.value
+
+        let answering = Task { try await session.answerMoment("o_1", CardAnswer(option: "Fine")) }
+        let request = try await bench.nextRequest()
+        #expect(request.method == .post && request.path == "/v0/desk/moment/o_1/answer")
+        #expect(
+            try request.body.map { try JSONValue(data: $0) }
+                == JSONValue(json: #"{"option":"Fine"}"#))
+        let working = Self.moment.replacingOccurrences(
+            of: #""allows_text":false"#,
+            with: #""allows_text":false,"state":"working","answer":{"option":"Fine"}"#)
+        try await bench.server.answer(202, json: #"{"moment":\#(working)}"#)
+        try await answering.value
+        #expect(session.desk?.moment?.isWorking == true && session.desk?.handled == 3)
+
+        let looking = Task { try await session.work() }
+        let work = try await bench.nextRequest()
+        #expect(work.method == .get && work.path == "/v0/work")
+        try await bench.server.answer(200, json: #"{"day":"2026-11-10","handled":[],"cleared":[]}"#)
+        #expect(try await looking.value == KumoWork(day: "2026-11-10"))
+    }
+
+    @Test("Done, jobs and a calendar event are plain requests")
     func deskRequests() async throws {
         let bench = try Bench()
         defer { bench.close() }
@@ -124,12 +160,6 @@ struct SessionDeskTests {
         #expect(
             job.why == "Ask how the Halcyon interview went"
                 && job.afterEvent?.title == "Halcyon technical")
-
-        let reading = Task { try await session.readBriefing("b_1") }
-        let read = try await bench.nextRequest()
-        #expect(read.method == .post && read.path == "/v0/desk/briefing/b_1/read")
-        try await bench.server.answer(204)
-        try await reading.value
 
         let event = NewCalendarEvent(
             title: "Dentist", start: When(year: 2026, month: 11, day: 17),
@@ -289,6 +319,9 @@ struct SessionDeskTests {
     private static func message(_ id: String, _ text: String, _ position: Int) -> String {
         #"{"id":"\#(id)","role":"user","text":"\#(text)","at":"2026-11-10T07:00:00.000Z","position":\#(position)}"#
     }
+
+    private static let moment =
+        #"{"id":"o_1","kind":"change","at":"2026-11-10T11:30:00.000Z","text":"Sam moved climbing to 8, so I moved your prep to 6.","message":"m_9","options":[{"label":"Fine"}],"allows_text":false}"#
 
     private static func question(_ id: String, working: Bool = false) -> String {
         let state = working ? #","state":"working""# : ""

@@ -67,7 +67,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     // MARK: - The Desk
 
-    /// `GET /v0/desk`: the morning card, what's coming up and what's waiting on you.
+    /// `GET /v0/desk`: Kumo's line for the moment, what's coming up and what's waiting on you.
     public func desk() async throws(RequestError) -> Desk {
         try await call(HTTPRequest(.get, "/v0/desk"))
     }
@@ -83,11 +83,27 @@ public struct ItoClient: Sendable, CustomStringConvertible {
                 body: try Self.json(answer)))
     }
 
-    /// `POST /v0/desk/briefing/{id}/read`: the morning card was seen, so only something new after
-    /// it makes a "since this morning" card.
-    public func readBriefing(_ id: BriefingID) async throws(RequestError) {
+    /// `POST /v0/desk/moment/{id}/read`: Kumo's line was on the Desk, so it's read, in the
+    /// conversation too, and no notification goes out for it.
+    public func readMoment(_ id: MomentID) async throws(RequestError) {
         try await callWithoutAnswer(
-            HTTPRequest(.post, "/v0/desk/briefing/\(Self.segment(id.rawValue))/read"))
+            HTTPRequest(.post, "/v0/desk/moment/\(Self.segment(id.rawValue))/read"))
+    }
+
+    /// `POST /v0/desk/moment/{id}/answer`: answers Kumo's line like a card. It comes back
+    /// `working` while Kumo acts on it, then gives way to all quiet.
+    public func answerMoment(_ id: MomentID, _ answer: CardAnswer) async throws(RequestError)
+        -> MomentResult
+    {
+        try await call(
+            HTTPRequest(
+                .post, "/v0/desk/moment/\(Self.segment(id.rawValue))/answer",
+                body: try Self.json(answer)))
+    }
+
+    /// `GET /v0/work`: Kumo's work today, what it handled and what it cleared.
+    public func work() async throws(RequestError) -> KumoWork {
+        try await call(HTTPRequest(.get, "/v0/work"))
     }
 
     /// `GET /v0/done?before=…&limit=…`: what Kumo did without you, newest first.

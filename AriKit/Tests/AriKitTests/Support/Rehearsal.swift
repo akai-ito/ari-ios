@@ -64,8 +64,8 @@ final class Rehearsal {
     static func connection() throws -> Connection {
         let server = try JSONValue(
             json: #"""
-                {"name":"studio","version":"0.4.0","protocol":"0.16","lead":{"name":"Kumo"},
-                 "briefing":{"not_before":"07:30"},"agent":{}}
+                {"name":"studio","version":"0.4.0","protocol":"0.17","lead":{"name":"Kumo"},
+                 "morning":{"not_before":"07:30"},"agent":{}}
                 """#
         ).decode(ServerInfo.self)
         return Connection(
@@ -188,8 +188,13 @@ final class Rehearsal {
         case .answerCard(let card):
             guard let answer = try? request.body?.decode(CardAnswer.self) else { return }
             Task { try? await session.answer(card, answer) }
-        case .readBriefing(let briefing):
-            Task { try? await session.readBriefing(briefing) }
+        case .readMoment(let moment):
+            Task { try? await session.readMoment(moment) }
+        case .answerMoment(let moment):
+            guard let answer = try? request.body?.decode(CardAnswer.self) else { return }
+            Task { try? await session.answerMoment(moment, answer) }
+        case .work:
+            Task { _ = try? await session.work() }
         case .onboarding:
             Task { try? await session.refreshOnboarding() }
         case .answerBelief(let belief):

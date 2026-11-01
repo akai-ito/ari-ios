@@ -124,11 +124,11 @@ extension Conversation {
             case next
         }
 
-        /// Whether the conversation shows it: your messages, the agent's replies and Kumo's posts. A
-        /// note becomes the live status's detail instead, and a role or kind this version of Ari
-        /// doesn't know stays hidden.
+        /// Whether the conversation shows it: your messages, the agent's replies, Kumo's posts and
+        /// its lines for the moment. A note becomes the live status's detail instead, and a role or
+        /// kind this version of Ari doesn't know stays hidden.
         public var isShown: Bool {
-            role == .user || (role == .agent && (kind == .reply || kind == .post))
+            role == .user || (role == .agent && [.reply, .post, .moment].contains(kind))
         }
 
         init(_ message: Message) {

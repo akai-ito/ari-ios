@@ -14,7 +14,8 @@ import Observation
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
 /// - **Calls** start and end on their own lane, in order; a call's stream carries the rest.
-/// - **The Desk's answers** (a card, the morning card seen, Done and its undo, a calendar event) are
+/// - **The Desk's answers** (a card, Kumo's line answered or seen, Done and its undo, a calendar
+///   event, today's work) are
 ///   plain requests: you're watching for them, so they say at once when they fail.
 @MainActor
 @Observable
@@ -393,21 +394,29 @@ public final class Session {
     /// box at work on it until the Desk says it's done.
     public func answer(_ card: CardID, _ answer: CardAnswer) async throws(RequestError) {
         let result = try await client.answer(card, answer)
-        guard let desk else { return }
-        self.desk = Desk(
-            briefing: desk.briefing, comingUp: desk.comingUp,
-            waiting: desk.waiting.map { $0.id == result.card.id ? result.card : $0 })
+        desk = desk?.replacing(card: result.card)
+    }
+
+    /// You answered Kumo's line: with one of its options, or words. It shows Kumo at work on it
+    /// until the Desk says it's done.
+    public func answerMoment(_ moment: MomentID, _ answer: CardAnswer) async throws(RequestError) {
+        let result = try await client.answerMoment(moment, answer)
+        desk = desk?.replacing(moment: result.moment)
+    }
+
+    /// Kumo's line has been on the Desk, so it's read and no notification goes out for it.
+    public func readMoment(_ id: MomentID) async throws(RequestError) {
+        try await client.readMoment(id)
+    }
+
+    /// Kumo's work today: what it handled and what it cleared.
+    public func work() async throws(RequestError) -> KumoWork {
+        try await client.work()
     }
 
     /// You pulled the Desk down: ask for all of it again.
     public func refreshDesk() async throws(RequestError) {
         desk = try await client.desk()
-    }
-
-    /// The morning card has been on screen, so only something new after it makes a "since this
-    /// morning" card.
-    public func readBriefing(_ id: BriefingID) async throws(RequestError) {
-        try await client.readBriefing(id)
     }
 
     /// A page of what Kumo did without you, newest first: the latest, or those before an entry.

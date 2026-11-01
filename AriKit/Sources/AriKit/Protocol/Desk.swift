@@ -1,88 +1,147 @@
 import Foundation
 
-// Kumo's Desk: where Ito opens. It rolls and never resets: the morning card, what's coming up and
-// what's waiting on you.
+// Kumo's Desk: where Ito opens. It rolls and never resets: Kumo's line for the moment, what's coming
+// up, what's waiting on you, and how much Kumo did without you today.
 
 /// Everything on the Desk at once. It's small, so `desk.changed` carries all of it.
 public struct Desk: Sendable, Equatable, Decodable {
-    /// The morning card, or "since this morning", while it's current.
-    public let briefing: Briefing?
+    /// Kumo's line for the moment, or `nil` while all is quiet.
+    public let moment: Moment?
     /// The next day and a half, and anything big this week, in time order.
     public let comingUp: [CalendarItem]
     /// Drafts, invites, times to check and questions, oldest first, until each is done.
     public let waiting: [DeskCard]
+    /// How many things Kumo did without you today, for "Done · handled 9".
+    public let handled: Int
+    /// When Kumo last read a new mail, for "Reading · last mail 2 min ago"; `nil` while no mail
+    /// account is connected, and until the first mail.
+    public let lastMailAt: Timestamp?
 
     public init(
-        briefing: Briefing? = nil, comingUp: [CalendarItem] = [], waiting: [DeskCard] = []
+        moment: Moment? = nil, comingUp: [CalendarItem] = [], waiting: [DeskCard] = [],
+        handled: Int = 0, lastMailAt: Timestamp? = nil
     ) {
-        self.briefing = briefing
+        self.moment = moment
         self.comingUp = comingUp
         self.waiting = waiting
+        self.handled = handled
+        self.lastMailAt = lastMailAt
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        moment = try container.decodeIfPresent(Moment.self, forKey: .moment)
+        comingUp = try container.decode([CalendarItem].self, forKey: .comingUp)
+        waiting = try container.decode([DeskCard].self, forKey: .waiting)
+        handled = try container.decodeIfPresent(Int.self, forKey: .handled) ?? 0
+        lastMailAt = try container.decodeIfPresent(Timestamp.self, forKey: .lastMailAt)
+    }
+
+    /// The same Desk with a card, or Kumo's line, as an answer just left them.
+    public func replacing(card: DeskCard? = nil, moment replaced: Moment? = nil) -> Desk {
+        Desk(
+            moment: replaced.flatMap { $0.id == moment?.id ? $0 : nil } ?? moment,
+            comingUp: comingUp,
+            waiting: waiting.map { $0.id == card?.id ? card ?? $0 : $0 },
+            handled: handled, lastMailAt: lastMailAt)
     }
 
     enum CodingKeys: String, CodingKey {
-        case briefing, waiting
+        case moment, waiting, handled
         case comingUp = "coming_up"
+        case lastMailAt = "last_mail_at"
     }
 }
 
-/// A briefing's id.
-public struct BriefingID: OpaqueIdentifier {
+/// The id of one of Kumo's lines for the moment.
+public struct MomentID: OpaqueIdentifier {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 }
 
-/// What Kumo tells you at the first calm moment of the morning, or later "since this morning". The
-/// box drops it at 14:00, or when a newer one replaces it.
-public struct Briefing: Sendable, Equatable, Decodable, Identifiable {
-    public let id: BriefingID
-    public let kind: BriefingKind
+/// Kumo's line for the moment, at the top of the Desk: one or two sentences, right for now, which
+/// order and connect what's below rather than repeat it. The same words are a message in the
+/// conversation. It goes three hours after it was read, at midnight, or once Kumo has acted on your
+/// answer, and then all is quiet.
+public struct Moment: Sendable, Equatable, Decodable, Identifiable {
+    public let id: MomentID
+    public let kind: MomentKind
     public let at: Timestamp
-    /// Kumo's lines, most important first, each perhaps opening a card.
-    public let lines: [BriefingLine]
-    /// How many small things Kumo handled that the lines don't mention, for "Also handled 9 small
-    /// things".
-    public let handled: Int
-    /// When an app first showed it.
+    /// One or two sentences, plain words.
+    public let text: String
+    /// The message in the conversation that holds the same words.
+    public let message: MessageID
+    /// Up to three short replies, such as "Ask me tonight". A tap answers Kumo, like a card.
+    public let options: [Ask.Option]
+    /// Whether a typed reply fits, for Reply.
+    public let allowsText: Bool
+    /// When an app first showed it on the Desk. Once read, no notification goes out for it.
     public let readAt: Timestamp?
+    /// `working` while Kumo acts on your answer.
+    public let state: CardState?
+    /// While it's `working`: the answer you gave.
+    public let answer: CardAnswer?
 
     public init(
-        id: BriefingID, kind: BriefingKind = .morning, at: Timestamp, lines: [BriefingLine],
-        handled: Int = 0, readAt: Timestamp? = nil
+        id: MomentID, kind: MomentKind = .news, at: Timestamp, text: String, message: MessageID,
+        options: [Ask.Option] = [], allowsText: Bool = false, readAt: Timestamp? = nil,
+        state: CardState? = nil, answer: CardAnswer? = nil
     ) {
         self.id = id
         self.kind = kind
         self.at = at
-        self.lines = lines
-        self.handled = handled
+        self.text = text
+        self.message = message
+        self.options = options
+        self.allowsText = allowsText
         self.readAt = readAt
+        self.state = state
+        self.answer = answer
     }
 
+    /// Whether Kumo is acting on your answer.
+    public var isWorking: Bool { state == .working }
+
     enum CodingKeys: String, CodingKey {
-        case id, kind, at, lines, handled
+        case id, kind, at, text, message, options, state, answer
+        case allowsText = "allows_text"
         case readAt = "read_at"
     }
 }
 
-public struct BriefingKind: OpenValue {
+/// What brought Kumo's line. A kind Ari doesn't know draws like any other.
+public struct MomentKind: OpenValue {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 
-    public static let morning = BriefingKind(rawValue: "morning")
-    /// "Since this morning": only when something new happened after you read the morning one.
-    public static let since = BriefingKind(rawValue: "since")
-    public static let known = [morning, since]
+    /// The first line of the day, at the first calm moment after your morning time.
+    public static let day = MomentKind(rawValue: "day")
+    /// Something that matters arrived.
+    public static let news = MomentKind(rawValue: "news")
+    /// Your day changed.
+    public static let change = MomentKind(rawValue: "change")
+    public static let known = [day, news, change]
 }
 
-public struct BriefingLine: Sendable, Equatable, Decodable {
-    /// One line, plain words.
-    public let text: String
-    /// The card waiting on you that it's about.
-    public let card: CardID?
+/// `POST /v0/desk/moment/{id}/answer`'s answer: Kumo's line, `working` with your answer.
+public struct MomentResult: Sendable, Equatable, Decodable {
+    public let moment: Moment
+}
 
-    public init(text: String, card: CardID? = nil) {
-        self.text = text
-        self.card = card
+/// `GET /v0/work`: Kumo's work today, for "47 in: 3 need you, 6 handled, 38 cleared". What needs
+/// you is the Desk's `waiting`.
+public struct KumoWork: Sendable, Equatable, Decodable {
+    /// Today, local time, such as `2026-11-05`.
+    public let day: String
+    /// What Kumo did without you today, newest first.
+    public let handled: [DoneEntry]
+    /// The mail Kumo read and left alone today, newest first.
+    public let cleared: [DoneEntry]
+
+    public init(day: String, handled: [DoneEntry] = [], cleared: [DoneEntry] = []) {
+        self.day = day
+        self.handled = handled
+        self.cleared = cleared
     }
 }
 
@@ -101,6 +160,8 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public let motion: MotionID?
     /// When it began waiting, for "since Wed".
     public let at: Timestamp
+    /// When Kumo last changed it while it waited, such as rewriting a draft.
+    public let changedAt: Timestamp?
     /// One line, such as "Draft to Tess".
     public let title: String
     /// The buttons to draw, in order. Answering with one sends its label.
@@ -119,7 +180,8 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
 
     public init(
         id: CardID, kind: CardKind, motion: MotionID? = nil, at: Timestamp,
-        title: String, options: [Ask.Option] = [], allowsText: Bool = false,
+        changedAt: Timestamp? = nil, title: String, options: [Ask.Option] = [],
+        allowsText: Bool = false,
         state: CardState? = nil, answer: CardAnswer? = nil, draft: DraftCard? = nil,
         invite: InviteCard? = nil, times: TimesCard? = nil, question: QuestionCard? = nil,
         offer: OfferCard? = nil
@@ -128,6 +190,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         self.kind = kind
         self.motion = motion
         self.at = at
+        self.changedAt = changedAt
         self.title = title
         self.options = options
         self.allowsText = allowsText
@@ -144,6 +207,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         case id, kind, motion, at, title, options, state, answer, draft, invite, times, question
         case offer
         case allowsText = "allows_text"
+        case changedAt = "changed_at"
     }
 }
 

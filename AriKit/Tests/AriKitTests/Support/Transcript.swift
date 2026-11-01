@@ -276,10 +276,12 @@ enum Route: Equatable {
     case undo(DoneID)
     case desk
     case answerCard(CardID)
-    case readBriefing(BriefingID)
+    case readMoment(MomentID)
+    case answerMoment(MomentID)
+    case work
     case addEvent
     case lead
-    case briefingSettings
+    case morningSettings
     case onboarding
     case answerBelief(BeliefID)
     case finishOnboarding
@@ -345,11 +347,15 @@ enum Route: Equatable {
         where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "cards" && parts[4] == "answer":
             self = .answerCard(CardID(parts[3]))
         case ("POST", 5)
-        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "briefing" && parts[4] == "read":
-            self = .readBriefing(BriefingID(parts[3]))
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "moment" && parts[4] == "read":
+            self = .readMoment(MomentID(parts[3]))
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "moment" && parts[4] == "answer":
+            self = .answerMoment(MomentID(parts[3]))
+        case ("GET", 2) where parts == ["v0", "work"]: self = .work
         case ("POST", 3) where parts == ["v0", "calendar", "events"]: self = .addEvent
         case ("PUT", 2) where parts == ["v0", "lead"]: self = .lead
-        case ("PUT", 2) where parts == ["v0", "briefing"]: self = .briefingSettings
+        case ("PUT", 2) where parts == ["v0", "morning"]: self = .morningSettings
         case ("GET", 2) where parts == ["v0", "onboarding"]: self = .onboarding
         case ("POST", 4)
         where parts[0] == "v0" && parts[1] == "onboarding" && parts[2] == "beliefs":
@@ -421,7 +427,7 @@ enum Route: Equatable {
     /// Settings, the Library and a call ask for these, not the session.
     var isOutsideSession: Bool {
         switch self {
-        case .lead, .briefingSettings:
+        case .lead, .morningSettings:
             true
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability,
             .connectCapability,
