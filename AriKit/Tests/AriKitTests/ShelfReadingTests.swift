@@ -49,13 +49,13 @@ struct ShelfReadingTests {
     func circles() {
         let people = [
             ("Leo", "friends"), ("Mum", "family"), ("Tess Harlow", "work"), ("Mira", "partner"),
-            ("Ayush", "friends"), ("Coach", "running"), ("Niwi", nil),
+            ("Omar", "friends"), ("Coach", "running"), ("Tilly", nil),
         ].map {
             PageSummary(address: PageAddress("memory:people/\($0.0)"), title: $0.0, circle: $0.1)
         }
         let circles = ShelfReading.circles(people)
         #expect(circles.map(\.circle) == ["partner", "family", "friends", "work", "running", nil])
-        #expect(circles[2].pages.map(\.title) == ["Ayush", "Leo"])
+        #expect(circles[2].pages.map(\.title) == ["Leo", "Omar"])
     }
 
     @Test("journal days group by month, newest first")
