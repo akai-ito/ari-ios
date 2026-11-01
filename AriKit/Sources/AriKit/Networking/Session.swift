@@ -409,9 +409,25 @@ public final class Session {
         try await client.readMoment(id)
     }
 
-    /// Kumo's work today: what it handled and what it cleared.
-    public func work() async throws(RequestError) -> KumoWork {
-        try await client.work()
+    /// Kumo's work today, or on another local day: what it handled and what it cleared, with the
+    /// trust ladder.
+    public func work(day: String? = nil) async throws(RequestError) -> KumoWork {
+        try await client.work(day: day)
+    }
+
+    /// You said Kumo got something wrong, with or without words. Returns the entry, corrected
+    /// (and undone, where it could be).
+    @discardableResult
+    public func correct(_ entry: DoneID, text: String? = nil) async throws(RequestError)
+        -> DoneEntry
+    {
+        try await client.correct(entry, text: text)
+    }
+
+    /// Show me everything again: one kind of Kumo's work back to Learning.
+    @discardableResult
+    public func resetTrust(_ work: WorkKind) async throws(RequestError) -> TrustRung {
+        try await client.resetTrust(work)
     }
 
     /// You pulled the Desk down: ask for all of it again.

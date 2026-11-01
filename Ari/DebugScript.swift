@@ -36,6 +36,8 @@ import SwiftUI
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensTopics = environment["ARI_TOPICS"] != nil
         static let opensKumosWork = environment["ARI_KUMOS_WORK"] != nil
+        /// `trust` opens Kumo's work at the ladder; `wrong` asks "That was wrong" of its first entry.
+        static let kumosWork = environment["ARI_KUMOS_WORK"]
         static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))
         static let shelf = environment["ARI_SHELF"]
         static let showsCalendar = environment["ARI_CALENDAR"] != nil

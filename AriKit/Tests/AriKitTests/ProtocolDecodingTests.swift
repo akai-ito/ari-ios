@@ -58,6 +58,12 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(DonePage.self)
                 case .undo(let entry):
                     #expect(try body.decode(DoneResult.self).entry.id == entry, "\(place)")
+                case .correct(let entry):
+                    let corrected = try body.decode(DoneResult.self).entry
+                    #expect(corrected.id == entry && corrected.isCorrected, "\(place)")
+                case .resetTrust(let work):
+                    let trust = try body.decode(TrustResult.self).trust
+                    #expect(trust.work == work && trust.step == .learning, "\(place)")
                 case .jobs:
                     _ = try body.decode(JobList.self)
                 case .addEvent:
@@ -201,6 +207,9 @@ struct ProtocolDecodingTests {
             case .motionState:
                 let state = try body.decode(MotionState.self)
                 #expect(try JSONValue(encoding: state) == body, "\(place)")
+            case .correct:
+                let words = try body.decode(CorrectDone.self).text
+                #expect(try JSONValue(encoding: CorrectDone(text: words)) == body, "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }

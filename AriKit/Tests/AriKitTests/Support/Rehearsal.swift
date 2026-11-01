@@ -195,6 +195,11 @@ final class Rehearsal {
             Task { try? await session.answerMoment(moment, answer) }
         case .work:
             Task { _ = try? await session.work() }
+        case .correct(let entry):
+            let text = request.body?["text"]?.string
+            Task { _ = try? await session.correct(entry, text: text) }
+        case .resetTrust(let work):
+            Task { _ = try? await session.resetTrust(work) }
         case .onboarding:
             Task { try? await session.refreshOnboarding() }
         case .answerBelief(let belief):

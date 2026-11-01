@@ -101,9 +101,31 @@ public struct ItoClient: Sendable, CustomStringConvertible {
                 body: try Self.json(answer)))
     }
 
-    /// `GET /v0/work`: Kumo's work today, what it handled and what it cleared.
-    public func work() async throws(RequestError) -> KumoWork {
-        try await call(HTTPRequest(.get, "/v0/work"))
+    /// `GET /v0/work`: Kumo's work today, or on another local day, what it handled and what it
+    /// cleared, with the trust ladder.
+    public func work(day: String? = nil) async throws(RequestError) -> KumoWork {
+        try await call(
+            HTTPRequest(.get, day.map { Self.path("/v0/work", ["day": $0]) } ?? "/v0/work"))
+    }
+
+    /// `POST /v0/done/{entry}/wrong`: "That was wrong". Kumo undoes it where it can, keeps a
+    /// preference and steps that kind of work back a rung. The answer is the entry, corrected.
+    public func correct(_ entry: DoneID, text: String? = nil) async throws(RequestError)
+        -> DoneEntry
+    {
+        let answer: DoneResult = try await call(
+            HTTPRequest(
+                .post, "/v0/done/\(Self.segment(entry.rawValue))/wrong",
+                body: try Self.json(CorrectDone(text: text))))
+        return answer.entry
+    }
+
+    /// `POST /v0/trust/{work}/reset`: show me everything again. The answer is the kind, back to
+    /// Learning.
+    public func resetTrust(_ work: WorkKind) async throws(RequestError) -> TrustRung {
+        let answer: TrustResult = try await call(
+            HTTPRequest(.post, "/v0/trust/\(Self.segment(work.rawValue))/reset"))
+        return answer.trust
     }
 
     /// `GET /v0/done?before=…&limit=…`: what Kumo did without you, newest first.

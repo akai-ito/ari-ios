@@ -19,6 +19,8 @@ struct DeskScreen: View {
     @State private var openedItem: CalendarItem?
     @State private var openedCard: DeskCard?
     @State private var showsWork = false
+    /// A day of Kumo's calls to glance at, from a review card's first option.
+    @State private var glancing: ReviewCard?
     /// Words for Kumo's line, from its Reply.
     @State private var replying: Moment?
     /// Your answer to Kumo's line on its way.
@@ -61,7 +63,7 @@ struct DeskScreen: View {
                         DeskSectionLabel("Waiting on you", trailing: "\(cards.count)")
                         WaitingList(
                             cards: cards, context: context(for:), open: { openedCard = $0 },
-                            answer: { card, answer in try await session.answer(card.id, answer) },
+                            answer: { card, given in try await answer(card, given) },
                             changed: changed(cards))
                     }
                 }
@@ -78,6 +80,10 @@ struct DeskScreen: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 24)
+            .sheet(isPresented: isGlancing) {
+                NavigationStack { KumosWorkScreen(session: session, review: glancing) }
+                    .presentationDetents([.large])
+            }
         }
         .scrollIndicators(.hidden)
         .background(.ariBackground)
@@ -86,8 +92,8 @@ struct DeskScreen: View {
         .sheet(item: $openedCard) { card in
             NavigationStack {
                 ScrollView {
-                    DeskCardView(card: card, context: context(for: card)) { answer in
-                        try await session.answer(card.id, answer)
+                    DeskCardView(card: card, context: context(for: card)) { given in
+                        try await answer(card, given)
                         openedCard = nil
                     }
                     .padding(16)
@@ -99,7 +105,7 @@ struct DeskScreen: View {
             .presentationDetents([.large])
         }
         .sheet(isPresented: $showsWork) {
-            NavigationStack { KumosWorkScreen(session: session) }
+            NavigationStack { kumosWork }
                 .presentationDetents([.large])
         }
         .sheet(item: $replying) { moment in
@@ -133,6 +139,27 @@ struct DeskScreen: View {
         }
         .animation(.smooth(duration: 0.35), value: followed)
         .animation(.smooth(duration: 0.35), value: session.problems)
+    }
+
+    /// Kumo's work, opened from its face or Done.
+    private var kumosWork: some View {
+        #if DEBUG
+            KumosWorkScreen(
+                session: session, opensAtTrust: DebugScript.kumosWork == "trust",
+                asksWrongAtFirst: DebugScript.kumosWork == "wrong")
+        #else
+            KumosWorkScreen(session: session)
+        #endif
+    }
+
+    private var isGlancing: Binding<Bool> {
+        Binding(get: { glancing != nil }, set: { if !$0 { glancing = nil } })
+    }
+
+    /// Answers a card; a review card's first option goes on to open the day's calls to glance at.
+    private func answer(_ card: DeskCard, _ answer: CardAnswer) async throws {
+        try await session.answer(card.id, answer)
+        if card.glances(answer) { glancing = card.review }
     }
 
     /// Kumo's line from the box, or all quiet in the app's own words.
@@ -409,7 +436,7 @@ struct AllDoneView: View {
         DoneView(
             entries: entries, hasMore: hasMore,
             undo: { _ = try await session.undo($0.id) },
-            correct: { entry, words in _ = session.send(words, done: entry.id) },
+            correct: { entry, words in try await session.correct(entry.id, text: words) },
             loadMore: load)
     }
 

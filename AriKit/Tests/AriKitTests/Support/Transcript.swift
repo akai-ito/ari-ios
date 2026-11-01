@@ -274,6 +274,8 @@ enum Route: Equatable {
     case done
     case jobs
     case undo(DoneID)
+    case correct(DoneID)
+    case resetTrust(WorkKind)
     case desk
     case answerCard(CardID)
     case readMoment(MomentID)
@@ -342,6 +344,10 @@ enum Route: Equatable {
         case ("GET", 2) where parts == ["v0", "jobs"]: self = .jobs
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "done" && parts[3] == "undo":
             self = .undo(DoneID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "done" && parts[3] == "wrong":
+            self = .correct(DoneID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "trust" && parts[3] == "reset":
+            self = .resetTrust(WorkKind(rawValue: parts[2]))
         case ("GET", 2) where parts == ["v0", "desk"]: self = .desk
         case ("POST", 5)
         where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "cards" && parts[4] == "answer":
