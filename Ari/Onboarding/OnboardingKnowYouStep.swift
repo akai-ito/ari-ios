@@ -24,6 +24,8 @@ private struct OnboardingQuestionsStep: View {
     @State private var poses = PoseHistory(.thinking)
     @State private var words = ""
     @State private var sending = DeskSending()
+    /// Your answer on its way, shown under the question until Kumo's next one arrives.
+    @State private var answered: String?
 
     private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -41,7 +43,12 @@ private struct OnboardingQuestionsStep: View {
                     case .asking(let question):
                         VStack(alignment: .leading, spacing: 22) {
                             kumoSays(question.text)
-                            answerArea
+                            if let answered {
+                                DeskAnswerLine(text: answered)
+                            } else {
+                                if !question.choices.isEmpty { choices(question.choices) }
+                                answerArea
+                            }
                         }
                     case .finished:
                         kumoSays(
@@ -63,7 +70,11 @@ private struct OnboardingQuestionsStep: View {
             }
         }
         .onChange(of: pose, initial: true) { _, pose in poses.set(pose) }
-        .onChange(of: model.asking) { _, _ in sending.clearProblem() }
+        .onChange(of: model.asking) { _, _ in
+            sending.clearProblem()
+            answered = nil
+        }
+        .animation(.smooth(duration: 0.3), value: answered)
     }
 
     /// Listening while it asks, thinking while your answer goes and the next comes, pleased when
@@ -85,6 +96,16 @@ private struct OnboardingQuestionsStep: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The short answers Kumo offered: a tap answers with one, as typing it would.
+    private func choices(_ options: [String]) -> some View {
+        WrappingStack(spacing: 8) {
+            ForEach(options, id: \.self) { option in
+                DeskPill(title: option, busy: sending.key == option) { answer(option, key: option) }
+            }
+        }
+        .disabled(sending.isSending)
     }
 
     private var answerArea: some View {
@@ -143,11 +164,20 @@ private struct OnboardingQuestionsStep: View {
     private func send() {
         let text = trimmed
         guard !text.isEmpty else { return }
+        answer(text, key: "answer")
+    }
+
+    /// Sends an answer, typed or tapped. It shows as yours under the question at once, while Kumo
+    /// thinks of the next; if it didn't go, the choices and the field come back.
+    private func answer(_ text: String, key: String) {
+        answered = text
         Task {
             if await sending.send(
-                "answer", failure: "Couldn't send that", { try await model.answer(text) })
+                key, failure: "Couldn't send that", { try await model.answer(text) })
             {
                 words = ""
+            } else {
+                answered = nil
             }
         }
     }

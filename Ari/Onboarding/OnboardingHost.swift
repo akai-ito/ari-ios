@@ -60,9 +60,12 @@ struct OnboardingHost: View {
         updateAsking()
     }
 
-    /// Kumo's latest message while you're getting to know each other, as the question it asks.
+    /// Kumo's latest message while you're getting to know each other, as the question it asks: a
+    /// reply once it has ended, or a post, which arrives whole. Kumo's first question is a post.
     private var latestQuestion: Conversation.Entry? {
-        session.conversation.entries.last { $0.role == .agent && $0.isShown && $0.outcome != nil }
+        session.conversation.entries.last {
+            $0.role == .agent && $0.isShown && ($0.kind == .post || $0.outcome != nil)
+        }
     }
 
     private func updateAsking() {
@@ -72,7 +75,7 @@ struct OnboardingHost: View {
         } else if session.conversation.turn != nil {
             model.asking = .waiting
         } else if let entry = latestQuestion {
-            model.asking = .asking(KumoQuestion(id: entry.id.rawValue, text: entry.text))
+            model.asking = .asking(Self.question(entry))
         }
     }
 
@@ -118,10 +121,24 @@ struct OnboardingHost: View {
             else { continue }
             if let reply = entries[(index + 1)...].last(where: { $0.role == .agent && $0.isShown })
             {
-                return KumoQuestion(id: reply.id.rawValue, text: reply.text)
+                return Self.question(reply)
             }
         }
         return nil
+    }
+
+    /// Kumo's message as a question: its words without the blocks it drew, and the short answers it
+    /// offered as choices to tap.
+    private static func question(_ entry: Conversation.Entry) -> KumoQuestion {
+        let document = ReplyDocument(markdown: entry.text)
+        let choices = document.shapes.sorted { $0.key < $1.key }.lazy.compactMap {
+            shape -> [String]? in
+            if case .choices(let choices)? = shape.value { return choices.options }
+            return nil
+        }
+        return KumoQuestion(
+            id: entry.id.rawValue, text: document.withoutShapes.plainText,
+            choices: choices.first ?? [])
     }
 
     private func refreshSources() async {

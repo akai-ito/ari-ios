@@ -110,6 +110,27 @@ struct DeskWorkingLine: View {
     }
 }
 
+/// The answer you gave, while the box acts on it: in your words, beside a small arrow, so a tap
+/// visibly took.
+struct DeskAnswerLine: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "arrow.turn.down.right")
+                .foregroundStyle(.ariBone)
+                .accessibilityHidden(true)
+            Text(text)
+                .foregroundStyle(.ariText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.subheadline)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("You answered: \(text)")
+        .transition(.opacity)
+    }
+}
+
 /// Sends an answer through a closure the screen gives: what's on its way meanwhile, so its button
 /// can spin and the others wait, and a one-line problem if it didn't go through.
 @Observable

@@ -47,6 +47,10 @@ struct TimesCardView: View {
                 footer(times)
             }
             .animation(.smooth(duration: 0.3), value: sending.problem)
+            // While Kumo drafts, the times you picked stay ticked, from any device.
+            .onChange(of: card.answer?.slots, initial: true) { _, slots in
+                if let slots, card.isWorking { ticked = Set(slots) }
+            }
         } else {
             UnknownCardView(card: card, presentation: presentation)
         }
