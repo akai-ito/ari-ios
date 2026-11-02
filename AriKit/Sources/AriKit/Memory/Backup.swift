@@ -11,6 +11,8 @@ public final class Backup {
     public private(set) var status: MemoryBackup?
     /// Starting or disconnecting right now.
     public private(set) var busy = false
+    /// Why the last refresh couldn't reach the server; `nil` once one has.
+    public private(set) var refreshProblem: RequestError?
 
     @ObservationIgnored private let client: ItoClient
     @ObservationIgnored private let clock: any Clock<Duration>
@@ -20,9 +22,14 @@ public final class Backup {
         self.clock = clock
     }
 
-    /// Asks the server again.
+    /// Asks the server again. If it can't, what was shown stays, and ``refreshProblem`` says why.
     public func refresh() async {
-        if let answer = try? await client.memoryBackup() { status = answer }
+        do throws(RequestError) {
+            status = try await client.memoryBackup()
+            refreshProblem = nil
+        } catch {
+            refreshProblem = error
+        }
     }
 
     /// Starts backing up to GitHub, or starts over: the answer holds the code to enter.

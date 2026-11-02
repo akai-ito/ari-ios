@@ -93,6 +93,22 @@ struct BackupTests {
         #expect(backup.status?.state == .on)
     }
 
+    @Test("a refresh that can't reach the server says why, until one can")
+    func saysWhyItCouldNotRefresh() async throws {
+        let server = StubServer()
+        await server.answer(.get, "/v0/memory/backup", with: Self.on)
+        await server.goOffline()
+        let backup = Backup(client: server.client)
+        await backup.refresh()
+        #expect(backup.status == nil)
+        #expect(backup.refreshProblem?.isTemporary == true)
+
+        await server.goOnline()
+        await backup.refresh()
+        #expect(backup.status?.state == .on)
+        #expect(backup.refreshProblem == nil)
+    }
+
     @Test("a memory problem has its own area")
     func problemArea() throws {
         let problem = try JSONDecoder().decode(

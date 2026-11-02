@@ -169,10 +169,7 @@ struct MemoryBackupPage: View {
         .background(.ariBackground)
         .navigationTitle("Back up to GitHub")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await backup.refresh()
-            if let state = status?.state, state == .off || state == .stopped { await start() }
-        }
+        .task { await open() }
         .task(id: status?.state) { await backup.follow() }
     }
 
@@ -205,7 +202,12 @@ struct MemoryBackupPage: View {
                 }
             }
         default:
-            DeviceCodeCard(code: nil)
+            if problem == nil {
+                DeviceCodeCard(code: nil)
+            } else {
+                Button("Try again") { Task { await open() } }
+                    .buttonStyle(SetupPill(primary: true))
+            }
         }
     }
 
@@ -297,6 +299,19 @@ struct MemoryBackupPage: View {
                 .foregroundStyle(.ariText)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// Asks where the backup stands, then starts it if it's off or stopped. If the server can't be
+    /// reached and nothing is known yet, says so, rather than waiting on a spinner.
+    private func open() async {
+        problem = nil
+        await backup.refresh()
+        guard let state = status?.state else {
+            let why = backup.refreshProblem?.plainWords ?? "no answer."
+            problem = "Couldn't reach your server: \(why)"
+            return
+        }
+        if state == .off || state == .stopped { await start() }
     }
 
     private func start() async {
