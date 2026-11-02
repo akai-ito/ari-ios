@@ -427,7 +427,6 @@ public struct DraftAttachment: Sendable, Equatable, Decodable {
     }
 }
 
-
 /// An invitation, held on Kumo's calendar until you answer; your answer goes back through iCloud.
 public struct InviteCard: Sendable, Equatable, Decodable {
     public let event: CalendarItem
