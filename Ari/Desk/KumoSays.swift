@@ -165,12 +165,14 @@ struct KumoStatusLine: View {
             liveness == .wrong ? "Shows what's wrong" : "Shows \(LeadName.current)'s work")
     }
 
-    /// "just now", "2 min ago", or the time, past an hour.
-    static func ago(_ date: Date, now: Date) -> String {
+    /// "just now", "2 min ago", the time past an hour, or the day before today: "at 14:05" alone
+    /// read as today after a quiet weekend.
+    static func ago(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
         let minutes = Int(now.timeIntervalSince(date) / 60)
         if minutes < 1 { return "just now" }
         if minutes < 60 { return "\(minutes) min ago" }
-        return "at \(date.formatted(DeskTime.time))"
+        if calendar.isDate(date, inSameDayAs: now) { return "at \(date.formatted(DeskTime.time))" }
+        return "on \(date.formatted(DeskTime.weekdayDay))"
     }
 }
 
