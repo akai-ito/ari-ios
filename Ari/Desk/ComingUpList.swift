@@ -94,6 +94,8 @@ struct ComingUpList: View {
         let isOpen = unfolded == item.id
         return VStack(alignment: .leading, spacing: 8) {
             Button {
+                // A failed answer belongs to the guess it was for.
+                sending.clearProblem()
                 withAnimation(.smooth(duration: 0.3)) { unfolded = isOpen ? nil : item.id }
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
