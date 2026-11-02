@@ -3,14 +3,15 @@ import AppIntents
 struct AriShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         // Never a calling word before Ari's name: Siri takes "Call Ari" or "Talk to Ari" to be
-        // a contact, and phones them.
+        // a contact, and phones them. The titles are fixed when the app is built, so they name Ito
+        // or what it does, never the lead, whom you can rename.
         AppShortcut(
             intent: CallAriIntent(),
             phrases: [
                 "Talk mode in \(.applicationName)",
                 "Walk with \(.applicationName)",
             ],
-            shortTitle: "Talk to Kumo", systemImageName: "waveform")
+            shortTitle: "Talk mode", systemImageName: "waveform")
         // Not "Tell Ari": Siri takes that as a text to the contact named Ari.
         AppShortcut(
             intent: AskAriIntent(),
@@ -18,6 +19,6 @@ struct AriShortcuts: AppShortcutsProvider {
                 "Ask \(.applicationName)",
                 "Note for \(.applicationName)",
             ],
-            shortTitle: "Ask Kumo", systemImageName: "bubble.left")
+            shortTitle: "Ask Ito", systemImageName: "bubble.left")
     }
 }

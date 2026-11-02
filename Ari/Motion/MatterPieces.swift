@@ -93,7 +93,7 @@ struct MatterFact: View {
 /// Kumo's word that it keeps the matter, at the foot of a widget.
 struct MatterFootnote: View {
     var body: some View {
-        Text("Kumo keeps this. To change it, just tell Kumo.")
+        Text("\(LeadName.current) keeps this. To change it, just tell \(LeadName.current).")
             .font(.footnote)
             .foregroundStyle(.ariTertiary)
     }

@@ -1,7 +1,8 @@
 import AriKit
 import SwiftUI
 
-/// Settings › Kumo: what the lead is called.
+/// Settings › Kumo, under the lead's own name: what it's called, when your morning starts, and the
+/// Focus Ito last told it, in one section.
 struct KumoSettings: View {
     let model: AppModel
     let client: ItoClient?
@@ -9,72 +10,73 @@ struct KumoSettings: View {
     @State private var renaming = false
     /// The name just saved, until the server's info catches up.
     @State private var saved: String?
+    /// Why the morning didn't save, in place of what it's for.
+    @State private var morningProblem: String?
 
-    private var name: String { saved ?? model.server?.leadName ?? "Kumo" }
+    private var name: String { saved ?? model.server?.leadName ?? LeadName.current }
 
     var body: some View {
         Section {
             Button {
                 renaming = true
             } label: {
-                LabeledContent("Kumo's name", value: name)
+                LabeledContent("Name", value: name)
                     .foregroundStyle(.ariText)
             }
             .disabled(client == nil)
             .sheet(isPresented: $renaming) {
                 RenameSheet(
-                    title: "Kumo's name", original: name,
-                    footer: "What Kumo answers to, from its next message."
+                    title: "\(name)'s name", original: name,
+                    footer: "What \(name) answers to, from its next message."
                 ) { (newName: String) throws(RequestError) in
                     guard let client else { throw .network(.userAuthenticationRequired) }
                     saved = try await client.renameLead(to: newName).name
                     model.refreshServer()
                 }
             }
+            MorningPicker(model: model, client: client, problem: $morningProblem)
+            FocusRow(model: model)
         } header: {
-            Text("Kumo")
+            Text(name)
+        } footer: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(morningProblem ?? MorningPicker.footer(name))
+                Text(FocusRow.footer(name))
+            }
         }
         .listRowBackground(Color.ariSurface)
     }
 }
 
-/// Settings › Morning: when your morning starts, the earliest Kumo's first line of the day may come.
-struct MorningSettings: View {
+/// When your morning starts, the earliest Kumo's first line of the day may come.
+private struct MorningPicker: View {
     let model: AppModel
     let client: ItoClient?
+    @Binding var problem: String?
 
     @State private var time: Date
     /// What the box has, so a choice is sent only when it differs.
     @State private var saved: MorningTime
-    @State private var problem: String?
 
-    init(model: AppModel, client: ItoClient?) {
+    init(model: AppModel, client: ItoClient?, problem: Binding<String?>) {
         self.model = model
         self.client = client
+        _problem = problem
         let morning = model.server?.morning ?? .standard
         _saved = State(initialValue: morning)
         _time = State(initialValue: Self.date(morning))
     }
 
     var body: some View {
-        Section {
-            DatePicker("Not before", selection: $time, displayedComponents: .hourAndMinute)
-                .disabled(client == nil)
-                // A pause first, so turning the wheel sends only where it stops.
-                .task(id: Self.morning(time)) { await save(Self.morning(time)) }
-        } header: {
-            Text("Morning")
-        } footer: {
-            if let problem {
-                Text(problem)
-            } else {
-                Text(
-                    "\(LeadName.current)'s first line of the day comes at the first calm moment "
-                        + "after this time, however late: when you open Ito, or the first gap in "
-                        + "your calendar.")
-            }
-        }
-        .listRowBackground(Color.ariSurface)
+        DatePicker("Morning starts", selection: $time, displayedComponents: .hourAndMinute)
+            .disabled(client == nil)
+            // A pause first, so turning the wheel sends only where it stops.
+            .task(id: Self.morning(time)) { await save(Self.morning(time)) }
+    }
+
+    static func footer(_ lead: String) -> String {
+        "\(lead)'s first line of the day comes at the first calm moment after your morning starts, "
+            + "however late: when you open Ito, or the first gap in your calendar."
     }
 
     private func save(_ chosen: MorningTime) async {

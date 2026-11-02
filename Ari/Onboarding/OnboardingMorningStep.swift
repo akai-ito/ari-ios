@@ -1,3 +1,4 @@
+import AriKit
 import SwiftUI
 
 /// Step 4: the morning's "not before" time, and notifications, with an honest line about how loud
@@ -18,7 +19,7 @@ struct OnboardingMorningStep: View {
                         .foregroundStyle(.ariText)
                         .deskCard(padding: 14, cornerRadius: 16)
                     Text(
-                        "Kumo's first line of the day comes at the first calm moment after this, however late: when you open Ito, or the first gap in your calendar."
+                        "\(LeadName.current)'s first line of the day comes at the first calm moment after this, however late: when you open Ito, or the first gap in your calendar."
                     )
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)

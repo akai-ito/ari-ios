@@ -1,3 +1,4 @@
+import AriKit
 import SwiftUI
 
 /// Step 1: the character wakes and looks at you, says what it's for in one line, and makes three
@@ -23,7 +24,7 @@ struct OnboardingMeetStep: View {
                 PresenceView(history: poses, size: 84)
                     .padding(.vertical, 28)
                 VStack(spacing: 14) {
-                    Text("Hello, I'm Kumo.")
+                    Text("Hello, I'm \(LeadName.current).")
                         .font(.onboardingGreeting)
                         .foregroundStyle(.ariText)
                         .accessibilityAddTraits(.isHeader)

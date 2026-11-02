@@ -1,3 +1,4 @@
+import AriKit
 import SwiftUI
 
 /// Step 3, while Kumo reads. Someone new gets Kumo's questions, one at a time; someone who comes with
@@ -207,7 +208,8 @@ private struct OnboardingBeliefsStep: View {
             VStack(alignment: .leading, spacing: 24) {
                 OnboardingHeader(
                     poses: poses, title: "Here's what I know. Still true?",
-                    caption: "Say what's changed, and Kumo will set things up around it.")
+                    caption:
+                        "Say what's changed, and \(LeadName.current) will set things up around it.")
                 VStack(spacing: 12) {
                     ForEach(model.beliefs) { belief in
                         OnboardingBeliefRow(model: model, belief: belief)
