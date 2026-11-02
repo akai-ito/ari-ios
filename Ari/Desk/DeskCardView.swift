@@ -157,7 +157,7 @@ struct DeskCardRow: View {
     static func detail(_ card: DeskCard) -> String? {
         switch card.kind {
         case .draft:
-            guard let body = card.draft?.body else { return nil }
+            guard let body = card.draft?.plainBody else { return nil }
             let first = body.split(whereSeparator: \.isNewline).first {
                 !$0.allSatisfy(\.isWhitespace)
             }

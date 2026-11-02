@@ -23,17 +23,8 @@ struct DraftCardView: View {
                     Text(card.title).font(.subheadline.weight(.semibold)).foregroundStyle(.ariText)
                 }
                 fields(draft)
-                Text(draft.body)
-                    .font(.subheadline)
-                    .foregroundStyle(.ariText)
-                    .lineSpacing(2)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.ariBackground, in: .rect(cornerRadius: 12, style: .continuous))
+                mail(draft)
                     .opacity(card.isWorking ? 0.5 : 1)
-                    .accessibilityLabel("The mail: \(draft.body)")
                 if card.isWorking {
                     if let said = card.answerWords { DeskAnswerLine(text: said) }
                     DeskWorkingLine(text: "Redrafting…")
@@ -47,6 +38,42 @@ struct DraftCardView: View {
         } else {
             UnknownCardView(card: card, presentation: presentation)
         }
+    }
+
+    /// The mail as it reads in Drafts: its words formatted, your signature quietly under them, then
+    /// the pictures and files it carries.
+    private func mail(_ draft: DraftCard) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(draft.formattedBody)
+                .font(.subheadline)
+                .foregroundStyle(.ariText)
+                .lineSpacing(2)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            if let signature = draft.signature {
+                Text(signature)
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let attachments = draft.attachments, !attachments.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
+                        Label(
+                            attachment.name,
+                            systemImage: attachment.kind == .image ? "photo" : "doc")
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.ariSecondary)
+                .lineLimit(1)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ariBackground, in: .rect(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("The mail: \(draft.plainBody)")
     }
 
     private func fields(_ draft: DraftCard) -> some View {
@@ -158,3 +185,16 @@ struct DraftCardView: View {
         .preferredColorScheme(.dark)
     }
 #endif
+
+extension DraftCard {
+    /// The words as they read in Mail: bold, italics and links drawn, line breaks kept. Words that
+    /// aren't valid Markdown show as they are.
+    var formattedBody: AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: body, options: options)) ?? AttributedString(body)
+    }
+
+    /// The words without their formatting, for previews and VoiceOver.
+    var plainBody: String { String(formattedBody.characters) }
+}

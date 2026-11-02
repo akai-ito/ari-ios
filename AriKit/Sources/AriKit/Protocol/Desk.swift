@@ -379,8 +379,12 @@ public struct DraftCard: Sendable, Equatable, Decodable {
     public let to: [String]
     public let cc: [String]?
     public let subject: String
-    /// Plain text, as it will be sent.
+    /// The mail's words in light Markdown, formatted as it is in Drafts, without its pictures.
     public let body: String
+    /// Your own signature as plain text, added at the end; absent when there's none.
+    public let signature: String?
+    /// The pictures shown in the mail and the files attached, in order.
+    public let attachments: [DraftAttachment]?
     /// The draft's own Message-ID, without angle brackets, for opening it in Mail.
     public let messageID: String
     /// The Message-ID of the mail it answers.
@@ -388,7 +392,8 @@ public struct DraftCard: Sendable, Equatable, Decodable {
 
     public init(
         account: String, from: String, to: [String], cc: [String]? = nil, subject: String,
-        body: String, messageID: String, inReplyTo: String? = nil
+        body: String, signature: String? = nil, attachments: [DraftAttachment]? = nil,
+        messageID: String, inReplyTo: String? = nil
     ) {
         self.account = account
         self.from = from
@@ -396,16 +401,32 @@ public struct DraftCard: Sendable, Equatable, Decodable {
         self.cc = cc
         self.subject = subject
         self.body = body
+        self.signature = signature
+        self.attachments = attachments
         self.messageID = messageID
         self.inReplyTo = inReplyTo
     }
 
     enum CodingKeys: String, CodingKey {
-        case account, from, to, cc, subject, body
+        case account, from, to, cc, subject, body, signature, attachments
         case messageID = "message_id"
         case inReplyTo = "in_reply_to"
     }
 }
+
+/// A picture or file in a draft: its name, and whether it shows in the words or rides along.
+public struct DraftAttachment: Sendable, Equatable, Decodable {
+    public let name: String
+    public let kind: AttachmentKind
+    public let inline: Bool
+
+    public init(name: String, kind: AttachmentKind, inline: Bool) {
+        self.name = name
+        self.kind = kind
+        self.inline = inline
+    }
+}
+
 
 /// An invitation, held on Kumo's calendar until you answer; your answer goes back through iCloud.
 public struct InviteCard: Sendable, Equatable, Decodable {
