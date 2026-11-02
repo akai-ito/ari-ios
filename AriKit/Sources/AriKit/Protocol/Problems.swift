@@ -31,10 +31,12 @@ public struct ProblemArea: OpenValue {
     public static let notifications = ProblemArea(rawValue: "notifications")
     public static let mail = ProblemArea(rawValue: "mail")
     public static let calendar = ProblemArea(rawValue: "calendar")
+    /// Contacts can't be read or kept current.
+    public static let contacts = ProblemArea(rawValue: "contacts")
     public static let capabilities = ProblemArea(rawValue: "capabilities")
     /// Memory isn't reaching its backup.
     public static let memory = ProblemArea(rawValue: "memory")
-    public static let known = [notifications, mail, calendar, capabilities, memory]
+    public static let known = [notifications, mail, calendar, contacts, capabilities, memory]
 }
 
 /// What's wrong on the server changed: all of it, empty once nothing is.
