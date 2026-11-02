@@ -88,7 +88,7 @@ struct TimesCardView: View {
 
     private func footer(_ times: TimesCard) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Text("Free in your calendar; your work one is invisible to Kumo.")
+            Text("Free in your calendar; your work one is invisible to \(LeadName.current).")
                 .font(.caption)
                 .foregroundStyle(.ariTertiary)
                 .fixedSize(horizontal: false, vertical: true)

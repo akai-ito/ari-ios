@@ -35,7 +35,8 @@ struct ThatWasWrong: View {
             .accessibilityElement(children: .combine)
             let usual = Self.usualWords(for: entry)
             if !usual.isEmpty {
-                HStack(spacing: 8) {
+                // On one line when they fit; large text wraps them rather than cutting them off.
+                WrappingStack(spacing: 8) {
                     ForEach(usual, id: \.self) { word in
                         DeskPill(
                             title: word, busy: sending.key == word, label: "Tell \(lead): \(word)"

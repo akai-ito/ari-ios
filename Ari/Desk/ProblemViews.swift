@@ -74,6 +74,7 @@ enum ProblemLook {
         case .notifications: "bell.slash"
         case .mail: "envelope.badge"
         case .calendar: "calendar.badge.exclamationmark"
+        case .contacts: "person.crop.circle.badge.exclamationmark"
         case .capabilities: "puzzlepiece.extension"
         case .memory: "externaldrive.badge.exclamationmark"
         default: "exclamationmark.circle"

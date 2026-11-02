@@ -11,6 +11,7 @@ struct DraftCardView: View {
     let answer: (CardAnswer) async throws -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sending = DeskSending()
     @State private var changing = false
     @State private var change = ""
@@ -115,28 +116,38 @@ struct DraftCardView: View {
             )
             .disabled(trimmed.isEmpty || sending.isSending || card.isWorking)
         }
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
+    /// Side by side on the right, or one above the other when large text leaves no room.
     private func buttons(_ draft: DraftCard) -> some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 0)
-            DeskPill(
-                title: changing ? "Cancel" : "Change…",
-                label: changing ? "Cancel the change" : "Ask Kumo to change the draft"
-            ) {
-                changing.toggle()
-                fieldFocused = changing
-                if !changing { change = "" }
-                sending.clearProblem()
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                pills(draft)
             }
-            if let url = Self.mailURL(messageID: draft.messageID) {
-                DeskPill(title: "Open in Mail", acts: true, label: "Open the draft in Mail") {
-                    openURL(url)
-                }
-            }
+            VStack(alignment: .trailing, spacing: 8) { pills(draft) }
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .disabled(sending.isSending || card.isWorking)
+    }
+
+    @ViewBuilder
+    private func pills(_ draft: DraftCard) -> some View {
+        DeskPill(
+            title: changing ? "Cancel" : "Change…",
+            label: changing ? "Cancel the change" : "Ask \(LeadName.current) to change the draft"
+        ) {
+            changing.toggle()
+            fieldFocused = changing
+            if !changing { change = "" }
+            sending.clearProblem()
+        }
+        if let url = Self.mailURL(messageID: draft.messageID) {
+            DeskPill(title: "Open in Mail", acts: true, label: "Open the draft in Mail") {
+                openURL(url)
+            }
+        }
     }
 
     private var trimmed: String { change.trimmingCharacters(in: .whitespacesAndNewlines) }

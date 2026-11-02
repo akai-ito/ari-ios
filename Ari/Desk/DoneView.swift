@@ -31,7 +31,7 @@ struct DoneView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 if entries.isEmpty && !hasMore {
-                    Text("Nothing yet. What Kumo does here shows up in Done.")
+                    Text("Nothing yet. What \(LeadName.current) does here shows up in Done.")
                         .font(.subheadline)
                         .foregroundStyle(.ariTertiary)
                         .padding(.top, 8)
@@ -42,7 +42,7 @@ struct DoneView: View {
                     dayView(day).padding(.top, index == 0 ? 0 : 10)
                 }
                 if hasMore { more }
-                Text("Tap any line to tell Kumo it got it wrong.")
+                Text("Tap any line to tell \(LeadName.current) it got it wrong.")
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)
                     .multilineTextAlignment(.center)
@@ -96,7 +96,7 @@ struct DoneView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
-                .accessibilityHint("Tell Kumo it got this wrong")
+                .accessibilityHint("Tell \(LeadName.current) it got this wrong")
                 if entry.undo { undoButton(entry) }
             }
             if let undoProblem, undoProblem.id == entry.id {
@@ -173,7 +173,7 @@ struct DoneView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityHint("Tell Kumo it got this wrong")
+                        .accessibilityHint("Tell \(LeadName.current) it got this wrong")
                     }
                 }
                 .padding(.leading, 12)
