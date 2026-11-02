@@ -55,12 +55,9 @@ struct InviteCardView: View {
 
     /// What it clashes with: "Clashes with Parkrun at 09:00."
     static func clashLine(_ invite: InviteCard) -> String? {
-        var parts: [String] = []
-        if let clash = invite.clash {
-            let at = clash.allDay ? "" : " at \(clash.start.date.formatted(DeskTime.time))"
-            parts.append("Clashes with \(clash.title)\(at).")
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
+        guard let clash = invite.clash else { return nil }
+        let at = clash.allDay ? "" : " at \(clash.start.date.formatted(DeskTime.time))"
+        return "Clashes with \(clash.title)\(at)."
     }
 }
 
@@ -84,7 +81,7 @@ struct QuestionCardView: View {
                     .lineSpacing(Rhythm.ariLineSpacing)
                     .fixedSize(horizontal: false, vertical: true)
                 CardOptions(card: card, sending: sending, answer: answer)
-                if card.takesText { field }
+                if card.allowsText { field }
             }
         } else {
             UnknownCardView(card: card, presentation: presentation)
@@ -96,7 +93,7 @@ struct QuestionCardView: View {
     private var field: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField(
-                card.buttons.isEmpty ? "Your answer" : "Or say something else", text: $words,
+                card.options.isEmpty ? "Your answer" : "Or say something else", text: $words,
                 axis: .vertical
             )
             .font(.subheadline)
@@ -163,7 +160,7 @@ struct CardOptions: View {
     let answer: (CardAnswer) async throws -> Void
 
     var body: some View {
-        let buttons = card.buttons
+        let buttons = card.options
         if !buttons.isEmpty || card.isWorking || sending.problem != nil {
             VStack(alignment: .leading, spacing: 10) {
                 if let said = card.answerWords {
@@ -177,7 +174,7 @@ struct CardOptions: View {
                 if let problem = sending.problem { DeskProblemLine(text: problem) }
                 if !buttons.isEmpty, card.answerWords == nil {
                     WrappingStack(spacing: 8) {
-                        ForEach(buttons) { button in
+                        ForEach(buttons, id: \.label) { button in
                             DeskPill(
                                 title: button.label, acts: button.acts,
                                 busy: sending.key == button.label

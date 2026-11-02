@@ -266,3 +266,62 @@ struct DeskDoneLine: View {
         .accessibilityHint("Shows \(LeadName.current)'s work")
     }
 }
+
+/// Words for Kumo's line, from its Reply: the line, a field, and Send. Kumo acts on them in the
+/// background, as on a card's typed answer.
+struct MomentReply: View {
+    let moment: Moment
+    let send: (String) async throws -> Void
+
+    @State private var words = ""
+    @State private var sending = DeskSending()
+    @FocusState private var focused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(moment.text)
+                    .font(.system(.body, design: .serif))
+                    .foregroundStyle(.ariSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("Your answer", text: $words, axis: .vertical)
+                    .font(.ariBody)
+                    .foregroundStyle(.ariText)
+                    .lineLimit(2...6)
+                    .focused($focused)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
+                if let problem = sending.problem { DeskProblemLine(text: problem) }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(.ariBackground)
+            .navigationTitle(moment.replyLabel ?? "Reply to \(LeadName.current)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.foregroundStyle(.ariText)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") { submit() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.ariText)
+                        .disabled(trimmed.isEmpty || sending.isSending)
+                }
+            }
+            .onAppear { focused = true }
+        }
+    }
+
+    private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func submit() {
+        let text = trimmed
+        guard !text.isEmpty else { return }
+        Task {
+            if await sending.send("text", { try await send(text) }) { dismiss() }
+        }
+    }
+}
