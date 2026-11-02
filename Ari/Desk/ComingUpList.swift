@@ -25,8 +25,9 @@ struct ComingUpList: View {
     @State private var unfolded: CalendarItemID?
     /// The guess showing what it really was, after Not right?.
     @State private var correcting: CalendarItemID?
-    /// The guess you're putting in your own words, from Something else….
-    @State private var describing: CalendarItem?
+    /// The guess you're putting in your own words, from Something else…, right in its row.
+    @State private var describing: CalendarItemID?
+    @State private var words = ""
     @State private var sending = DeskSending()
 
     @Environment(\.calendar) private var calendar
@@ -47,12 +48,6 @@ struct ComingUpList: View {
             .onAppear {
                 if unfolded == nil { unfolded = unfoldedGuess ?? correctingGuess }
                 if correcting == nil { correcting = correctingGuess }
-            }
-            .sheet(item: $describing) { item in
-                GuessWords(item: item) { words in
-                    try await answerGuess(item, GuessAnswer(text: words))
-                }
-                .presentationDetents([.medium])
             }
         }
     }
@@ -97,6 +92,7 @@ struct ComingUpList: View {
                 // A failed answer belongs to the guess it was for.
                 sending.clearProblem()
                 withAnimation(.smooth(duration: 0.3)) { unfolded = isOpen ? nil : item.id }
+                describing = nil
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
                     if !stacked {
@@ -168,16 +164,36 @@ struct ComingUpList: View {
         }
     }
 
-    /// What it really was: the usual kinds of time, other than the guess, or your own words.
+    /// What it really was: the usual kinds of time, other than the guess, or your own words in a
+    /// field that opens under them, with the keyboard. They become the block's title on Kumo's
+    /// calendar.
     private func choices(for item: CalendarItem) -> some View {
-        WrappingStack(spacing: 8) {
-            ForEach(Self.corrections.filter { $0 != item.guess?.activity }, id: \.rawValue) {
-                activity in
-                GuessChoice(title: Self.name(activity)) {
-                    send(GuessAnswer(activity: activity), for: item)
+        let describes = describing == item.id
+        return VStack(alignment: .leading, spacing: 8) {
+            WrappingStack(spacing: 8) {
+                ForEach(Self.corrections.filter { $0 != item.guess?.activity }, id: \.rawValue) {
+                    activity in
+                    GuessChoice(title: Self.name(activity)) {
+                        send(GuessAnswer(activity: activity), for: item)
+                    }
+                }
+                GuessChoice(title: describes ? "Cancel" : "Something else…") {
+                    sending.clearProblem()
+                    withAnimation(.smooth(duration: 0.25)) {
+                        describing = describes ? nil : item.id
+                    }
                 }
             }
-            GuessChoice(title: "Something else…") { describing = item }
+            if describes {
+                InlineField(
+                    prompt: "What was it?", text: $words, button: "Save",
+                    buttonLabel: "Save what it was", opensKeyboard: true, limit: 60
+                ) {
+                    let text = InlineField.trimmed(words)
+                    if !text.isEmpty { send(GuessAnswer(text: text), for: item) }
+                }
+                .transition(.opacity)
+            }
         }
         .transition(.opacity)
     }
@@ -189,6 +205,8 @@ struct ComingUpList: View {
                 item.id.rawValue, failure: failure, { try await answerGuess(item, answer) })
             {
                 correcting = nil
+                describing = nil
+                words = ""
             }
         }
     }
@@ -338,74 +356,6 @@ private struct GuessChoice: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// What a guess really was, in your own words: a field and Save. It becomes the block's title on
-/// Kumo's calendar.
-private struct GuessWords: View {
-    let item: CalendarItem
-    let send: (String) async throws -> Void
-
-    @State private var words = ""
-    @State private var sending = DeskSending()
-    @FocusState private var focused: Bool
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(
-                    "\(LeadName.current) guessed \(item.title), \(item.start.date.formatted(DeskTime.time))."
-                )
-                .font(.subheadline)
-                .foregroundStyle(.ariSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                TextField("What was it?", text: $words)
-                    .font(.ariBody)
-                    .foregroundStyle(.ariText)
-                    .focused($focused)
-                    .submitLabel(.done)
-                    .onSubmit(submit)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
-                if let problem = sending.problem { DeskProblemLine(text: problem) }
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .background(.ariBackground)
-            .navigationTitle("Something else")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.foregroundStyle(.ariText)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: submit)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.ariText)
-                        .disabled(trimmed.isEmpty || sending.isSending)
-                }
-            }
-            .onAppear { focused = true }
-        }
-    }
-
-    private var trimmed: String {
-        String(words.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
-    }
-
-    private func submit() {
-        let text = trimmed
-        guard !text.isEmpty else { return }
-        Task {
-            if await sending.send(
-                "text", failure: "Couldn't tell \(LeadName.current)", { try await send(text) })
-            {
-                dismiss()
-            }
-        }
     }
 }
 

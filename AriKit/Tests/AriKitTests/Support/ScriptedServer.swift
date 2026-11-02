@@ -1,5 +1,6 @@
 import AriKit
 import Foundation
+import Synchronization
 
 /// A transcript's server behind the transport seam. It records every request Ari makes and holds
 /// it until the test answers; it writes events into the open stream; and it can drop off the
@@ -9,6 +10,8 @@ actor ScriptedServer: Transport {
     private var unanswered: [(request: HTTPRequest, reply: CheckedContinuation<Reply, any Error>)] =
         []
     private var stream: AsyncThrowingStream<Data, any Error>.Continuation?
+    /// How far Ari has read into the open stream.
+    private var reading: StreamReading?
     private var online = true
     private var reachable = true
     /// Requests that failed because the server was unreachable, such as while it restarted.
@@ -53,6 +56,10 @@ actor ScriptedServer: Transport {
     /// Whether the event stream is open.
     var isStreaming: Bool { stream != nil }
 
+    /// Whether Ari has read everything written into the open stream and waits for more, or there's
+    /// no stream to read.
+    var hasReadStream: Bool { reading?.isCaughtUp ?? true }
+
     /// Answers the oldest unanswered request, as the transcript's `server` line says.
     func answer(_ response: Transcript.Response) throws {
         guard !unanswered.isEmpty else {
@@ -73,16 +80,21 @@ actor ScriptedServer: Transport {
             return
         }
         let (events, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-        if response.status == 200 {
-            stream?.finish()
-            stream = continuation
-        } else {
+        guard response.status == 200 else {
             continuation.yield(body)
             continuation.finish()
+            reply.resume(
+                returning: .stream(
+                    HTTPStream(status: response.status, headers: response.headers, body: events)))
+            return
         }
+        stream?.finish()
+        stream = continuation
+        let reading = StreamReading(events)
+        self.reading = reading
         reply.resume(
             returning: .stream(
-                HTTPStream(status: response.status, headers: response.headers, body: events)))
+                HTTPStream(status: response.status, headers: response.headers, body: reading.body)))
     }
 
     /// Answers the oldest unanswered request with `status` and a JSON body.
@@ -106,12 +118,15 @@ actor ScriptedServer: Transport {
         }
         let json = String(decoding: try JSONEncoder().encode(logged.json), as: UTF8.self)
         let id = logged.event.id?.rawValue ?? ""
+        reading?.wrote()
         stream.yield(Data("id: \(id)\nevent: \(logged.event.type)\ndata: \(json)\n\n".utf8))
     }
 
     /// Sends the keep-alive comment the server sends at least every 15 seconds.
     func ping() {
-        stream?.yield(Data(": ping\n\n".utf8))
+        guard let stream else { return }
+        reading?.wrote()
+        stream.yield(Data(": ping\n\n".utf8))
     }
 
     /// The network drops (`false`) or returns. A drop breaks the stream and fails every request.
@@ -140,5 +155,43 @@ actor ScriptedServer: Transport {
     private func breakStream(_ code: URLError.Code) {
         stream?.finish(throwing: URLError(code))
         stream = nil
+    }
+}
+
+/// The stream as Ari reads it, counting what Ari has asked for: once Ari asks for the piece after
+/// the last one written, it has read everything before it.
+final class StreamReading: Sendable {
+    private let counts = Mutex((written: 0, asked: 0))
+    private let source: Source
+
+    init(_ stream: AsyncThrowingStream<Data, any Error>) {
+        source = Source(stream.makeAsyncIterator())
+    }
+
+    /// The stream for Ari: each piece it asks for is counted.
+    var body: AsyncThrowingStream<Data, any Error> {
+        AsyncThrowingStream { [self] in
+            counts.withLock { $0.asked += 1 }
+            return try await source.iterator.next()
+        }
+    }
+
+    /// One more piece goes into the stream.
+    func wrote() {
+        counts.withLock { $0.written += 1 }
+    }
+
+    /// Whether Ari has asked for more than has been written.
+    var isCaughtUp: Bool {
+        counts.withLock { $0.asked > $0.written }
+    }
+
+    /// The stream's iterator, which only Ari's one reader moves, one piece at a time.
+    private final class Source: @unchecked Sendable {
+        var iterator: AsyncThrowingStream<Data, any Error>.Iterator
+
+        init(_ iterator: AsyncThrowingStream<Data, any Error>.Iterator) {
+            self.iterator = iterator
+        }
     }
 }

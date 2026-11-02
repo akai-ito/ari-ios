@@ -1,69 +1,63 @@
 import AriKit
 import SwiftUI
 
-/// Something wrong on the server, in one quiet line on the Desk: its title beside a small mark. A
-/// tap opens how to fix it. It stays until it's fixed, when the server clears it.
-struct ProblemLine: View {
-    let problem: ServerProblem
-    let open: () -> Void
+/// What's wrong on the server, opened from "Something's wrong ›" under Kumo's face: each problem,
+/// what it means for you and how to fix it. It follows the server, so a problem fixed meanwhile
+/// leaves the list, and the Desk closes it once nothing's wrong.
+struct ProblemsSheet: View {
+    let problems: [ServerProblem]
+
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Button(action: open) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: ProblemLook.symbol(problem.area))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.ariBone)
-                    .accessibilityHidden(true)
-                Text(problem.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.ariTertiary)
-                    .accessibilityHidden(true)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(Array(problems.enumerated()), id: \.element.id) { index, problem in
+                        if index > 0 { Divider().overlay(Color.ariLine) }
+                        ProblemDetail(problem: problem)
+                    }
+                    Text("Each goes away by itself once it's fixed.")
+                        .font(.footnote)
+                        .foregroundStyle(.ariTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+                .animation(.smooth(duration: 0.3), value: problems)
             }
-            .contentShape(Rectangle())
+            .background(.ariBackground)
+            .navigationTitle("Needs you")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.foregroundStyle(.ariText)
+                }
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(problem.title)
-        .accessibilityHint("Shows how to fix it")
+        .presentationDetents([.medium, .large])
     }
 }
 
-/// A problem in full: what's wrong, what it means for you, and how to fix it.
-struct ProblemView: View {
+/// One problem: what's wrong, what it means for you, and how to fix it. The same on the Desk's
+/// list and at the top of Settings.
+struct ProblemDetail: View {
     let problem: ServerProblem
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Label(problem.title, systemImage: ProblemLook.symbol(problem.area))
-                    .font(.headline)
-                    .foregroundStyle(.ariText)
-                Text(problem.detail)
-                    .font(.ariBody)
-                    .foregroundStyle(.ariText)
-                    .lineSpacing(Rhythm.ariLineSpacing)
-                    .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 6) {
-                    DeskSectionLabel("How to fix it")
-                    Text(problem.fix)
-                        .font(.ariBody)
-                        .foregroundStyle(.ariText)
-                        .lineSpacing(Rhythm.ariLineSpacing)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text("This goes away by itself once it's fixed.")
-                    .font(.footnote)
-                    .foregroundStyle(.ariTertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
+        VStack(alignment: .leading, spacing: 6) {
+            Label(problem.title, systemImage: ProblemLook.symbol(problem.area))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.ariText)
+            Text(problem.detail)
+                .font(.subheadline)
+                .foregroundStyle(.ariSecondary)
+            Text(problem.fix)
+                .font(.subheadline)
+                .foregroundStyle(.ariText)
+                .textSelection(.enabled)
         }
-        .background(.ariBackground)
+        .fixedSize(horizontal: false, vertical: true)
+        .transition(.opacity)
     }
 }
 
@@ -83,18 +77,11 @@ enum ProblemLook {
 }
 
 #if DEBUG
-    #Preview("A problem") {
-        VStack(alignment: .leading, spacing: 14) {
-            ProblemLine(problem: ProblemSamples.push) {}
-            ProblemLine(problem: ProblemSamples.outlook) {}
-        }
-        .padding(18)
-        .background(.ariBackground)
-        .preferredColorScheme(.dark)
-    }
-
-    #Preview("How to fix it") {
-        ProblemView(problem: ProblemSamples.push)
+    #Preview("Needs you") {
+        Color.ariBackground
+            .sheet(isPresented: .constant(true)) {
+                ProblemsSheet(problems: [ProblemSamples.push, ProblemSamples.outlook])
+            }
             .preferredColorScheme(.dark)
     }
 
