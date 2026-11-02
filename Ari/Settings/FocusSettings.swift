@@ -1,7 +1,7 @@
 import AriKit
 import SwiftUI
 
-/// Settings › Your Focus: how to let Ito know your Focus, and what Ari last told the box.
+/// Settings › Your Focus: how to let Ito know your Focus, and what the box last heard.
 struct FocusSettings: View {
     let model: AppModel
 

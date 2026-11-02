@@ -85,8 +85,9 @@ public final class Session {
     @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
     /// Whether Ari is on screen here, as the server should next hear it.
     @ObservationIgnored private var presenceRequest: (device: String, looking: Bool)?
-    /// Your phone's latest Focus, still to reach the box after it couldn't at the time.
-    @ObservationIgnored private var statusRequest: (device: String, status: DeviceStatus)?
+    /// The latest Focus on its way to the box: each waits for the one before, so an older one
+    /// never lands after a newer one.
+    @ObservationIgnored private var statusSending: Task<Bool, Never>?
     /// Attachments still to upload, in the order you attached them.
     @ObservationIgnored private var uploadQueue: [PendingAttachment] = []
 
@@ -175,7 +176,6 @@ public final class Session {
                 Task { await self.runCancels() },
                 Task { await self.runDevice() },
                 Task { await self.runPresence() },
-                Task { await self.runStatus() },
                 Task { await self.runUploads() },
                 Task { await self.runCalls() },
             ]
@@ -312,18 +312,24 @@ public final class Session {
     }
 
     /// Your phone's Focus turned on or off, with Ito part of it. It goes at once, even while Ari is
-    /// in the background; if the box can't be reached, it goes once Ari next runs, unless a newer
-    /// one replaced it.
-    public func setFocus(_ focus: FocusKind?, device: String) async {
-        let status = DeviceStatus(focus: focus)
-        statusRequest = nil
-        do throws(RequestError) {
-            try await client.setStatus(device, status)
-        } catch {
-            guard error.isTemporary, statusRequest == nil else { return }
-            statusRequest = (device, status)
-            wake(.status)
+    /// in the background, after any still on its way, and isn't tried again here: the app tells the
+    /// box your real Focus each time it can reach it, so one that failed can't land after a newer
+    /// one. Returns whether the box has it.
+    @discardableResult
+    public func setFocus(_ focus: FocusKind?, device: String) async -> Bool {
+        let before = statusSending
+        let client = client
+        let sending = Task {
+            _ = await before?.value
+            do throws(RequestError) {
+                try await client.setStatus(device, DeviceStatus(focus: focus))
+                return true
+            } catch {
+                return false
+            }
         }
+        statusSending = sending
+        return await sending.value
     }
 
     /// You started a call: it starts on the server as soon as it can. Returns its id, for its
@@ -820,16 +826,6 @@ public final class Session {
         }
     }
 
-    private func runStatus() async {
-        await runLane(.status) {
-            statusRequest
-        } send: { request throws(RequestError) in
-            try await client.setStatus(request.device, request.status)
-        } done: { request in
-            if statusRequest?.status == request.status { statusRequest = nil }
-        }
-    }
-
     /// Sends a lane's requests one at a time: each goes when there's a network, again after a short
     /// wait if it failed for a passing reason, and leaves once the server has it or refuses it.
     private func runLane<Request>(
@@ -876,7 +872,6 @@ public final class Session {
         static let presence = Wake(rawValue: 1 << 7)
         static let upload = Wake(rawValue: 1 << 8)
         static let call = Wake(rawValue: 1 << 9)
-        static let status = Wake(rawValue: 1 << 10)
     }
 
     /// A call to start, end, or delete the audio of, in the order you asked.

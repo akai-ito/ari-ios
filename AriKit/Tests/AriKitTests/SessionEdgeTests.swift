@@ -336,6 +336,37 @@ struct SessionEdgeTests {
         #expect(upload.path == "/v0/attachments/\(notes.id)?name=C%2B%2B%20notes.pdf")
     }
 
+    @Test("A Focus turned off reaches the box last, even when the on before it was lost")
+    func focusOffLast() async throws {
+        let bench = try await live()
+        defer { bench.close() }
+        let session = bench.session
+        let on = Task { await session.setFocus(.sleep, device: "d1") }
+        await bench.settle()
+        let off = Task { await session.setFocus(nil, device: "d1") }
+        await bench.settle()
+
+        // The on is lost on the way; the off gets through.
+        var made = [try await bench.nextRequest()]
+        try await bench.server.answer(
+            Transcript.Response(line: 0, at: 0, status: 0, headers: [:], body: nil, lost: true))
+        await bench.settle()
+        made.append(try await bench.nextRequest())
+        try await bench.server.answer(204)
+        _ = await (on.value, off.value)
+
+        // Nothing older follows the off.
+        await bench.advance(to: 60_000)
+        while let request = await bench.server.takeRequest() {
+            made.append(request)
+            try await bench.server.answer(204)
+            await bench.settle()
+        }
+        let focus = try made.map { try $0.body.map { try JSONValue(data: $0) }?["focus"]?.string }
+        #expect(made.allSatisfy { $0.path == "/v0/devices/d1/status" })
+        #expect(focus == ["sleep", nil])
+    }
+
     private func uploaded(_ attachment: PendingAttachment) -> String {
         #"{"attachment":{"id":"\#(attachment.id)","kind":"image","name":"\#(attachment.name)","media_type":"image/jpeg","size":1454}}"#
     }

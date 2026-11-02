@@ -27,12 +27,16 @@ final class AppModel {
     var openingPosition: Int?
     /// Whether the conversation is on screen here.
     private(set) var isLooking = false
+    /// What your box last heard of your Focus, for Settings: the Focus, or none, and when.
+    private(set) var focusTold: (focus: FocusKind?, at: Date)?
     /// A pairing link from `ito pair`'s QR code, opened from the Camera or another app, for the
     /// connect screen to use.
     var pairing: PairingLink?
 
     @ObservationIgnored let notifications = NotificationStore.forThisApp()
     @ObservationIgnored private var pushToken: String?
+    /// Focus changes still on their way to the box.
+    @ObservationIgnored private var tellingFocus = 0
 
     @ObservationIgnored private let tokens: any TokenStore
     @ObservationIgnored private let defaults: UserDefaults
@@ -44,6 +48,9 @@ final class AppModel {
     init(tokens: (any TokenStore)? = nil, defaults: UserDefaults = .standard) {
         self.tokens = tokens ?? group.tokens
         self.defaults = defaults
+        if let at = defaults.object(forKey: "focusToldAt") as? Date {
+            focusTold = (defaults.string(forKey: "focusTold").map(FocusKind.init(rawValue:)), at)
+        }
         guard let saved = Saved.load(from: defaults) else { return }
         group.address = saved.address
         address = saved.address
@@ -69,6 +76,10 @@ final class AppModel {
         if let previous = session, previous.address != connection.address {
             forgetDevice(at: previous.address)
         }
+        // This box may not have heard your Focus: it does once the stream is live.
+        focusTold = nil
+        defaults.removeObject(forKey: "focusTold")
+        defaults.removeObject(forKey: "focusToldAt")
         session?.close()
         session = Self.session(for: connection)
         session?.start()
@@ -200,23 +211,34 @@ final class AppModel {
         session?.setLooking(looking, device: notifications.deviceID)
     }
 
-    /// What Ari last told the box about your Focus, for Settings: the Focus, or none, and when.
-    var focusTold: (focus: FocusKind?, at: Date)? {
-        guard let at = defaults.object(forKey: "focusToldAt") as? Date else { return nil }
-        return (defaults.string(forKey: "focusTold").map(FocusKind.init(rawValue:)), at)
-    }
-
     /// A Focus with Ito in it turned on, or off: the box hears it now, even with Ari in the
-    /// background, or once Ari next runs.
+    /// background. If it can't, it hears your real Focus once Ari can reach it again.
     func tellFocus(_ focus: FocusKind?) async {
+        guard let session else { return }
+        tellingFocus += 1
+        defer { tellingFocus -= 1 }
+        guard await session.setFocus(focus, device: notifications.deviceID) else { return }
+        let at = Date.now
+        focusTold = (focus, at)
         defaults.set(focus?.rawValue, forKey: "focusTold")
-        defaults.set(Date.now, forKey: "focusToldAt")
-        await session?.setFocus(focus, device: notifications.deviceID)
+        defaults.set(at, forKey: "focusToldAt")
     }
 
-    /// The event stream is live again.
+    /// Tells the box the Focus your phone is in now, if it isn't the one the box last heard: iOS
+    /// may turn a Focus off while Ari can't reach the box, or without telling Ari at all.
+    private func tellRealFocus() async {
+        guard tellingFocus == 0, let filter = try? await ItoFocusFilter.current else { return }
+        let focus = filter.use.map { FocusKind(rawValue: $0.rawValue) }
+        // A Focus coming on or off while iOS answered says it itself. Never told is none.
+        guard tellingFocus == 0, focus != (focusTold?.focus ?? nil) else { return }
+        await tellFocus(focus)
+    }
+
+    /// The event stream is live again, so the box can be reached: it hears what it may have
+    /// missed.
     func reconnected() {
         if isLooking { setLooking(true) }
+        Task { await tellRealFocus() }
     }
 
     /// An answer given from a notification: it goes at once, even with Ari in the background.

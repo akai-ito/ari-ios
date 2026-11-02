@@ -142,7 +142,8 @@ without a server, such as `sunday`, `quiet`, `wrong` or `work`.
 
 Ito is also a Focus filter: in the Settings app, open Focus, choose one, then Add Filter › Ito and
 say what that Focus is for. iOS then tells Ari whenever it turns on or off, and Ari tells your box,
-even from the background; Settings › Your Focus shows what it last said.
+even from the background. Each time Ari reaches the box again it checks your real Focus and sends it
+if the box missed a change; Settings › Your Focus shows what the box last heard.
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy
