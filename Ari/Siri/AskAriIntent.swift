@@ -2,16 +2,18 @@ import AppIntents
 import AriKit
 import UIKit
 
-/// "Hey Siri, ask Ari": Siri asks what to send, and it goes to Ari like a message from the chat.
-/// A reply within ten seconds comes back through Siri; a slower one arrives as a notification,
-/// as any reply does while you're away. Shortcuts can send it too.
+/// "Hey Siri, ask Ari": Siri asks what to send, by the lead's name, and it goes to Ari like a
+/// message from the chat. A reply within ten seconds comes back through Siri; a slower one arrives
+/// as a notification, as any reply does while you're away. Shortcuts can send it too. What Siri
+/// reads from the app's metadata can't follow a rename, so it names Ito rather than the lead.
 struct AskAriIntent: AppIntent {
     static let title: LocalizedStringResource = "Ask Ito"
     static let description = IntentDescription(
-        "Send Kumo a message. A quick reply is read back; a longer one comes as a notification.")
+        "Send Ito a message. A quick reply is read back; a longer one comes as a notification.")
 
-    @Parameter(title: "Message", requestValueDialog: "What should I tell Kumo?")
-    var message: String
+    /// Asked for in `perform`, so the question can use the lead's name.
+    @Parameter(title: "Message")
+    var message: String?
 
     @Dependency private var model: AppModel
 
@@ -21,6 +23,7 @@ struct AskAriIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let session = model.session else { throw AskAriError.notConnected }
+        let message = try await words()
         // In the background the stream is closed: open it for the reply, and say this device
         // is looking, so the server doesn't also push what Siri reads out.
         let wasPaused = session.link == .paused
@@ -44,6 +47,14 @@ struct AskAriIntent: AppIntent {
         }
         return .result(
             dialog: "\(LeadName.current)'s on it. The reply will come as a notification.")
+    }
+
+    /// The message, asked for by the lead's name when Shortcuts or Siri didn't bring it.
+    private func words() async throws -> String {
+        if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return message
+        }
+        return try await $message.requestValue("What should I tell \(LeadName.current)?")
     }
 
     /// What Ari said back, as Siri should say it, once the turn has ended: the reply up to its

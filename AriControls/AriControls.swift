@@ -15,10 +15,10 @@ struct TalkControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "Talk") {
             ControlWidgetButton(action: CallAriIntent()) {
-                Label("Talk to Kumo", systemImage: "waveform")
+                Label("Talk mode", systemImage: "waveform")
             }
         }
-        .displayName("Talk to Kumo")
-        .description("Start a call with Kumo, to talk hands-free.")
+        .displayName("Talk mode")
+        .description("Start a call in Ito, to talk hands-free.")
     }
 }

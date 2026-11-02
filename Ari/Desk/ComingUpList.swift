@@ -271,10 +271,10 @@ struct ComingUpList: View {
         .accessibilityHint("Opens the event")
     }
 
-    /// The note after the title: "Kumo" for its own blocks, when to leave, how many days, or where.
+    /// The note after the title: the lead's name, such as "Kumo", for its own blocks, when to leave, how many days, or where.
     private func note(_ item: CalendarItem) -> Text? {
         var parts: [Text] = []
-        if Self.isKumos(item) { parts.append(Text("Kumo")) }
+        if Self.isKumos(item) { parts.append(Text(LeadName.current)) }
         if let leave = item.leaveAt {
             parts.append(Text("leave \(leave.date, format: DeskTime.time)"))
         }

@@ -38,7 +38,7 @@ struct InviteCardView: View {
     /// Where it's held, which matters more than which space it's in.
     private func corner(_ invite: InviteCard) -> String? {
         invite.event.calendar.kumo || invite.event.status == .hold
-            ? "held in Kumo's calendar" : context
+            ? "held in \(LeadName.current)'s calendar" : context
     }
 
     /// "Tue 17 Nov · 16:00–17:00 · Zoom", or "Sat 14 Nov · all day".

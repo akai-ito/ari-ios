@@ -1,3 +1,4 @@
+import AriKit
 import SwiftUI
 
 /// Step 2: where Kumo can read from, each opening its setup sheet, and whether it's connected. Once
@@ -14,7 +15,7 @@ struct OnboardingConnectStep: View {
                 OnboardingHeader(
                     poses: poses, title: "First, your mail and calendar.",
                     caption:
-                        "Kumo reads the last three months to learn what's in motion, then keeps up as new mail comes in. It never sends anything."
+                        "\(LeadName.current) reads the last three months to learn what's in motion, then keeps up as new mail comes in. It never sends anything."
                 )
                 VStack(spacing: 0) {
                     ForEach(Array(model.sources.enumerated()), id: \.element.id) { index, source in
@@ -28,7 +29,7 @@ struct OnboardingConnectStep: View {
                 .deskCard(padding: 0)
                 if model.anyConnected {
                     OnboardingReadingLine(
-                        text: "Kumo has started reading the last three months.",
+                        text: "\(LeadName.current) has started reading the last three months.",
                         active: !(model.progress?.isDone ?? false)
                     )
                     .transition(.opacity)

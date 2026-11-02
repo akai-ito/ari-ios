@@ -55,7 +55,7 @@ struct OccasionView: View {
                     Image(systemName: "bubble.left")
                         .foregroundStyle(.ariBone)
                         .accessibilityHidden(true)
-                    Text("Kumo will check in after.")
+                    Text("\(LeadName.current) will check in after.")
                         .foregroundStyle(.ariSecondary)
                 }
                 .font(.subheadline)

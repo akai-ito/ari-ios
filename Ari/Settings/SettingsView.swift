@@ -19,7 +19,7 @@ struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingSwitch = false
-    /// For Kumo's settings, made once with Settings.
+    /// For the lead's settings, made once with Settings.
     @State private var client: ItoClient?
     /// Made with Settings, so a place already on the stack (from `ARI_SETTINGS`) has it at once.
     @State private var capabilities: Capabilities?
@@ -37,8 +37,6 @@ struct SettingsView: View {
                     ServerProblems(problems: session.problems)
                     server
                     KumoSettings(model: model, client: client)
-                    MorningSettings(model: model, client: client)
-                    FocusSettings(model: model)
                     capabilitiesSection
                     GettingStartedAgain(session: session) { dismiss() }
                     MemoryBackupSection(
@@ -212,7 +210,7 @@ struct SettingsView: View {
                             model.turnOffNotifications()
                         }
                     }))
-            Button("Focus and sounds…", action: openSystemSettings)
+            Button("Notification sounds in iOS Settings…", action: openSystemSettings)
         } header: {
             Text("Notifications")
         } footer: {
