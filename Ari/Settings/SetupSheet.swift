@@ -206,7 +206,7 @@ struct SetupSheet: View {
     private func device(_ field: SetupField, _ connect: SetupField.Connect) -> some View {
         VStack(spacing: 22) {
             if let connection {
-                code(connection.code)
+                DeviceCodeCard(code: connection.code)
                 Button(connect.title) { openURL(connection.url) }
                     .buttonStyle(SetupPill(primary: true))
                 HStack(spacing: 10) {
@@ -223,7 +223,7 @@ struct SetupSheet: View {
                         .buttonStyle(SetupPill())
                 }
             } else {
-                code(nil)
+                DeviceCodeCard(code: nil)
                 if problem != nil, !starting {
                     Button("Try again") { Task { await startConnecting() } }
                         .buttonStyle(SetupPill(primary: true))
@@ -241,10 +241,6 @@ struct SetupSheet: View {
         .task(id: connection?.code) {
             if let connection { await waitForConnection(field.name, until: connection) }
         }
-    }
-
-    private func code(_ code: String?) -> some View {
-        DeviceCodeCard(code: code)
     }
 
     /// What went wrong, or what *Test connection* found.

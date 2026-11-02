@@ -261,8 +261,28 @@ struct DoneView: View {
     }
 }
 
-/// Telling Kumo it got one line of Done wrong, in your words. It goes to the space as a message
-/// quoting the line, and Kumo keeps it as a preference.
+/// Everything Kumo has done, every day, from Kumo's work: a reply to a line corrects it.
+struct AllDoneView: View {
+    let session: Session
+
+    @State private var entries: [DoneEntry] = []
+    @State private var hasMore = true
+
+    var body: some View {
+        DoneView(
+            entries: entries, hasMore: hasMore,
+            undo: { _ = try await session.undo($0.id) },
+            correct: { entry, words in try await session.correct(entry.id, text: words) },
+            loadMore: load)
+    }
+
+    private func load() async throws {
+        let page = try await session.done(before: entries.last?.id)
+        entries += page.entries
+        hasMore = page.hasMore
+    }
+}
+
 #if DEBUG
     #Preview("Done") {
         @Previewable @State var page = DeskSamples.donePage
