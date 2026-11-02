@@ -1,38 +1,20 @@
 import AriKit
 import SwiftUI
 
-/// "That was wrong" on something Kumo did: say what in a word, tap one of the usual words, or just
-/// tell Kumo. Kumo undoes it where it can, keeps what to do differently, and checks with you more
-/// for that kind of work.
+/// "That was wrong" on something Kumo did, opened right under it: one of the usual words in a tap,
+/// your own words, or just tell Kumo. Kumo undoes it where it can, keeps what to do differently,
+/// and checks with you more for that kind of work.
 struct ThatWasWrong: View {
     let entry: DoneEntry
     /// Tells Kumo, with your words or none.
     let send: (String?) async throws -> Void
+    let cancel: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var words = ""
     @State private var sending = DeskSending()
-    @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("That was wrong").font(.headline).foregroundStyle(.ariText)
-                Spacer(minLength: 8)
-                Button("Cancel") { dismiss() }
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .buttonStyle(.plain)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.text).font(.subheadline).foregroundStyle(.ariSecondary)
-                if let reason = entry.reason {
-                    Text(reason).font(.footnote).foregroundStyle(.ariTertiary)
-                }
-            }
-            .padding(.leading, 12)
-            .overlay(alignment: .leading) { Rectangle().fill(Color.ariLine).frame(width: 2) }
-            .accessibilityElement(children: .combine)
+        VStack(alignment: .leading, spacing: 10) {
             let usual = Self.usualWords(for: entry)
             if !usual.isEmpty {
                 // On one line when they fit; large text wraps them rather than cutting them off.
@@ -47,37 +29,33 @@ struct ThatWasWrong: View {
                     }
                 }
             }
-            TextField("In a word, or more", text: $words, axis: .vertical)
-                .font(.subheadline)
-                .foregroundStyle(.ariText)
-                .lineLimit(1...4)
-                .focused($focused)
-                .padding(12)
-                .background(.ariField, in: .rect(cornerRadius: 14, style: .continuous))
+            InlineField(
+                prompt: "In a word, or more", text: $words,
+                button: typed == nil ? "Just tell \(lead)" : "Tell \(lead)", sendsEmpty: true,
+                opensKeyboard: true, busy: sending.key == "words", waits: sending.isSending
+            ) {
+                tell(typed, key: "words")
+            }
             if let problem = sending.problem { DeskProblemLine(text: problem) }
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(promise)
                     .font(.footnote)
                     .foregroundStyle(.ariTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                DeskPill(
-                    title: typed == nil ? "Just tell \(lead)" : "Tell \(lead)", acts: true,
-                    busy: sending.key == "words"
-                ) { tell(typed, key: "words") }
-                .disabled(sending.isSending)
+                Button("Cancel", action: cancel)
+                    .font(.footnote)
+                    .foregroundStyle(.ariSecondary)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cancel That was wrong")
             }
-            Spacer(minLength: 0)
         }
-        .padding(22)
-        .presentationDetents([.medium, .large])
-        .presentationBackground(.ariSurface)
     }
 
     private var lead: String { LeadName.current }
 
     private var typed: String? {
-        let trimmed = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = InlineField.trimmed(words)
         return trimmed.isEmpty ? nil : trimmed
     }
 
@@ -90,9 +68,7 @@ struct ThatWasWrong: View {
     }
 
     private func tell(_ said: String?, key: String) {
-        Task {
-            if await sending.send(key, { try await send(said) }) { dismiss() }
-        }
+        Task { await sending.send(key) { try await send(said) } }
     }
 
     /// The usual things wrong with each kind of call, one tap each.
@@ -110,15 +86,16 @@ struct ThatWasWrong: View {
 
 #if DEBUG
     #Preview("That was wrong") {
-        Color.ariBackground
-            .sheet(isPresented: .constant(true)) {
-                ThatWasWrong(
-                    entry: DoneEntry(
-                        id: "d1", at: DeskSamples.at(9, 14),
-                        text: "Binned \"Your Acme order is on its way\" from Acme",
-                        reason: "Acme selling something", undo: true, work: .sorting)
-                ) { _ in try await Task.sleep(for: .seconds(1)) }
-            }
-            .preferredColorScheme(.dark)
+        ThatWasWrong(
+            entry: DoneEntry(
+                id: "d1", at: DeskSamples.at(9, 14),
+                text: "Binned \"Your Acme order is on its way\" from Acme",
+                reason: "Acme selling something", undo: true, work: .sorting),
+            send: { _ in try await Task.sleep(for: .seconds(1)) }, cancel: {}
+        )
+        .padding(20)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(.ariBackground)
+        .preferredColorScheme(.dark)
     }
 #endif

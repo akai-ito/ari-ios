@@ -37,6 +37,7 @@
         static let hotelDraft = DeskCard(
             id: "hotel-orto", kind: .draft, motion: "florence", at: at(7, 2),
             title: "Draft to Hotel Orto",
+            options: [Ask.Option(label: "Drop it")],
             draft: DraftCard(
                 account: "iCloud", from: "divy@icloud.com", to: ["Hotel Orto <info@hotelorto.it>"],
                 subject: "Re: Booking confirmed, 12–15 Nov",
@@ -53,6 +54,7 @@
             id: "tess", kind: .draft, motion: "job-search",
             at: at(day: -1, 18, 4),
             title: "Draft to Tess Harlow",
+            options: [Ask.Option(label: "Drop it")],
             draft: DraftCard(
                 account: "iCloud", from: "divy@icloud.com", to: ["Tess Harlow"],
                 subject: "Halcyon: technical interview slots",
@@ -118,51 +120,6 @@
             default: nil
             }
         }
-
-        // MARK: Done
-
-        static let donePage = DonePage(
-            entries: [
-                DoneEntry(
-                    id: "d1", at: at(9, 14), text: "Domino's: unsubscribed, binned", undo: true),
-                DoneEntry(
-                    id: "q1", at: at(9, 10), text: "Monzo statement",
-                    reason: "routine, nothing due",
-                    quiet: true),
-                DoneEntry(
-                    id: "d2", at: at(9, 2),
-                    text: "Hotel Orto booking → Florence › Stay, on your calendar"),
-                DoneEntry(
-                    id: "q2", at: at(8, 51), text: "GitHub: CI passed on ito-core",
-                    reason: "you saw it on the PR", quiet: true),
-                DoneEntry(
-                    id: "d3", at: at(8, 40), text: "Council tax: due 1 Dec, reminder on the 24th"),
-                DoneEntry(
-                    id: "q3", at: at(8, 12), text: "Tess: “thanks!”",
-                    reason: "a thank-you, no action", quiet: true),
-                DoneEntry(
-                    id: "q4", at: at(7, 3), text: "Medium Daily", reason: "you rarely open these",
-                    quiet: true),
-                DoneEntry(
-                    id: "d4", at: at(day: -1, 18, 20),
-                    text: "Dentist moved to Fri 13, 9:30; calendar updated"),
-                DoneEntry(
-                    id: "d5", at: at(day: -1, 11, 5), text: "Uber Eats promo: unsubscribed, binned",
-                    undo: true),
-                DoneEntry(
-                    id: "q5", at: at(day: -1, 9, 30), text: "Thames Water bill",
-                    reason: "direct debit, nothing to do", quiet: true),
-            ],
-            hasMore: true)
-
-        static let olderDone = [
-            DoneEntry(
-                id: "d6", at: at(day: -3, 16, 40),
-                text: "Northwind: Freya's reply → Job search, waiting on them"),
-            DoneEntry(
-                id: "q6", at: at(day: -3, 8, 0), text: "Strava weekly summary",
-                reason: "nothing new", quiet: true),
-        ]
 
         // MARK: Making times
 

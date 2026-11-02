@@ -325,7 +325,21 @@ final class Rehearsal {
         if sinceLastPing >= .seconds(15) {
             sinceLastPing = .zero
             await server.ping()
+            await waitForReading()
         }
+        await settle()
+    }
+
+    /// Waits, for a few real seconds at most, until Ari has read the stream up to the last ping.
+    /// On a busy machine the clock can otherwise run ahead of Ari's reading: across a jump of
+    /// hours, pings pile up unread until Ari's 45 seconds without hearing anything pass on the
+    /// clock, and it reconnects, though the server never went quiet.
+    private func waitForReading() async {
+        let deadline = ContinuousClock.now + .seconds(3)
+        while !(await server.hasReadStream), ContinuousClock.now < deadline {
+            await settle()
+        }
+        // The reader hands each piece to the session on the main actor: let it take the last.
         await settle()
     }
 

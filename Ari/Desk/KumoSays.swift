@@ -20,13 +20,13 @@ struct KumoMoment: Identifiable, Equatable {
     struct Action: Identifiable, Equatable {
         var id: String { title }
         let title: String
-        /// Leads somewhere, such as Reply: drawn with a chevron.
+        /// Opens a field for your words, such as Reply: drawn with a chevron.
         var opens = false
     }
 }
 
 extension KumoMoment {
-    /// Reply, which opens a field for words when Kumo's line takes them.
+    /// Reply, which opens a field for words, right under the line, when Kumo's line takes them.
     static let reply = Action(title: "Reply", opens: true)
 
     /// Kumo's line as the box sends it: its quieter line under it, its options as short replies,
@@ -77,9 +77,11 @@ struct KumoSays: View {
     let openWork: () -> Void
     let openSettings: () -> Void
     /// Opens what's wrong, from "Something's wrong ›".
-    let openProblem: () -> Void
-    var act: (KumoMoment.Action) -> Void = { _ in }
-    var skip: () -> Void = {}
+    let openProblems: () -> Void
+    /// Answers Kumo's line: with one of its replies, or your words.
+    var answer: (CardAnswer) async throws -> Void = { _ in }
+    /// Skips the day's question.
+    var skip: () async throws -> Void = {}
     /// Your answer on its way, and why it didn't go through.
     var sending = DeskSending()
 
@@ -101,9 +103,9 @@ struct KumoSays: View {
                 )
                 .padding(.bottom, 2)
                 KumoStatusLine(
-                    liveness: liveness, open: liveness == .wrong ? openProblem : openWork)
+                    liveness: liveness, open: liveness == .wrong ? openProblems : openWork)
                 if let moment {
-                    MomentView(moment: moment, sending: sending, act: act, skip: skip)
+                    MomentView(moment: moment, sending: sending, answer: answer, skip: skip)
                         .id(moment.id)
                         .transition(
                             reduceMotion
@@ -177,12 +179,18 @@ struct KumoStatusLine: View {
 }
 
 /// Kumo's words for the moment, in its own hand and a size up from the cards, with the small
-/// actions under them. The day's question carries a small label and a Skip.
+/// actions under them. Reply, or what the line calls it, opens a field right here, with the
+/// keyboard. The day's question carries a small label and a Skip.
 private struct MomentView: View {
     let moment: KumoMoment
     let sending: DeskSending
-    let act: (KumoMoment.Action) -> Void
-    let skip: () -> Void
+    let answer: (CardAnswer) async throws -> Void
+    let skip: () async throws -> Void
+
+    /// The action whose field is open, such as Reply.
+    @State private var replying: KumoMoment.Action?
+    @State private var words = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 12) {
@@ -220,26 +228,46 @@ private struct MomentView: View {
                 }
                 .disabled(sending.isSending)
                 .padding(.top, 2)
+                if replying != nil {
+                    InlineField(
+                        prompt: "Your answer", text: $words,
+                        buttonLabel: "Send your answer to \(LeadName.current)",
+                        opensKeyboard: true, busy: sending.key == "text",
+                        waits: sending.isSending, send: sendWords
+                    )
+                    .transition(
+                        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                }
             }
             if let problem = sending.problem { DeskProblemLine(text: problem) }
         }
         .frame(maxWidth: 340)
         .padding(.horizontal, 8)
         .accessibilityElement(children: .contain)
+        .animation(.smooth(duration: 0.3), value: replying)
     }
 
     @ViewBuilder
     private var buttons: some View {
         ForEach(moment.actions) { action in
-            DeskPill(
-                title: action.opens ? "\(action.title) ›" : action.title,
-                busy: sending.key == action.title, label: action.title
-            ) {
-                act(action)
+            if action.opens {
+                let open = replying == action
+                DeskPill(
+                    title: open ? "Cancel" : "\(action.title) ›",
+                    label: open ? "Cancel your answer" : action.title
+                ) {
+                    sending.clearProblem()
+                    replying = open ? nil : action
+                    if open { words = "" }
+                }
+            } else {
+                DeskPill(title: action.title, busy: sending.key == action.title) {
+                    send(action.title) { try await answer(CardAnswer(option: action.title)) }
+                }
             }
         }
         if moment.asks {
-            Button("Skip", action: skip)
+            Button("Skip") { send("Skip", skip) }
                 .font(.subheadline)
                 .foregroundStyle(.ariTertiary)
                 .buttonStyle(.plain)
@@ -248,80 +276,37 @@ private struct MomentView: View {
                 .accessibilityHint("Skips today's question")
         }
     }
+
+    private func send(_ key: String, _ deliver: @escaping () async throws -> Void) {
+        Task { await sending.send(key, deliver) }
+    }
+
+    private func sendWords() {
+        let text = InlineField.trimmed(words)
+        guard !text.isEmpty else { return }
+        Task {
+            if await sending.send("text", { try await answer(CardAnswer(text: text)) }) {
+                replying = nil
+                words = ""
+            }
+        }
+    }
 }
 
-/// Done on the Desk: one line, how much Kumo handled today. A tap opens Kumo's work.
+/// Done on the Desk: one plain row that opens Kumo's work. How much Kumo handled is said once, in
+/// its quiet line.
 struct DeskDoneLine: View {
-    let handled: Int
     let open: () -> Void
 
     var body: some View {
         Button(action: open) {
-            DeskSectionLabel("Done", trailing: "handled \(handled) ›")
+            DeskSectionLabel("Done", trailing: "›")
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Done: handled \(handled) today")
-        .accessibilityHint("Shows \(LeadName.current)'s work")
-    }
-}
-
-/// Words for Kumo's line, from its Reply: the line, a field, and Send. Kumo acts on them in the
-/// background, as on a card's typed answer.
-struct MomentReply: View {
-    let moment: Moment
-    let send: (String) async throws -> Void
-
-    @State private var words = ""
-    @State private var sending = DeskSending()
-    @FocusState private var focused: Bool
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(moment.text)
-                    .font(.system(.body, design: .serif))
-                    .foregroundStyle(.ariSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                TextField("Your answer", text: $words, axis: .vertical)
-                    .font(.ariBody)
-                    .foregroundStyle(.ariText)
-                    .lineLimit(2...6)
-                    .focused($focused)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
-                if let problem = sending.problem { DeskProblemLine(text: problem) }
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .background(.ariBackground)
-            .navigationTitle(moment.replyLabel ?? "Reply to \(LeadName.current)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.foregroundStyle(.ariText)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Send") { submit() }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.ariText)
-                        .disabled(trimmed.isEmpty || sending.isSending)
-                }
-            }
-            .onAppear { focused = true }
-        }
-    }
-
-    private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    private func submit() {
-        let text = trimmed
-        guard !text.isEmpty else { return }
-        Task {
-            if await sending.send("text", { try await send(text) }) { dismiss() }
-        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Done")
+        .accessibilityHint("Shows what \(LeadName.current) did")
+        .accessibilityAddTraits(.isButton)
     }
 }

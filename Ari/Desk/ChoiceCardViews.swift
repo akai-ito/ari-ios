@@ -88,32 +88,15 @@ struct QuestionCardView: View {
         }
     }
 
-    private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
-
     private var field: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField(
-                card.options.isEmpty ? "Your answer" : "Or say something else", text: $words,
-                axis: .vertical
-            )
-            .font(.subheadline)
-            .foregroundStyle(.ariText)
-            .lineLimit(1...4)
-            .submitLabel(.send)
-            .onSubmit(send)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
-            DeskPill(
-                title: "Send", acts: true, busy: sending.key == "text", label: "Send your answer",
-                action: send
-            )
-            .disabled(trimmed.isEmpty || sending.isSending || card.isWorking)
-        }
+        InlineField(
+            prompt: card.options.isEmpty ? "Your answer" : "Or say something else", text: $words,
+            buttonLabel: "Send your answer", busy: sending.key == "text",
+            waits: sending.isSending || card.isWorking, send: send)
     }
 
     private func send() {
-        let text = trimmed
+        let text = InlineField.trimmed(words)
         guard !text.isEmpty else { return }
         Task {
             if await sending.send("text", { try await answer(CardAnswer(text: text)) }) {

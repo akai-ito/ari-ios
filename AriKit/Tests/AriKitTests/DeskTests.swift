@@ -257,6 +257,85 @@ struct DeskTests {
         #expect(last.entries.isEmpty && !last.hasMore)
     }
 
+    @Test(
+        "Kumo's work before today: each earlier day with anything on it, read whole, then the end")
+    func history() async throws {
+        let today = KumoWork(day: "2026-11-05", handled: [Self.entry("d9", "2026-11-05T09:00")])
+        // Done goes back one entry at a time: Tuesday's, then Saturday's (a quiet weekend), then
+        // nothing more.
+        let done: [String?: DonePage] = [
+            "d9": DonePage(entries: [Self.entry("d8", "2026-11-04T18:00")], hasMore: true),
+            "d6": DonePage(entries: [Self.entry("d5", "2026-11-01T11:00")], hasMore: false),
+        ]
+        let days: [String: KumoWork] = [
+            "2026-11-04": KumoWork(
+                day: "2026-11-04", handled: [Self.entry("d8", "2026-11-04T18:00")],
+                cleared: [Self.entry("d6", "2026-11-04T07:00", quiet: true)]),
+            "2026-11-01": KumoWork(
+                day: "2026-11-01", handled: [Self.entry("d5", "2026-11-01T11:00")]),
+        ]
+        var asked: [String] = []
+        var history = WorkHistory()
+        for _ in 0..<2 {
+            try await history.readNext(
+                after: today, calendar: Self.london,
+                done: { before in done[before?.rawValue] ?? DonePage(entries: []) },
+                work: { day in
+                    asked.append(day)
+                    return days[day] ?? KumoWork(day: day)
+                })
+        }
+        #expect(asked == ["2026-11-04", "2026-11-01"])
+        #expect(history.days.map(\.day) == ["2026-11-04", "2026-11-01"])
+        #expect(history.isFinished)
+
+        let undone = Self.entry("d8", "2026-11-04T18:00", text: "Undone: filed a bill")
+        #expect(history.replacing(undone).days[0].handled == [undone])
+    }
+
+    @Test("an empty page of Done ends Kumo's work, though it says there's more")
+    func historyEnds() async throws {
+        var history = WorkHistory()
+        var worked = false
+        try await history.readNext(
+            after: KumoWork(day: "2026-11-05"), calendar: Self.london,
+            done: { _ in DonePage(entries: [], hasMore: true) },
+            work: { day in
+                worked = true
+                return KumoWork(day: day)
+            })
+        #expect(history.isFinished && history.days.isEmpty && !worked)
+    }
+
+    @Test("Kumo's work never reads a day twice, where the phone's days and the box's disagree")
+    func historyGoesBack() async throws {
+        // The entry falls on the 5th by this phone's clock, which the box already counted as today.
+        let today = KumoWork(day: "2026-11-05")
+        var asked: [String] = []
+        var history = WorkHistory()
+        try await history.readNext(
+            after: today, calendar: Self.london,
+            done: { _ in DonePage(entries: [Self.entry("d1", "2026-11-05T08:00")], hasMore: true) },
+            work: { day in
+                asked.append(day)
+                return KumoWork(day: day)
+            })
+        #expect(asked == ["2026-11-04"] && history.days.isEmpty && !history.isFinished)
+    }
+
+    private static let london: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London")!
+        return calendar
+    }()
+
+    private static func entry(
+        _ id: String, _ at: String, quiet: Bool = false, text: String = "Filed a bill"
+    ) -> DoneEntry {
+        DoneEntry(
+            id: DoneID(rawValue: id), at: Timestamp("\(at):00.000Z")!, text: text, quiet: quiet)
+    }
+
     @Test("an answer sends only what it says: an option, the clear slots, or words")
     func answers() throws {
         let option = try JSONValue(encoding: CardAnswer(option: "Accept"))

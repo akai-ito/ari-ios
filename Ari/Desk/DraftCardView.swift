@@ -3,7 +3,9 @@ import SwiftUI
 
 /// A mail Kumo wrote for you, waiting in your Drafts: who it's to and from, what it's about, the
 /// mail itself in a quiet inset, then Change… (words such as "a bit more casual", which rewrite the
-/// same draft) and Open in Mail, where you send it. Kumo never sends it itself.
+/// same draft) and Open in Mail, where you send it. Kumo never sends it itself. The card's own
+/// options, such as Drop it, sit quietly to the left; dropping a draft deletes it from your Drafts
+/// too, so it asks first.
 struct DraftCardView: View {
     let card: DeskCard
     var context: String?
@@ -15,7 +17,8 @@ struct DraftCardView: View {
     @State private var sending = DeskSending()
     @State private var changing = false
     @State private var change = ""
-    @FocusState private var fieldFocused: Bool
+    /// The option waiting on "Drop this draft?".
+    @State private var confirming: String?
 
     var body: some View {
         if let draft = card.draft {
@@ -28,7 +31,10 @@ struct DraftCardView: View {
                     .opacity(card.isWorking ? 0.5 : 1)
                 if card.isWorking {
                     if let said = card.answerWords { DeskAnswerLine(text: said) }
-                    DeskWorkingLine(text: "Redrafting…")
+                    // Words rewrite the draft; an option, such as Drop it, is Kumo's to act on.
+                    DeskWorkingLine(
+                        text: card.answer?.option == nil
+                            ? "Redrafting…" : "\(LeadName.current)'s on it…")
                 }
                 if changing { changeField }
                 if let problem = sending.problem { DeskProblemLine(text: problem) }
@@ -99,37 +105,76 @@ struct DraftCardView: View {
 
     /// What to change, in your words, sent as a change to the same draft.
     private var changeField: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("What should change?", text: $change, axis: .vertical)
-                .font(.subheadline)
-                .foregroundStyle(.ariText)
-                .lineLimit(1...4)
-                .focused($fieldFocused)
-                .submitLabel(.send)
-                .onSubmit(sendChange)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(.ariField, in: .rect(cornerRadius: 16, style: .continuous))
-            DeskPill(
-                title: "Send", acts: true, busy: sending.key == "change",
-                label: "Send the change", action: sendChange
-            )
-            .disabled(trimmed.isEmpty || sending.isSending || card.isWorking)
-        }
+        InlineField(
+            prompt: "What should change?", text: $change, buttonLabel: "Send the change",
+            opensKeyboard: true, busy: sending.key == "change",
+            waits: sending.isSending || card.isWorking, send: sendChange
+        )
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
-    /// Side by side on the right, or one above the other when large text leaves no room.
+    /// Side by side on the right, with the card's own options quietly on the left, or one above
+    /// the other when large text leaves no room.
     private func buttons(_ draft: DraftCard) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
+                options
                 Spacer(minLength: 0)
                 pills(draft)
             }
-            VStack(alignment: .trailing, spacing: 8) { pills(draft) }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 8) {
+                pills(draft)
+                options
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .disabled(sending.isSending || card.isWorking)
+        .confirmationDialog(
+            "Drop this draft?", isPresented: isConfirming, titleVisibility: .visible,
+            presenting: confirming
+        ) { option in
+            Button(option, role: .destructive) { choose(option) }
+        } message: { _ in
+            Text("It's deleted from your Drafts too.")
+        }
+    }
+
+    /// The options the card carries, such as Drop it: quiet, since sending is the way on.
+    private var options: some View {
+        ForEach(card.options, id: \.label) { option in
+            Button {
+                sending.clearProblem()
+                confirming = option.label
+            } label: {
+                Text(option.label)
+                    .font(.subheadline)
+                    .foregroundStyle(.ariSecondary)
+                    .opacity(sending.key == option.label ? 0 : 1)
+                    .overlay {
+                        if sending.key == option.label {
+                            ProgressView().controlSize(.small).tint(.ariSecondary)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Asks first, then deletes it from your Drafts")
+            .accessibilityValue(sending.key == option.label ? "Sending" : "")
+        }
+    }
+
+    private var isConfirming: Binding<Bool> {
+        Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
+    }
+
+    private func choose(_ option: String) {
+        changing = false
+        change = ""
+        Task {
+            await sending.send(option) { try await answer(CardAnswer(option: option)) }
+        }
     }
 
     @ViewBuilder
@@ -139,7 +184,6 @@ struct DraftCardView: View {
             label: changing ? "Cancel the change" : "Ask \(LeadName.current) to change the draft"
         ) {
             changing.toggle()
-            fieldFocused = changing
             if !changing { change = "" }
             sending.clearProblem()
         }
@@ -150,10 +194,8 @@ struct DraftCardView: View {
         }
     }
 
-    private var trimmed: String { change.trimmingCharacters(in: .whitespacesAndNewlines) }
-
     private func sendChange() {
-        let words = trimmed
+        let words = InlineField.trimmed(change)
         guard !words.isEmpty, !card.isWorking else { return }
         Task {
             let sent = await sending.send("change", failure: "Couldn't send the change") {

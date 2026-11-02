@@ -372,19 +372,7 @@ private struct ServerProblems: View {
         if !problems.isEmpty {
             Section {
                 ForEach(problems) { problem in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(problem.title, systemImage: ProblemLook.symbol(problem.area))
-                            .font(.body.weight(.semibold))
-                        Text(problem.detail)
-                            .font(.subheadline)
-                            .foregroundStyle(.ariSecondary)
-                        Text(problem.fix)
-                            .font(.subheadline)
-                            .foregroundStyle(.ariText)
-                            .textSelection(.enabled)
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 4)
+                    ProblemDetail(problem: problem).padding(.vertical, 4)
                 }
             } header: {
                 Text("Needs you")

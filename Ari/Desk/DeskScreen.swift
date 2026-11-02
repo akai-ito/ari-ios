@@ -2,7 +2,7 @@ import AriKit
 import SwiftUI
 
 /// Where Ito opens, and home for everything admin: Kumo's line for the moment, what's coming up,
-/// what's waiting on you, how much Kumo handled, and Tell Kumo. It rolls and never resets: each part
+/// what's waiting on you, Done, and Tell Kumo. It rolls and never resets: each part
 /// keeps its own clock. Talking lives in the chat; a quick word told here goes there, and Kumo's
 /// reply shows here too.
 struct DeskScreen: View {
@@ -21,14 +21,12 @@ struct DeskScreen: View {
     @State private var showsWork = false
     /// A day of Kumo's calls to glance at, from a review card's first option.
     @State private var glancing: ReviewCard?
-    /// Words for Kumo's line, from its Reply.
-    @State private var replying: Moment?
     /// Your answer to Kumo's line on its way.
     @State private var sending = DeskSending()
     /// What followed an answer Kumo has just acted on, from Done, for a minute after its card left.
     @State private var followed: DoneEntry?
-    /// A problem on the server, opened to see how to fix it.
-    @State private var openedProblem: ServerProblem?
+    /// What's wrong on the server, opened from "Something's wrong ›" to see how to fix it.
+    @State private var showsProblems = false
     /// When you last left the Desk; cards that changed after it carry a dot while you're here.
     @AppStorage("deskLookedAt") private var lookedAt = 0.0
     @State private var lastLook = Date.now
@@ -40,18 +38,10 @@ struct DeskScreen: View {
                 KumoSays(
                     moment: kumoMoment, liveness: liveness,
                     openWork: { showsWork = true }, openSettings: openSettings,
-                    openProblem: { openedProblem = session.problems.first },
-                    act: act(_:), skip: skip, sending: sending
+                    openProblems: { showsProblems = true }, answer: answerMoment(_:),
+                    skip: skipMoment, sending: sending
                 )
                 .task(id: unread) { await read() }
-                if !session.problems.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(session.problems) { problem in
-                            ProblemLine(problem: problem) { openedProblem = problem }
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                }
                 if let items = session.desk?.comingUp, !items.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         DeskSectionLabel("Coming up")
@@ -81,8 +71,8 @@ struct DeskScreen: View {
                             if !Task.isCancelled { self.followed = nil }
                         }
                 }
-                if let desk = session.desk {
-                    DeskDoneLine(handled: desk.handled) { showsWork = true }
+                if session.desk != nil {
+                    DeskDoneLine { showsWork = true }
                 }
             }
             .padding(.horizontal, 18)
@@ -117,19 +107,10 @@ struct DeskScreen: View {
             NavigationStack { kumosWork }
                 .presentationDetents([.large])
         }
-        .sheet(item: $replying) { moment in
-            MomentReply(moment: moment) { words in
-                try await session.answerMoment(moment.id, CardAnswer(text: words))
-            }
-            .presentationDetents([.medium])
-        }
-        .sheet(item: $openedProblem) { problem in
-            NavigationStack {
-                ProblemView(problem: problem)
-                    .navigationTitle("Needs you")
-                    .navigationBarTitleDisplayMode(.inline)
-            }
-            .presentationDetents([.medium, .large])
+        .sheet(isPresented: $showsProblems) { ProblemsSheet(problems: session.problems) }
+        // Once the server has nothing wrong, there's nothing left to fix.
+        .onChange(of: session.problems.isEmpty) { _, fixed in
+            if fixed { showsProblems = false }
         }
         .onChange(of: working) { before, now in
             let settled = before.filter { now[$0.key] == nil }.map(\.value)
@@ -201,26 +182,30 @@ struct DeskScreen: View {
     }
 
     /// Kumo's line on screen for a moment counts as read, in the chat too, so no notification
-    /// goes out for it.
+    /// goes out for it. Saying so tries again until it goes through, while the line is still on
+    /// screen and unread: a lost request would otherwise let the notification out for a line
+    /// you've seen.
     private func read() async {
         guard let unread else { return }
         try? await Task.sleep(for: .seconds(1.5))
-        guard !Task.isCancelled else { return }
-        try? await session.readMoment(unread)
+        var wait = Duration.seconds(2)
+        while !Task.isCancelled {
+            do throws(RequestError) {
+                try await session.readMoment(unread)
+                return
+            } catch {
+                // Only a lost request or a busy server is worth asking again.
+                guard error.isTemporary else { return }
+            }
+            try? await Task.sleep(for: wait)
+            wait = min(wait * 2, .seconds(60))
+        }
     }
 
-    /// A tap on one of Kumo's replies answers it, as a card's option does; Reply opens a field.
-    private func act(_ action: KumoMoment.Action) {
+    /// Answers Kumo's line, with one of its replies or your words, as a card's answer goes.
+    private func answerMoment(_ answer: CardAnswer) async throws {
         guard let moment = session.desk?.moment else { return }
-        if action.opens {
-            replying = moment
-            return
-        }
-        Task {
-            await sending.send(action.title) {
-                try await session.answerMoment(moment.id, CardAnswer(option: action.title))
-            }
-        }
+        try await session.answerMoment(moment.id, answer)
     }
 
     /// The first guess, shown open or with its choices from `ARI_GUESS`, in debug builds.
@@ -234,11 +219,9 @@ struct DeskScreen: View {
     }
 
     /// Skip, on the day's question: it goes at once, and Kumo never asks it again.
-    private func skip() {
+    private func skipMoment() async throws {
         guard let moment = session.desk?.moment else { return }
-        Task {
-            await sending.send("Skip") { try await session.skipMoment(moment.id) }
-        }
+        try await session.skipMoment(moment.id)
     }
 
     /// The cards that are new or changed since you last left the Desk.

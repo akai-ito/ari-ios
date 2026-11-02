@@ -22,6 +22,8 @@
         case work
         /// Kumo's work, down at how much it checks with you.
         case workTrust = "work-trust"
+        /// Kumo's work back at yesterday, with "That was wrong" open on one of its calls.
+        case workWrong = "work-wrong"
         /// A weekday's Coming up, with Kumo's soft blocks and its guesses.
         case guesses
         /// The day's one question.
@@ -52,12 +54,12 @@
                         .init(title: "The run"), .init(title: "The prep"),
                         .init(title: "I'm stopping"),
                     ])
-            case .afterEvent, .work, .workTrust:
+            case .afterEvent, .work, .workTrust, .workWrong:
                 KumoMoment(
                     id: "after-northwind", text: "How did the call with Northwind go?",
                     actions: [.init(title: "Reply", opens: true), .init(title: "Ask me tonight")])
             case .quiet:
-                KumoMoment(id: "quiet", text: "All quiet. I handled 9 small things.")
+                .quiet(handled: 9, waiting: false)
             case .wrong:
                 KumoMoment(
                     id: "sam-moved",
@@ -90,7 +92,7 @@
             switch self {
             case .sunday: S.sunday
             case .commit, .pastLine: S.lateNight
-            case .afterEvent, .work, .workTrust, .question: S.evening
+            case .afterEvent, .work, .workTrust, .workWrong, .question: S.evening
             case .quiet: S.quietAfternoon
             case .wrong: S.wrongDay
             case .guesses: S.weekday
@@ -101,7 +103,8 @@
             switch self {
             case .sunday: [S.priyaDraft, S.halcyonTimes]
             case .commit, .pastLine: [S.priyaDraft]
-            case .afterEvent, .work, .workTrust: [S.thanksDraft, S.halcyonTimes, S.samInvite]
+            case .afterEvent, .work, .workTrust, .workWrong:
+                [S.thanksDraft, S.halcyonTimes, S.samInvite]
             case .quiet: []
             case .wrong, .guesses: [S.halcyonTimes, S.samInvite]
             case .question: [S.thanksDraft, S.halcyonTimes]
@@ -111,13 +114,11 @@
         var changed: Set<CardID> {
             switch self {
             case .sunday: ["priya-draft"]
-            case .afterEvent, .work, .workTrust, .question: ["halcyon-times"]
+            case .afterEvent, .work, .workTrust, .workWrong, .question: ["halcyon-times"]
             case .wrong: ["sam-invite"]
             default: []
             }
         }
-
-        var handled: Int { 9 }
 
         /// The status bar's time for the still, so it matches the moment.
         var clock: String {
@@ -125,7 +126,7 @@
             case .sunday: "9:10"
             case .commit: "00:45"
             case .pastLine: "01:10"
-            case .afterEvent, .work, .workTrust: "15:20"
+            case .afterEvent, .work, .workTrust, .workWrong: "15:20"
             case .quiet: "15:40"
             case .wrong: "11:30"
             case .guesses: "8:20"
@@ -160,19 +161,17 @@
 
         @State private var draft = ""
         @State private var showsWork = false
+        @State private var showsProblems = false
+
+        private var opensWork: Bool { [.work, .workTrust, .workWrong].contains(sketch) }
 
         var body: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     KumoSays(
                         moment: sketch.moment, liveness: sketch.liveness,
-                        openWork: { showsWork = true }, openSettings: {}, openProblem: {})
-                    if !sketch.problems.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(sketch.problems) { problem in ProblemLine(problem: problem) {} }
-                        }
-                        .padding(.horizontal, 4)
-                    }
+                        openWork: { showsWork = true }, openSettings: {},
+                        openProblems: { showsProblems = true })
                     if !sketch.comingUp.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             DeskSectionLabel("Coming up")
@@ -190,7 +189,7 @@
                                 changed: sketch.changed)
                         }
                     }
-                    DeskDoneLine(handled: sketch.handled) { showsWork = true }
+                    DeskDoneLine { showsWork = true }
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 24)
@@ -205,19 +204,41 @@
                 .background(.ariBackground)
             }
             .sheet(isPresented: $showsWork) {
-                NavigationStack {
-                    KumosWorkView(
-                        ledger: MomentSamples.ledger, wrong: { _ in }, openAll: {},
-                        opensAtTrust: sketch == .workTrust)
-                }
-                .presentationDetents([.large])
+                NavigationStack { SketchWork(sketch: sketch) }
+                    .presentationDetents([.large])
             }
+            .sheet(isPresented: $showsProblems) { ProblemsSheet(problems: sketch.problems) }
             .task {
-                if sketch == .work || sketch == .workTrust {
+                if opensWork {
                     try? await Task.sleep(for: .milliseconds(400))
                     showsWork = true
                 }
             }
+        }
+    }
+
+    /// Kumo's work in a sketch: today, then the earlier days, read one at a time as you scroll.
+    private struct SketchWork: View {
+        let sketch: MomentSketch
+        @State private var daysRead: Int
+
+        init(sketch: MomentSketch) {
+            self.sketch = sketch
+            _daysRead = State(initialValue: sketch == .workWrong ? MomentSamples.earlier.count : 0)
+        }
+
+        var body: some View {
+            KumosWorkView(
+                ledger: MomentSamples.ledger,
+                earlier: Array(MomentSamples.earlier.prefix(daysRead)),
+                earlierWork: daysRead < MomentSamples.earlier.count
+                    ? .more(attempt: daysRead) : .finished,
+                readEarlier: {
+                    try? await Task.sleep(for: .milliseconds(600))
+                    daysRead += 1
+                },
+                opensAtTrust: sketch == .workTrust,
+                correctingAtFirst: sketch == .workWrong ? "y2" : nil)
         }
     }
 
@@ -340,6 +361,7 @@
 
         static let priyaDraft = DeskCard(
             id: "priya-draft", kind: .draft, at: at(8, 2), title: "Draft to Priya at Northwind",
+            options: [Ask.Option(label: "Drop it")],
             draft: DraftCard(
                 account: "iCloud", from: "you@icloud.example", to: ["Priya Raman"],
                 subject: "Re: Intro call on Monday",
@@ -348,6 +370,7 @@
 
         static let thanksDraft = DeskCard(
             id: "thanks-draft", kind: .draft, at: at(15, 5), title: "Draft to Priya at Northwind",
+            options: [Ask.Option(label: "Drop it")],
             draft: DraftCard(
                 account: "iCloud", from: "you@icloud.example", to: ["Priya Raman"],
                 subject: "Thanks for today",
@@ -379,57 +402,92 @@
 
         // MARK: Kumo's work
 
+        /// Today's work as the box would send it, read the way the app reads it.
         static let ledger = KumoLedger(
-            came: 47,
-            needYou: [thanksDraft, halcyonTimes, samInvite],
-            handled: [
-                DoneEntry(
-                    id: "h1", at: at(15, 2), text: "Electricity bill → Admin, due 14 Nov",
-                    reason: "A bill with a date on it; a reminder's set for the 12th."),
-                DoneEntry(
-                    id: "h2", at: at(14, 40), text: "Dentist moved to Fri 13, 9:30",
-                    reason: "Bright Smile's mail confirmed the new time.", undo: true),
-                DoneEntry(
-                    id: "h3", at: at(13, 15), text: "Pizza Planet promos: unsubscribed, binned",
-                    reason: "You haven't opened one since March.", undo: true),
-                DoneEntry(
-                    id: "h4", at: at(11, 30), text: "Climbing with Sam → your calendar, 20:00",
-                    reason: "Sam confirmed by mail.", undo: true),
-                DoneEntry(
-                    id: "h5", at: at(10, 5), text: "Northwind: Priya's reply → Job search",
-                    reason: "A reply to your note; nothing to answer yet."),
-                DoneEntry(
-                    id: "h6", at: at(8, 20), text: "Parcel on Thursday, 14:00–15:00",
-                    reason: "You're working from home then."),
-            ],
-            cleared: (0..<38).map { index in
-                let samples = [
-                    ("Bank statement", "routine, nothing due"),
-                    ("CI passed on ito-core", "you saw it on the PR"),
-                    ("Weekly running summary", "nothing new"),
-                    ("Water bill", "direct debit, nothing to do"),
-                    ("Daily digest", "you rarely open these"),
-                    ("Sam: “ha, see you there”", "a reply, no action"),
-                ]
-                let (text, reason) = samples[index % samples.count]
-                return DoneEntry(
-                    id: DoneID(rawValue: "c\(index)"), at: at(8 + index % 7, index % 60),
-                    text: text, reason: reason, quiet: true)
-            },
-            trust: [
-                KumoLedger.Trust(
-                    kind: "Sorting mail", symbol: "tray", step: .trusted,
-                    line:
-                        "Two weeks without a correction on sorting. I've stopped showing you the cleared ones."
-                ),
-                KumoLedger.Trust(
-                    kind: "Calendar", symbol: "calendar", step: .spotChecks,
-                    line:
-                        "You fixed the dentist time on Tuesday, so I'm back to showing you about one in five."
-                ),
-                KumoLedger.Trust(
-                    kind: "Drafts", symbol: "envelope", step: .learning,
-                    line: "Every draft waits for you. Your casual style is still new to me."),
-            ])
+            work: KumoWork(
+                day: WorkHistory.day(of: .now), handled: handled, cleared: cleared, trust: trust),
+            waiting: [thanksDraft, halcyonTimes, samInvite])
+
+        private static let handled = [
+            DoneEntry(
+                id: "h1", at: at(15, 2), text: "Electricity bill → Admin, due 14 Nov",
+                reason: "A bill with a date on it; a reminder's set for the 12th."),
+            DoneEntry(
+                id: "h2", at: at(14, 40), text: "Dentist moved to Fri 13, 9:30",
+                reason: "Bright Smile's mail confirmed the new time.", undo: true, work: .calendar),
+            DoneEntry(
+                id: "h3", at: at(13, 15), text: "Pizza Planet promos: unsubscribed, binned",
+                reason: "You haven't opened one since March.", undo: true, work: .sorting),
+            DoneEntry(
+                id: "h4", at: at(11, 30), text: "Climbing with Sam → your calendar, 20:00",
+                reason: "Sam confirmed by mail.", undo: true, work: .calendar),
+            DoneEntry(
+                id: "h5", at: at(10, 5), text: "Northwind: Priya's reply → Job search",
+                reason: "A reply to your note; nothing to answer yet.", work: .sorting),
+            DoneEntry(
+                id: "h6", at: at(8, 20), text: "Parcel on Thursday, 14:00–15:00",
+                reason: "You're working from home then."),
+        ]
+
+        private static let cleared = (0..<38).map { index in
+            let samples = [
+                ("Bank statement", "routine, nothing due"),
+                ("CI passed on ito-core", "you saw it on the PR"),
+                ("Weekly running summary", "nothing new"),
+                ("Water bill", "direct debit, nothing to do"),
+                ("Daily digest", "you rarely open these"),
+                ("Sam: “ha, see you there”", "a reply, no action"),
+            ]
+            let (text, reason) = samples[index % samples.count]
+            return DoneEntry(
+                id: DoneID(rawValue: "c\(index)"), at: at(8 + index % 7, index % 60),
+                text: text, reason: reason, quiet: true, work: .sorting)
+        }
+
+        private static let trust = [
+            TrustRung(
+                work: .sorting, title: "Sorting mail", step: .trusted,
+                line:
+                    "Two weeks without a correction on sorting. I've stopped showing you the cleared ones.",
+                since: at(day: -14, 9)),
+            TrustRung(
+                work: .calendar, title: "Calendar", step: .spotChecks,
+                line:
+                    "You fixed the dentist time on Tuesday, so I'm back to showing you about one in five.",
+                since: at(day: -6, 10)),
+            TrustRung(
+                work: .drafts, title: "Drafts", step: .learning,
+                line: "Every draft waits for you. Your casual style is still new to me.",
+                since: at(day: -3, 18)),
+        ]
+
+        /// The days before today, as Kumo's work reads them while you scroll back.
+        static let earlier = [
+            KumoWork(
+                day: WorkHistory.day(of: at(day: -1, 12).date),
+                handled: [
+                    DoneEntry(
+                        id: "y1", at: at(day: -1, 18, 20),
+                        text: "Halcyon: second call → Thu, 11:00",
+                        reason: "Tess confirmed the slot you picked.", undo: true, work: .calendar),
+                    DoneEntry(
+                        id: "y2", at: at(day: -1, 11, 5),
+                        text: "Binned “Your order is on its way” from Pizza Planet",
+                        reason: "Pizza Planet selling something", undo: true, work: .sorting),
+                ],
+                cleared: [
+                    DoneEntry(
+                        id: "y3", at: at(day: -1, 9, 30), text: "Water bill",
+                        reason: "direct debit, nothing to do", quiet: true, work: .sorting)
+                ]),
+            KumoWork(
+                day: WorkHistory.day(of: at(day: -3, 12).date),
+                handled: [
+                    DoneEntry(
+                        id: "e1", at: at(day: -3, 16, 40),
+                        text: "Northwind: Priya's note → Job search, waiting on them",
+                        reason: "Nothing to answer yet.", work: .sorting)
+                ]),
+        ]
     }
 #endif
