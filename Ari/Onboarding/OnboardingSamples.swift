@@ -123,12 +123,12 @@
         }
 
         /// Kumo's next question after `id`, a moment later, as if from the box.
-        private static func next(after id: KumoQuestion.ID) async throws -> KumoQuestion? {
+        private static func next(after id: KumoQuestion.ID) async throws -> KumoAsking {
             try await Task.sleep(for: .milliseconds(700))
             guard let index = questions.firstIndex(where: { $0.id == id }),
                 index + 1 < questions.count
-            else { return nil }
-            return questions[index + 1]
+            else { return .finished }
+            return .asking(questions[index + 1])
         }
     }
 #endif

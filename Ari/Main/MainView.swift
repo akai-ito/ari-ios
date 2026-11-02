@@ -81,7 +81,8 @@ struct MainView: View {
             }
             await motions?.refresh()
         }
-        .onChange(of: model.openingPosition) { _, position in
+        // Initial too: a notification tapped as Ari launches can set these before this view is up.
+        .onChange(of: model.openingPosition, initial: true) { _, position in
             if position != nil { place = .chat }
         }
         .task {
@@ -163,10 +164,10 @@ struct MainView: View {
             // The voice may have changed while the stream was down.
             Task { await voices?.refresh() }
         }
-        .onChange(of: model.opening) { _, message in
+        .onChange(of: model.opening, initial: true) { _, message in
             if message != nil { place = .chat }
         }
-        .onChange(of: model.opensDesk) { _, opens in
+        .onChange(of: model.opensDesk, initial: true) { _, opens in
             guard opens else { return }
             place = .desk
             model.opensDesk = false
