@@ -49,10 +49,9 @@ final class AppModel {
         address = saved.address
         lastAddress = saved.address.description
         server = saved.server
-        LeadName.remember(saved.server.lead.name)
+        if let server = saved.server { LeadName.remember(server.lead.name) }
         if let token = try? self.tokens.token(for: saved.address) {
-            session = Self.session(
-                for: Connection(address: saved.address, token: token, server: saved.server))
+            session = Self.session(at: saved.address, token: token)
         }
     }
 
@@ -70,7 +69,7 @@ final class AppModel {
             forgetDevice(at: previous.address)
         }
         session?.close()
-        session = Self.session(for: connection)
+        session = Self.session(at: connection.address, token: connection.token)
         session?.start()
         registerDevice()
     }
@@ -244,17 +243,34 @@ final class AppModel {
         return text[key.upperBound...].prefix(80).contains("development") ? .sandbox : .production
     }()
 
-    private static func session(for connection: Connection) -> Session {
+    private static func session(at address: ServerAddress, token: Token) -> Session {
         let outbox =
-            (try? OutboxStore.applicationSupport(for: connection.address))
+            (try? OutboxStore.applicationSupport(for: address))
             ?? OutboxStore(
                 directory: FileManager.default.temporaryDirectory.appending(path: "Outbox"))
-        return Session(connection: connection, outbox: outbox, cache: .forThisApp())
+        return Session(address: address, token: token, outbox: outbox, cache: .forThisApp())
     }
 
     private struct Saved: Codable {
         let address: ServerAddress
-        let server: ServerInfo
+        /// `nil` when an older Ari saved it in a shape this one can't read, such as before a field
+        /// was renamed: the address and token still connect, and coming on screen asks again.
+        let server: ServerInfo?
+
+        init(address: ServerAddress, server: ServerInfo) {
+            self.address = address
+            self.server = server
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            address = try container.decode(ServerAddress.self, forKey: .address)
+            server = try? container.decode(ServerInfo.self, forKey: .server)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case address, server
+        }
 
         static func load(from defaults: UserDefaults) -> Saved? {
             defaults.data(forKey: "server").flatMap {

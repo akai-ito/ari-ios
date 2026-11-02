@@ -121,20 +121,33 @@ public final class Session {
     ///     after ``start()``.
     ///   - cache: Where attachments' bytes are kept once fetched or attached; with none, they're
     ///     fetched each time.
-    public init(
+    public convenience init(
         connection: Connection, conversation: Conversation = Conversation(), outbox: OutboxStore,
         cache: AttachmentCache? = nil, transport: any Transport = URLSessionTransport(),
         network: any NetworkPath = SystemNetworkPath(),
         clock: some Clock<Duration> = ContinuousClock()
     ) {
+        self.init(
+            address: connection.address, token: connection.token, conversation: conversation,
+            outbox: outbox, cache: cache, transport: transport, network: network, clock: clock)
+    }
+
+    /// A session with the server at `address`, for when who answered there isn't known, such as
+    /// when an older Ari saved it in a shape this one can't read.
+    public init(
+        address: ServerAddress, token: Token, conversation: Conversation = Conversation(),
+        outbox: OutboxStore, cache: AttachmentCache? = nil,
+        transport: any Transport = URLSessionTransport(),
+        network: any NetworkPath = SystemNetworkPath(),
+        clock: some Clock<Duration> = ContinuousClock()
+    ) {
         self.conversation = conversation
-        self.address = connection.address
+        self.address = address
         self.outbox = outbox
         self.cache = cache
         self.network = network
         ticker = Ticker(clock)
-        client = ItoClient(
-            address: connection.address, token: connection.token, transport: transport)
+        client = ItoClient(address: address, token: token, transport: transport)
     }
 
     // MARK: - Lifecycle
