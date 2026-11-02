@@ -96,7 +96,9 @@ struct DeskScreen: View {
         .background(.ariBackground)
         .safeAreaInset(edge: .bottom, spacing: 0) { bottom }
         .sheet(item: $openedItem) { CalendarEventView(item: $0) }
-        .sheet(item: $openedCard) { card in
+        .sheet(item: $openedCard) { opened in
+            // As the Desk has it now, such as redrafting, rather than as it was when opened.
+            let card = session.desk?.waiting.first { $0.id == opened.id } ?? opened
             NavigationStack {
                 ScrollView {
                     DeskCardView(card: card, context: context(for: card)) { given in
@@ -141,9 +143,18 @@ struct DeskScreen: View {
             }
         #endif
         .onDisappear { endLook() }
+        // Only leaving for the background ends a visit: Control Center, a notification pulled down
+        // or the way back from the background pass through inactive, and ending the visit there
+        // cleared the dots of what changed while you were away.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { startLook() } else { endLook() }
+            switch phase {
+            case .active: startLook()
+            case .background: endLook()
+            default: break
+            }
         }
+        // A failed answer belongs to its line: Kumo's next line starts without it.
+        .onChange(of: session.desk?.moment?.id) { _, _ in sending.clearProblem() }
         .animation(.smooth(duration: 0.35), value: followed)
         .animation(.smooth(duration: 0.35), value: session.problems)
     }

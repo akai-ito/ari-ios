@@ -102,6 +102,8 @@ struct KumosWorkView: View {
     var openAll: (() -> Void)?
     /// An undo that didn't go through.
     var problem: String?
+    /// A "Show me everything again" that didn't go through, shown with the ladder.
+    var trustProblem: String?
     /// Opens scrolled down to how much Kumo checks with you, for previews.
     var opensAtTrust = false
 
@@ -333,6 +335,7 @@ struct KumosWorkView: View {
                 }
             }
             .deskCard()
+            if let trustProblem { DeskProblemLine(text: trustProblem) }
             Text(
                 "Learning: I show you everything. Spot checks: about one in five. Trusted: only what needs you. A “That was wrong” steps it back one."
             )
@@ -424,6 +427,7 @@ struct KumosWorkScreen: View {
 
     @State private var work: KumoWork?
     @State private var problem: String?
+    @State private var trustProblem: String?
     @State private var openedCard: DeskCard?
     @State private var showsAll = false
     @State private var correcting: DoneEntry?
@@ -459,7 +463,7 @@ struct KumosWorkScreen: View {
                 wrong: { correcting = $0 },
                 showEverything: { kind in Task { await showEverything(kind) } },
                 openAll: review == nil ? { showsAll = true } : nil, problem: problem,
-                opensAtTrust: opensAtTrust)
+                trustProblem: trustProblem, opensAtTrust: opensAtTrust)
         } else {
             VStack(spacing: 12) {
                 if let problem {
@@ -501,11 +505,12 @@ struct KumosWorkScreen: View {
     }
 
     private func showEverything(_ kind: WorkKind) async {
+        trustProblem = nil
         do {
             try await session.resetTrust(kind)
             await load()
         } catch {
-            problem = "Couldn't change that: \(DeskSending.words(for: error))"
+            trustProblem = "Couldn't change that: \(DeskSending.words(for: error))"
         }
     }
 
@@ -518,9 +523,10 @@ struct KumosWorkScreen: View {
         }
     }
 
-    /// A card that needs you, opened in full, as on the Desk.
-    private func cardView(_ card: DeskCard) -> some View {
-        ScrollView {
+    /// A card that needs you, opened in full, as on the Desk, and kept as the Desk has it now.
+    private func cardView(_ opened: DeskCard) -> some View {
+        let card = session.desk?.waiting.first { $0.id == opened.id } ?? opened
+        return ScrollView {
             DeskCardView(card: card, context: context(for: card)) { answer in
                 try await session.answer(card.id, answer)
                 openedCard = nil
