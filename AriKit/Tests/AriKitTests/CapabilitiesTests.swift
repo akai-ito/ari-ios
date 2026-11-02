@@ -172,6 +172,7 @@ actor StubServer: Transport {
     }
 
     func goOffline() { offline = true }
+    func goOnline() { offline = false }
 
     func send(_ request: HTTPRequest, to base: URL) async throws -> HTTPResponse {
         guard !offline else { throw URLError(.notConnectedToInternet) }
