@@ -117,10 +117,11 @@ struct OnboardingActions {
     /// Starts a call with Kumo, to answer the question in your voice. Kumo's next question arrives
     /// by setting `asking`.
     var talk: () -> Void
-    /// Sends an answer to a question; returns Kumo's next question, or `nil` once it has enough.
-    var answer: (KumoQuestion.ID, String) async throws -> KumoQuestion?
-    /// Passes on a question; returns the next, or `nil`.
-    var skip: (KumoQuestion.ID) async throws -> KumoQuestion?
+    /// Sends an answer to a question; returns what Kumo does next: its next question, still
+    /// thinking, or finished once it has enough.
+    var answer: (KumoQuestion.ID, String) async throws -> KumoAsking
+    /// Passes on a question; returns what Kumo does next.
+    var skip: (KumoQuestion.ID) async throws -> KumoAsking
     /// One of Kumo's beliefs is still true.
     var confirm: (Belief.ID) async throws -> Void
     /// One isn't any more, with what's true now (empty when it simply ended).
@@ -210,14 +211,12 @@ final class OnboardingModel {
 
     func answer(_ text: String) async throws {
         guard case .asking(let question) = asking else { return }
-        let next = try await actions.answer(question.id, text)
-        asking = next.map(KumoAsking.asking) ?? .finished
+        asking = try await actions.answer(question.id, text)
     }
 
     func skipQuestion() async throws {
         guard case .asking(let question) = asking else { return }
-        let next = try await actions.skip(question.id)
-        asking = next.map(KumoAsking.asking) ?? .finished
+        asking = try await actions.skip(question.id)
     }
 
     // MARK: Still true?

@@ -18,7 +18,11 @@ struct OnboardingHost: View {
             if let model { OnboardingFlow(model: model) }
         }
         .task {
-            if model == nil { model = makeModel() }
+            if model == nil {
+                model = makeModel()
+                // The first look at getting started came before there was a model to fill.
+                update(session.onboarding)
+            }
             if capabilities == nil { capabilities = app.client().map(Capabilities.init(client:)) }
             model?.serverSends = app.server?.setup?.notifications ?? true
             // Accounts already connected, such as when getting started runs again, show so.
@@ -112,22 +116,24 @@ struct OnboardingHost: View {
                 finish: { try await session.finishOnboarding() }))
     }
 
-    /// Sends an answer and waits for Kumo's next question: `nil` once Kumo has what it needs.
-    private func say(_ text: String) async throws -> KumoQuestion? {
-        guard let sent = session.send(text) else { return nil }
+    /// Sends an answer and waits for what Kumo does next: its next question, or finished once it
+    /// has what it needs. After a minute it stops waiting and shows Kumo still thinking, rather
+    /// than finished; the question shows when it comes.
+    private func say(_ text: String) async throws -> KumoAsking {
+        guard let sent = session.send(text) else { return .finished }
         for _ in 0..<240 {
             try await Task.sleep(for: .milliseconds(250))
-            if session.onboarding?.state == .ready { return nil }
+            if session.onboarding?.state == .ready { return .finished }
             let entries = session.conversation.entries
             guard let index = entries.firstIndex(where: { $0.id == sent }),
                 session.conversation.turn == nil
             else { continue }
             if let reply = entries[(index + 1)...].last(where: { $0.role == .agent && $0.isShown })
             {
-                return Self.question(reply)
+                return .asking(Self.question(reply))
             }
         }
-        return nil
+        return .waiting
     }
 
     /// Kumo's message as a question: its words without the blocks it drew, and the short answers it
