@@ -1,8 +1,8 @@
 import AriKit
 import SwiftUI
 
-/// Step 4: notifications, with an honest line about when they come. Allow asks iOS; Not now is
-/// fine too.
+/// Step 4, once you've talked about checking in: notifications, with an honest line about when they
+/// come. Allow asks iOS; Not now is fine too.
 struct OnboardingNotificationsStep: View {
     let model: OnboardingModel
 
@@ -93,8 +93,8 @@ struct OnboardingNotificationsStep: View {
 #if DEBUG
     #Preview("4 · Notifications") {
         @Previewable @State var model = OnboardingSamples.model(
-            step: .notifications, connected: ["icloud"],
-            progress: OnboardingProgress(read: 2480, total: 3100))
+            step: .checkIn, connected: ["icloud"],
+            progress: OnboardingProgress(read: 2480, total: 3100), talkedCheckIn: true)
         OnboardingFlow(model: model)
             .preferredColorScheme(.dark)
     }
