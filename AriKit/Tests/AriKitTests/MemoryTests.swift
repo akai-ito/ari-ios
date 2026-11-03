@@ -84,6 +84,36 @@ struct MemoryTests {
         #expect(!PageAddress.pastConversations.isPage)
     }
 
+    @Test("a page's photos come by name, once, and a page without them has none")
+    func photos() async throws {
+        let json = #"""
+            {"address": "memory:journal/2026-11-03", "title": "3 November 2026", "shelf": "journal",
+             "aliases": [], "links": [], "changed_at": "2026-11-03T18:30:00.000Z",
+             "markdown": "![Mira by the river](../media/3f9a1c2b4d5e6f70.jpg)\n",
+             "photos": [{"source": "../media/3f9a1c2b4d5e6f70.jpg", "name": "3f9a1c2b4d5e6f70.jpg",
+                         "width": 1333, "height": 2000}]}
+            """#
+        let page = try JSONDecoder().decode(MemoryPage.self, from: Data(json.utf8))
+        let plain = try JSONDecoder().decode(
+            MemoryPage.self,
+            from: Data(json.replacing(#/,\s*"photos"[\s\S]*\]/#, with: "").utf8))
+        let photo = MemoryPhoto(
+            source: "../media/3f9a1c2b4d5e6f70.jpg", name: "3f9a1c2b4d5e6f70.jpg", width: 1333,
+            height: 2000)
+        #expect(page.photos == [photo])
+        #expect(plain.photos.isEmpty)
+
+        let server = PhotoServer(bytes: Data([0xFF, 0xD8, 0xFF, 0xD9]))
+        let memory = Memory(
+            client: ItoClient(
+                address: try ServerAddress("https://studio.example"),
+                token: Token("ito_example_not_a_real_token_00000000000000000000"),
+                transport: server))
+        #expect(await memory.photo(photo) == Data([0xFF, 0xD8, 0xFF, 0xD9]))
+        #expect(await memory.photo(photo) == Data([0xFF, 0xD8, 0xFF, 0xD9]))
+        #expect(await server.paths == ["/v0/memory/media/3f9a1c2b4d5e6f70.jpg"])
+    }
+
     /// The Library's requests in the contract's transcripts, made through the real client.
     @Test(arguments: ["35-ari-updates-what-it-knows", "36-forget-that"])
     func transcripts(_ name: String) async throws {
@@ -107,5 +137,24 @@ struct MemoryTests {
         let mismatches = await server.mismatches
         #expect(mismatches.isEmpty, "\(mismatches)")
         #expect(await server.unanswered == 0)
+    }
+}
+
+/// Answers every request with the same photo, and remembers what it was asked for.
+private actor PhotoServer: Transport {
+    private(set) var paths: [String] = []
+    private let bytes: Data
+
+    init(bytes: Data) {
+        self.bytes = bytes
+    }
+
+    func send(_ request: HTTPRequest, to base: URL) async throws -> HTTPResponse {
+        paths.append(request.path)
+        return HTTPResponse(status: 200, headers: ["content-type": "image/jpeg"], body: bytes)
+    }
+
+    func open(_ request: HTTPRequest, to base: URL) async throws -> HTTPStream {
+        throw URLError(.badServerResponse)
     }
 }

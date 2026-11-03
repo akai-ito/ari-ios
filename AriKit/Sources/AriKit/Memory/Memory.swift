@@ -22,6 +22,12 @@ public final class Memory {
     public private(set) var load = Load.loading
 
     @ObservationIgnored private let client: ItoClient
+    /// Photos fetched while Ari runs, by name, up to a few dozen megabytes.
+    private let photos: NSCache<NSString, NSData> = {
+        let cache = NSCache<NSString, NSData>()
+        cache.totalCostLimit = 64 * 1024 * 1024
+        return cache
+    }()
 
     public init(client: ItoClient) {
         self.client = client
@@ -61,6 +67,15 @@ public final class Memory {
 
     public func change(_ change: String) async throws(RequestError) -> PageChange {
         try await client.change(change)
+    }
+
+    /// A photo's bytes, kept once fetched: a photo in memory never changes under its name.
+    public func photo(_ photo: MemoryPhoto) async -> Data? {
+        let key = photo.name as NSString
+        if let kept = photos.object(forKey: key) { return kept as Data }
+        guard let data = try? await client.memoryPhoto(photo.name) else { return nil }
+        photos.setObject(data as NSData, forKey: key, cost: data.count)
+        return data
     }
 
 }

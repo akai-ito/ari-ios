@@ -58,7 +58,8 @@ struct ShelfRoute: Hashable {
 }
 
 /// One page, read-only, drawn from Ari's Markdown: the pages it links to as chips on top, then
-/// the present, then *Earlier*. Names in the words open their pages.
+/// the present, then *Earlier*, with the photos it keeps where the story shows them. Names in the
+/// words open their pages.
 struct PageView: View {
     let memory: Memory?
     let address: PageAddress
@@ -82,7 +83,7 @@ struct PageView: View {
                             }
                         }
                     }
-                    ReplyView(document: PageLink.reading(page), position: .infinity)
+                    PageStory(page: page, memory: memory)
                     Text(
                         "\(LibraryHome.title(ofShelf: page.shelf)) · as of \(LibraryHome.ago(page.changedAt))"
                     )
