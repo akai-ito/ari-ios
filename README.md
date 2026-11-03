@@ -65,16 +65,16 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
 - **The Desk.** Where Ito opens, and home for everything admin, so mail never floods the chat. At
   the top, Kumo's line: something it thought worth saying for now, which Kumo changes when the
   moment does and which never notifies. Under Kumo's face a tiny line says it's reading, with the
-  last mail, or "Something's wrong ›", and the face looks a little off. Then what's coming up (opening in Apple's
-  own event view), what's waiting on you (drafts to open in Mail, invites, times to check against
-  your work calendar, questions Kumo wasn't sure about), each with a dot when it's new or changed
-  since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's work: today's
-  ledger, each thing with its reason, Undo and "That was wrong" (a word, a tap on a usual word, or
-  just the tap), and everything before. Your answer shows on its card
-  while Kumo acts on it, and then a line says what followed. While something on the server needs
-  you, such as notifications it can't send or a mail account that keeps refusing its sign-in, a
-  quiet line says so too, opening how to fix it; Settings lists it first, and both clear on their
-  own once it's fixed. Tell Kumo talks into the chat, with the reply on the Desk.
+  last mail, or "Something's wrong ›", and the face looks a little off. Then what's coming up
+  (opening in Apple's own event view), what's waiting on you (drafts to open in Mail, invites, times
+  to check against your work calendar, questions Kumo wasn't sure about), each with a dot when it's
+  new or changed since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's
+  work: today's ledger, each thing with its reason, Undo and "That was wrong" (a word, a tap on a
+  usual word, or just the tap), and everything before. Your answer shows on its card while Kumo acts
+  on it, and then a line says what followed. While something on the server needs you, such as
+  notifications it can't send or a mail account that keeps refusing its sign-in, a quiet line says
+  so too, opening how to fix it; Settings lists it first, and both clear on their own once it's
+  fixed. Tell Kumo talks into the chat, with the reply on the Desk.
 - **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
   questions while Kumo reads three months of mail (or "still true?" for what it already knows),
   notifications, then what's in motion. Kumo's questions can offer answers to tap.
