@@ -165,6 +165,26 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return answer.event
     }
 
+    /// `PATCH /v0/calendar/events/{item}`: moves one of Kumo's own blocks, such as its plan for an
+    /// hour of your day, within 12 hours. Done keeps the move with an undo. The answer is the block
+    /// as the calendar now holds it.
+    public func moveEvent(_ item: CalendarItemID, to times: EventMove) async throws(RequestError)
+        -> CalendarItem
+    {
+        let answer: CalendarEventResult = try await call(
+            HTTPRequest(
+                .patch, "/v0/calendar/events/\(Self.segment(item.rawValue))",
+                body: try Self.json(times)))
+        return answer.event
+    }
+
+    /// `DELETE /v0/calendar/events/{item}`: takes one of Kumo's own blocks off its calendar. Done
+    /// keeps the removal with an undo that puts it back.
+    public func removeEvent(_ item: CalendarItemID) async throws(RequestError) {
+        try await callWithoutAnswer(
+            HTTPRequest(.delete, "/v0/calendar/events/\(Self.segment(item.rawValue))"))
+    }
+
     /// `POST /v0/turns/{turn}/stop`: the reply keeps what Ari had written.
     public func stop(_ turn: TurnID) async throws(RequestError) -> StopResult {
         try await call(HTTPRequest(.post, "/v0/turns/\(Self.segment(turn.rawValue))/stop"))

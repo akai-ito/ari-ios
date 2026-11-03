@@ -13,6 +13,12 @@ public struct Timestamp: Hashable, Sendable, CustomStringConvertible {
         self.date = date
     }
 
+    /// A time on this device, written as the server writes its own: UTC, with milliseconds.
+    public init(_ date: Date) {
+        rawValue = date.formatted(Self.withMilliseconds)
+        self.date = Self.parse(rawValue) ?? date
+    }
+
     public var description: String { rawValue }
 
     private static let withMilliseconds = Date.ISO8601FormatStyle(includingFractionalSeconds: true)

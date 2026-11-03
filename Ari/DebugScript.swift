@@ -11,7 +11,7 @@ import SwiftUI
     /// `ARI_MOTION_PLACE` on a place's page,
     /// `ARI_MOTION_PIN` with a map pin's callout up (a stop's id), or `ARI_MOTION_CHANGES` showing what changed), `ARI_SETTINGS` opens Settings (or, with
     /// `capabilities`, `capability:<id>`, `setup:<id>`, `model`, `voice` or `backup`, goes on to that place, or with `memory` scrolls to it),
-    /// `ARI_TOPICS` opens the conversation's topics, `ARI_KUMOS_WORK` opens Kumo's work on the Desk, `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
+    /// `ARI_TOPICS` opens the conversation's topics, `ARI_DESK` opens part of the Desk (`upto` for What I'm up to, `tracks` for it scrolled to Getting to know you, `day` for your day, `problems`, or `wrong` for That was wrong in Kumo's work), `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
     /// `ARI_SHELF` opens a shelf (`people`, or `journal` and with `ARI_CALENDAR` its calendar), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
@@ -32,10 +32,11 @@ import SwiftUI
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensTopics = environment["ARI_TOPICS"] != nil
-        static let opensKumosWork = environment["ARI_KUMOS_WORK"] != nil
-        /// `wrong` asks "That was wrong" of its first entry.
-        static let kumosWork = environment["ARI_KUMOS_WORK"]
-        /// `ARI_GUESS` shows the Desk's first guess open (`open`), or with what it really was
+        /// `ARI_MOODS` opens Ari on Kumo's moods side by side, without a server.
+        static let showsMoods = environment["ARI_MOODS"] != nil
+        /// `ARI_DESK`: what the Desk opens once it's up.
+        static let desk = environment["ARI_DESK"]
+        /// `ARI_GUESS` shows the day's first guess open (`open`), or with what it really was
         /// (`correct`).
         static let guess = environment["ARI_GUESS"]
         static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))

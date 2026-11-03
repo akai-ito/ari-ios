@@ -5,7 +5,7 @@
     /// The Desk on the Thursday of Halcyon, from the milestone's design record, for previews: times are
     /// relative to now, so "Today" stays today.
     enum DeskSamples {
-        // MARK: Coming up
+        // MARK: Coming up, for the thread
 
         static let comingUp: [CalendarItem] = [
             CalendarItem(
@@ -106,9 +106,6 @@
             id: "future", kind: CardKind(rawValue: "parcel"), at: at(10, 0),
             title: "Your DPD parcel arrives between 14:00 and 15:00")
 
-        static let waiting = [
-            hotelDraft, revolutQuestion, northwindInvite, halcyonTimes, futureCard,
-        ]
         static let allCards = [
             tessDraft, halcyonTimes, northwindInvite, revolutQuestion, outlookOffer, futureCard,
         ]

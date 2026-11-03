@@ -46,8 +46,8 @@ struct InviteCardView: View {
         let day = event.start.date.formatted(DeskTime.weekdayDayMonth)
         let time =
             event.allDay
-            ? (ComingUpList.days(of: event) > 1
-                ? "\(ComingUpList.days(of: event)) days" : "all day")
+            ? (DayReading.days(of: event) > 1
+                ? "\(DayReading.days(of: event)) days" : "all day")
             : "\(event.start.date.formatted(DeskTime.time))–\(event.end.date.formatted(DeskTime.time))"
         let place = location ? event.location : nil
         return [day, time, place].compactMap(\.self).joined(separator: " · ")

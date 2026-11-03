@@ -2,9 +2,9 @@ import AriKit
 import CoreSpotlight
 import SwiftUI
 
-/// Ito's four places: the Desk, home for everything admin; Chat, the one conversation with Kumo; In
-/// motion, what you're actually doing, which Kumo keeps current; and You, what Kumo knows. Settings
-/// open from the corner of each.
+/// Ito's four places: the Desk, where Kumo is; Chat, the one conversation with Kumo; In motion,
+/// what you're actually doing, which Kumo keeps current; and You, what Kumo knows. Settings open
+/// from the corner of Chat, In motion and You.
 struct MainView: View {
     let session: Session
     let model: AppModel
@@ -29,15 +29,7 @@ struct MainView: View {
     var body: some View {
         TabView(selection: $place) {
             Tab("Desk", systemImage: "rectangle.grid.1x2", value: .desk) {
-                DeskScreen(
-                    session: session, openChat: { place = .chat },
-                    openSettings: { showsSettings = true },
-                    talk: {
-                        makeTalk()
-                        place = .chat
-                        talk?.start()
-                    },
-                    talkReady: voices?.canTalk ?? false)
+                DeskScreen(session: session)
             }
             Tab("Chat", systemImage: "bubble.left", value: .chat) {
                 ConversationView(
