@@ -61,3 +61,42 @@ struct AmbientLine: View {
         }
     }
 }
+
+/// Where the weather would be, before Ito may know roughly where you are: one line asking, and one
+/// on why. Allow asks iOS, for rough location only; the cross closes it for good.
+struct WeatherOffer: View {
+    let allow: () -> Void
+    let decline: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button(action: allow) {
+                VStack(spacing: 3) {
+                    Label("Show the weather here", systemImage: "location")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.ariSecondary)
+                    Text(
+                        "Just your town, for the weather and so \(LeadName.current) follows you when you travel."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.ariTertiary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Asks to use your rough location")
+            Button(action: decline) {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.ariTertiary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Not now")
+        }
+        .frame(maxWidth: 300)
+    }
+}

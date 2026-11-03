@@ -29,7 +29,7 @@ struct MainView: View {
     var body: some View {
         TabView(selection: $place) {
             Tab("Desk", systemImage: "rectangle.grid.1x2", value: .desk) {
-                DeskScreen(session: session)
+                DeskScreen(session: session, model: model)
             }
             Tab("Chat", systemImage: "bubble.left", value: .chat) {
                 ConversationView(

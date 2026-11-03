@@ -32,6 +32,7 @@ struct AriApp: App {
                     model.session?.start()
                     model.collectShares()
                     model.refreshServer()
+                    model.whereabouts.refresh()
                 case .background:
                     // A call carries on in your pocket: Ari's replies still have to arrive.
                     if CallEngine.isOn { break }

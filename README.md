@@ -105,6 +105,11 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
 - **Four places, and Settings.** Desk, Chat, In motion and You in the iOS 26 tab bar. Settings opens
   from the corner of Chat, In motion and You: the server, Kumo's name, notifications, Kumo's voice
   and model, capabilities, and the app icon.
+- **Where you are, roughly.** Ito tells your box the phone's time zone each time it opens and
+  whenever it changes, so Kumo lives by your clock wherever you are. The first time the Desk could
+  show the weather, it offers to, in one line: allow rough location (When In Use, approximate) and
+  the phone adds its town, rounded to about 10 km, re-read at most hourly. Refuse it and only the
+  time zone goes. Settings › Kumo shows what the box keeps.
 - **Messages that reach you.** Every message from Kumo notifies as it's sent, encrypted on the way:
   a reply, a failure, a question, or something Kumo wrote to you on its own. With Ito open it's a
   banner, except while you're reading the chat. Your Focus decides what makes a sound; a message
