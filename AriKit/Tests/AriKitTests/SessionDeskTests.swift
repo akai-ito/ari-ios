@@ -147,6 +147,37 @@ struct SessionDeskTests {
         #expect(try await yesterday.value.day == "2026-11-09")
     }
 
+    @Test("moving and removing one of Kumo's blocks show at once")
+    func blocks() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        try await bench.open(
+            with: Self.snapshot(
+                "e_10", desk: #"{"coming_up":[\#(Self.block(at: 14))],"waiting":[]}"#))
+        let session = bench.session
+        let start = try #require(Timestamp("2026-11-10T15:00:00.000Z"))
+        let end = try #require(Timestamp("2026-11-10T17:00:00.000Z"))
+
+        let moving = Task { try await session.move("b_1", to: EventMove(start: start, end: end)) }
+        let move = try await bench.nextRequest()
+        #expect(move.method == .patch && move.path == "/v0/calendar/events/b_1")
+        #expect(
+            try move.body.map { try JSONValue(data: $0) }
+                == JSONValue(
+                    json: #"{"start":"2026-11-10T15:00:00.000Z","end":"2026-11-10T17:00:00.000Z"}"#)
+        )
+        try await bench.server.answer(200, json: #"{"event":\#(Self.block(at: 15))}"#)
+        try await moving.value
+        #expect(session.desk?.comingUp.first?.start.instant == start.date)
+
+        let removing = Task { try await session.remove("b_1") }
+        let remove = try await bench.nextRequest()
+        #expect(remove.method == .delete && remove.path == "/v0/calendar/events/b_1")
+        try await bench.server.answer(204)
+        try await removing.value
+        #expect(session.desk?.comingUp.isEmpty == true)
+    }
+
     @Test("That was wrong, with or without words")
     func corrections() async throws {
         let bench = try Bench()
@@ -371,6 +402,13 @@ struct SessionDeskTests {
 
     private static let track =
         #"{"id":"l_1","name":"Writing as you","stage":"spot_checks","since":"2026-11-01T10:00:00.000Z","confirmed":12,"corrected":1,"evidence":[]}"#
+
+    private static func block(at hour: Int) -> String {
+        let start = String(format: "2026-11-10T%02d:00:00.000Z", hour)
+        let end = String(format: "2026-11-10T%02d:00:00.000Z", hour + 2)
+        return
+            #"{"id":"b_1","uid":"b1@kumo","title":"Deep work","start":"\#(start)","end":"\#(end)","all_day":false,"calendar":{"name":"Kumo","kumo":true}}"#
+    }
 
     private static func plan(_ id: String, at: String) -> String {
         #"{"id":"\#(id)","at":"\#(at)","what":"Ask how the run went","why":"You wanted to talk it through.","by":"kumo","source":{"kind":"chat","title":"Chat"},"set_at":"2026-11-10T09:00:00.000Z"}"#

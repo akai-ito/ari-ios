@@ -62,19 +62,25 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
   send answers it, from a notification too. An approval shows what it would do, and any pictures
   it would make public, such as a report's screenshots.
-- **The Desk.** Where Ito opens, and home for everything admin, so mail never floods the chat. At
-  the top, Kumo's line: something it thought worth saying for now, which Kumo changes when the
-  moment does and which never notifies. Under Kumo's face a tiny line says it's reading, with the
-  last mail, or "Something's wrong ›", and the face looks a little off. Then what's coming up
-  (opening in Apple's own event view), what's waiting on you (drafts to open in Mail, invites, times
-  to check against your work calendar, questions Kumo wasn't sure about), each with a dot when it's
-  new or changed since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's
-  work: today's ledger, each thing with its reason, Undo and "That was wrong" (a word, a tap on a
-  usual word, or just the tap), and everything before. Your answer shows on its card while Kumo acts
-  on it, and then a line says what followed. While something on the server needs you, such as
-  notifications it can't send or a mail account that keeps refusing its sign-in, a quiet line says
-  so too, opening how to fix it; Settings lists it first, and both clear on their own once it's
-  fixed. Tell Kumo talks into the chat, with the reply on the Desk.
+- **The Desk.** Where Ito opens, and where Kumo is. Kumo sits big, a sixth of the way down, on a
+  faint cushion of dots, in its mood (bright, proud, focused, cosy, concerned, drowsy, or calm),
+  with its line under it in its own serif: something Kumo thought worth saying now, which never
+  notifies. Behind it the day's light changes with the hour, and once the box knows roughly where
+  you are, the weather and the sunset sit small at the top. Nothing moves Kumo. When something
+  needs you, a small "2 for you" sits beside it, and Kumo glances at it.
+- **What I'm up to.** Tapping Kumo opens what needs you (drafts to open in Mail, invites, times to
+  check against your work calendar, questions, offers), Kumo's plans (each check-in it set, with
+  when, why, whether it repeats and who set it; tap one to move or reword it, or cancel it), today's
+  Done with Undo and "That was wrong" (a word, a tap on a usual word, or just the tap) and
+  everything before, and Getting to know you: the areas Kumo is learning, as dots by stage, each
+  opening what it stands on.
+- **Your day.** At the Desk's foot, today is a dotted thread: dense where the day has been, your
+  events as knots, now ringed, and only the next one named. Tapping it opens the day as a calm list,
+  then tomorrow, with Kumo's planned blocks, guesses and check-ins woven in faintly (Only mine hides
+  them). A guess takes Right or Not right?, a planned block moves or comes off (Done keeps an undo),
+  and a check-in changes or cancels. Your own events open in Apple's event view. While something on
+  the server needs you, a quiet "Something's wrong ›" under Kumo's line opens how to fix it;
+  Settings lists it first, and both clear on their own once it's fixed.
 - **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
   questions while Kumo reads three months of mail (or "still true?" for what it already knows),
   notifications, then what's in motion. Kumo's questions can offer answers to tap.
@@ -97,8 +103,8 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   provider's own page where it can ("Connect GitHub", "Connect Outlook"), or with guided steps where
   it can't (an iCloud or Gmail app password), so keys go to your box and never come back.
 - **Four places, and Settings.** Desk, Chat, In motion and You in the iOS 26 tab bar. Settings opens
-  from the corner: the server, Kumo's name, notifications, Kumo's voice and model, capabilities, and
-  the app icon.
+  from the corner of Chat, In motion and You: the server, Kumo's name, notifications, Kumo's voice
+  and model, capabilities, and the app icon.
 - **Messages that reach you.** Every message from Kumo notifies as it's sent, encrypted on the way:
   a reply, a failure, a question, or something Kumo wrote to you on its own. With Ito open it's a
   banner, except while you're reading the chat. Your Focus decides what makes a sound; a message
@@ -128,14 +134,15 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk; `ARI_MOTION` then opens a thing in
 motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going
 further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
+`ARI_DESK` opens part of the Desk (`upto`, `tracks`, `day`, `problems` or `wrong`),
 `ARI_SETTINGS` opens Settings and
 `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
 *times*, *invite* and *mail* put cards on the Desk, *work* fills Kumo's work, and *plan* lays out a
-day of Kumo's plan and guesses in Coming up (`ARI_GUESS` shows the first guess `open`, or with what
-it really was, `correct`).
+day of Kumo's plan and guesses (`ARI_GUESS` shows the day's first guess `open`, or with what it
+really was, `correct`).
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy

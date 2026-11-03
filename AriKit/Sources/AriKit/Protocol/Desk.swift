@@ -74,6 +74,11 @@ public struct Desk: Sendable, Equatable, Decodable {
         return with(plans: plans.sorted { $0.at.date < $1.at.date })
     }
 
+    /// The same Desk without one of Coming up's items, such as one of Kumo's blocks you removed.
+    public func removing(item: CalendarItemID) -> Desk {
+        with(comingUp: comingUp.filter { $0.id != item })
+    }
+
     /// The same Desk with all of Kumo's plans as the box listed them.
     public func replacing(plans: [WakeUp]) -> Desk {
         with(plans: plans)
@@ -586,6 +591,18 @@ public struct CalendarStatus: OpenValue {
     public static let tentative = CalendarStatus(rawValue: "tentative")
     public static let confirmed = CalendarStatus(rawValue: "confirmed")
     public static let known = [hold, tentative, confirmed]
+}
+
+/// The body of `PATCH /v0/calendar/events/{item}`: where one of Kumo's own blocks moves to, within
+/// 12 hours of where it was.
+public struct EventMove: Sendable, Equatable, Codable {
+    public let start: Timestamp
+    public let end: Timestamp
+
+    public init(start: Timestamp, end: Timestamp) {
+        self.start = start
+        self.end = end
+    }
 }
 
 /// The body of `POST /v0/calendar/events`: an event for your own calendar, which the box writes.

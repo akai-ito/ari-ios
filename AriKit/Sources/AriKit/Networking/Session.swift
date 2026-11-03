@@ -491,6 +491,24 @@ public final class Session {
         try await client.addEvent(event)
     }
 
+    /// You moved one of Kumo's blocks on your day. It shows where it is now at once, until the
+    /// Desk says how it is.
+    public func move(_ item: CalendarItemID, to times: EventMove) async throws(RequestError) {
+        let moved = try await client.moveEvent(item, to: times)
+        desk = desk?.replacing(item: moved)
+    }
+
+    /// You removed one of Kumo's blocks from your day. It leaves the Desk at once.
+    public func remove(_ item: CalendarItemID) async throws(RequestError) {
+        do throws(RequestError) {
+            try await client.removeEvent(item)
+        } catch {
+            // Already gone is removed too.
+            guard error.status == 404 else { throw error }
+        }
+        desk = desk?.removing(item: item)
+    }
+
     // MARK: - Getting started
 
     /// Asks where getting started stands, which the snapshot and `onboarding.changed` also say.
