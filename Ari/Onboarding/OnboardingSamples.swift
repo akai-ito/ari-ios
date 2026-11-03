@@ -32,6 +32,19 @@
             ),
         ]
 
+        static let checkIn = KumoQuestion(
+            id: "checkin",
+            text:
+                "How should I check in? When do you like to plan your day, and is there anything you'd like me to keep an eye on?"
+        )
+
+        static let plans = [
+            PlanSummary(
+                id: "w1", when: "Weekdays at 08:30",
+                what: "Shape the day with you if it's unplanned"),
+            PlanSummary(id: "w2", when: "Sundays at 18:00", what: "A look at the week ahead"),
+        ]
+
         static let beliefs = [
             Belief(id: "halcyon", text: "You're in Halcyon's interview process."),
             Belief(id: "florence", text: "Florence with Mira on the 12th."),
@@ -77,7 +90,8 @@
             step: OnboardingModel.Step, connected: Set<String>,
             progress: OnboardingProgress? = nil,
             asking: KumoAsking = .asking(OnboardingSamples.questions[0]),
-            beliefs: [Belief] = [], reveal: OnboardingReveal? = nil
+            beliefs: [Belief] = [], reveal: OnboardingReveal? = nil, talkedCheckIn: Bool = false,
+            plans: [PlanSummary] = []
         ) -> OnboardingModel {
             let sources = sources.map { source in
                 var source = source
@@ -117,6 +131,8 @@
             let made = OnboardingModel(
                 step: step, sources: sources, progress: progress, asking: asking,
                 beliefs: beliefs, reveal: reveal, actions: actions)
+            made.talkedCheckIn = talkedCheckIn
+            made.plans = plans
             model = made
             return made
         }

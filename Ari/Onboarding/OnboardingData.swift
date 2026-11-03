@@ -59,6 +59,15 @@ struct RevealMatter: Equatable, Identifiable, Sendable {
     let symbol: String
 }
 
+/// One of the first plans Kumo sets while you talk about how it should check in: "Weekdays at
+/// 08:30", "Shape the day with you if it's unplanned".
+struct PlanSummary: Equatable, Identifiable, Sendable {
+    let id: String
+    /// How it comes back, or when it's due for a one-off, such as "Weekdays at 08:30".
+    let when: String
+    let what: String
+}
+
 /// Something the catch-up put on your calendar, such as a booking that wasn't there.
 struct AddedEvent: Equatable, Sendable {
     let title: String
@@ -146,8 +155,9 @@ final class OnboardingModel {
         case connect
         /// Kumo's questions while it reads, or "Still true?" for someone with memory.
         case knowYou
-        /// Notifications.
-        case notifications
+        /// A short talk about how Kumo should check in, which sets its first plans; then
+        /// notifications.
+        case checkIn
         /// What's in motion and what Kumo added; Open the Desk.
         case reveal
 
@@ -165,6 +175,12 @@ final class OnboardingModel {
     var notifications: NotificationsChoice?
     /// Whether the server can send notifications yet; `false` until it has an Apple push key.
     var serverSends = true
+    /// The plans Kumo has set so far, such as from the talk about checking in.
+    var plans: [PlanSummary] = []
+    /// Whether you're done talking about checking in, and on to notifications.
+    var talkedCheckIn = false
+    /// How many of Kumo's questions you've answered.
+    private(set) var answered = 0
     /// What Kumo found; `nil` while it's still catching up.
     var reveal: OnboardingReveal?
 
@@ -198,7 +214,11 @@ final class OnboardingModel {
     }
 
     func back() {
-        if let previous = Step(rawValue: step.rawValue - 1) { step = previous }
+        if step == .checkIn, talkedCheckIn {
+            talkedCheckIn = false
+        } else if let previous = Step(rawValue: step.rawValue - 1) {
+            step = previous
+        }
     }
 
     // MARK: Kumo's questions
@@ -206,6 +226,7 @@ final class OnboardingModel {
     func answer(_ text: String) async throws {
         guard case .asking(let question) = asking else { return }
         asking = try await actions.answer(question.id, text)
+        answered += 1
     }
 
     func skipQuestion() async throws {

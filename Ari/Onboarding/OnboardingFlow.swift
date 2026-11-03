@@ -2,7 +2,7 @@ import AriKit
 import SwiftUI
 
 /// Onboarding, right after pairing with the box: meeting Kumo, connecting mail and calendar, Kumo
-/// getting to know you while it reads, notifications, and the reveal of what's in
+/// getting to know you while it reads, how Kumo should check in, notifications, and the reveal of what's in
 /// motion. One idea a step, and calm throughout: never a form.
 struct OnboardingFlow: View {
     let model: OnboardingModel
@@ -33,7 +33,7 @@ struct OnboardingFlow: View {
         case .meet: OnboardingMeetStep(model: model)
         case .connect: OnboardingConnectStep(model: model)
         case .knowYou: OnboardingKnowYouStep(model: model)
-        case .notifications: OnboardingNotificationsStep(model: model)
+        case .checkIn: OnboardingCheckInStep(model: model)
         case .reveal: OnboardingRevealStep(model: model)
         }
     }
@@ -87,9 +87,9 @@ private struct OnboardingTopBar: View {
         .animation(.smooth(duration: 0.3), value: showsReading)
     }
 
-    /// While you answer Kumo, and choose notifications, Kumo is still reading.
+    /// While you talk with Kumo, and choose notifications, Kumo is still reading.
     private var showsReading: Bool {
-        (model.step == .knowYou || model.step == .notifications) && model.reveal == nil
+        (model.step == .knowYou || model.step == .checkIn) && model.reveal == nil
             && model.progress != nil
     }
 }

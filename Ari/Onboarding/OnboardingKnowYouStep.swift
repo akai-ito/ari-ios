@@ -10,7 +10,21 @@ struct OnboardingKnowYouStep: View {
         if model.knowsYou {
             OnboardingBeliefsStep(model: model)
         } else {
-            OnboardingQuestionsStep(model: model)
+            OnboardingTalk(model: model)
+        }
+    }
+}
+
+/// Step 4: a short talk about how Kumo should check in, in Kumo's own words, which sets its first
+/// plans as you go; then notifications.
+struct OnboardingCheckInStep: View {
+    let model: OnboardingModel
+
+    var body: some View {
+        if model.talkedCheckIn {
+            OnboardingNotificationsStep(model: model)
+        } else {
+            OnboardingTalk(model: model, mode: .checkIn)
         }
     }
 }
@@ -18,22 +32,30 @@ struct OnboardingKnowYouStep: View {
 // MARK: - Kumo's questions
 
 /// Kumo asks, in its own hand, one question at a time, each answered by typing or by talking, or
-/// skipped. Which question comes next is Kumo's call: it arrives from the box.
-private struct OnboardingQuestionsStep: View {
+/// skipped. Which question comes next is Kumo's call: it arrives from the box. It's one
+/// conversation: getting to know you, then how Kumo should check in, where the plans Kumo sets
+/// show under the talk as they come.
+struct OnboardingTalk: View {
     let model: OnboardingModel
+    var mode = Mode.gettingToKnowYou
+
+    enum Mode { case gettingToKnowYou, checkIn }
 
     @State private var poses = PoseHistory(.thinking)
     @State private var words = ""
     @State private var sending = DeskSending()
     /// Your answer on its way, shown under the question until Kumo's next one arrives.
     @State private var answered: String?
+    /// Whether you've answered on this step, for Continue.
+    @State private var answeredHere = false
 
     private var trimmed: String { words.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         OnboardingPage {
             VStack(alignment: .leading, spacing: 22) {
-                DeskSectionLabel("Getting to know you")
+                DeskSectionLabel(
+                    mode == .checkIn ? "How should I check in?" : "Getting to know you")
                 PresenceView(history: poses, size: 40)
                     .padding(.leading, 2)
                     .padding(.vertical, 8)
@@ -58,16 +80,30 @@ private struct OnboardingQuestionsStep: View {
                 }
                 .id(model.asking)
                 .transition(.opacity)
+                if mode == .checkIn, !model.plans.isEmpty { plans }
             }
             .animation(.smooth(duration: 0.45), value: model.asking)
+            .animation(.smooth(duration: 0.45), value: model.plans)
         } footer: {
-            switch model.asking {
-            case .finished:
-                OnboardingButton("Continue") { model.advance() }
-            case .waiting:
-                OnboardingQuietButton("Continue without answering") { model.advance() }
-            case .asking:
-                EmptyView()
+            switch mode {
+            case .checkIn:
+                if answeredHere || !model.plans.isEmpty {
+                    OnboardingButton("Continue") { model.talkedCheckIn = true }
+                } else {
+                    OnboardingQuietButton("Skip for now") { model.talkedCheckIn = true }
+                }
+            case .gettingToKnowYou:
+                switch model.asking {
+                case .finished:
+                    OnboardingButton("Continue") { model.advance() }
+                case .waiting:
+                    OnboardingQuietButton("Continue without answering") { model.advance() }
+                case .asking where model.answered > 0:
+                    // Kumo goes on to how it should check in, which is the next step's.
+                    OnboardingQuietButton("Next") { model.advance() }
+                case .asking:
+                    EmptyView()
+                }
             }
         }
         .onChange(of: pose, initial: true) { _, pose in poses.set(pose) }
@@ -87,6 +123,27 @@ private struct OnboardingQuestionsStep: View {
         case .asking: return .asking
         case .finished: return .noticed
         }
+    }
+
+    /// The plans Kumo has set so far, as they come: how each comes back, and what it's for.
+    private var plans: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DeskSectionLabel("My plans")
+            ForEach(model.plans) { plan in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(plan.what)
+                        .font(.subheadline)
+                        .foregroundStyle(.ariSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(plan.when)
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.ariTertiary)
+                }
+                .accessibilityElement(children: .combine)
+                .transition(.opacity)
+            }
+        }
+        .padding(.top, 6)
     }
 
     private func kumoSays(_ text: String, quiet: Bool = false) -> some View {
@@ -176,6 +233,7 @@ private struct OnboardingQuestionsStep: View {
             if await sending.send(
                 key, failure: "Couldn't send that", { try await model.answer(text) })
             {
+                answeredHere = true
                 words = ""
             } else {
                 answered = nil
@@ -372,6 +430,15 @@ private struct OnboardingBeliefRow: View {
             progress: OnboardingProgress(read: 2210, total: 4800),
             beliefs: OnboardingSamples.beliefs
         )
+        OnboardingFlow(model: model)
+            .preferredColorScheme(.dark)
+    }
+
+    #Preview("4 · How should I check in?") {
+        @Previewable @State var model = OnboardingSamples.model(
+            step: .checkIn, connected: ["icloud"],
+            progress: OnboardingProgress(read: 2480, total: 3100),
+            asking: .asking(OnboardingSamples.checkIn), plans: OnboardingSamples.plans)
         OnboardingFlow(model: model)
             .preferredColorScheme(.dark)
     }

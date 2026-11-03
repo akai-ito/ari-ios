@@ -2,7 +2,8 @@ import AriKit
 import SwiftUI
 
 /// Onboarding, backed by the box: the steps fill in from the session's `onboarding` as Kumo reads,
-/// Kumo's questions are its messages in the chat, and what you do goes to the box.
+/// Kumo's questions are its messages in the chat (getting to know you, then how it should check
+/// in), the plans it sets come from the Desk, and what you do goes to the box.
 struct OnboardingHost: View {
     let session: Session
     let app: AppModel
@@ -30,6 +31,11 @@ struct OnboardingHost: View {
         }
         .onChange(of: session.onboarding, initial: true) { _, onboarding in update(onboarding) }
         .onChange(of: latestQuestion) { _, _ in updateAsking() }
+        // Talking about checking in goes on after Kumo has caught up.
+        .onChange(of: model?.step) { _, _ in updateAsking() }
+        .onChange(of: session.desk?.plans, initial: true) { _, plans in
+            model?.plans = (plans ?? []).map(Self.summary)
+        }
         .sheet(isPresented: $connecting, onDismiss: { Task { await refreshSources() } }) {
             if let capabilities { ConnectSheet(capabilities: capabilities) }
         }
@@ -77,7 +83,7 @@ struct OnboardingHost: View {
 
     private func updateAsking() {
         guard let model else { return }
-        if session.onboarding?.state == .ready {
+        if session.onboarding?.state == .ready, model.step != .checkIn {
             model.asking = .finished
         } else if session.conversation.turn != nil {
             model.asking = .waiting
@@ -90,7 +96,7 @@ struct OnboardingHost: View {
 
     private func makeModel() -> OnboardingModel {
         OnboardingModel(
-            sources: Self.sources,
+            step: Self.startingStep, sources: Self.sources,
             actions: OnboardingActions(
                 connect: { _ in connecting = true },
                 talk: { talk?.start() },
@@ -115,7 +121,7 @@ struct OnboardingHost: View {
         guard let sent = session.send(text) else { return .finished }
         for _ in 0..<240 {
             try await Task.sleep(for: .milliseconds(250))
-            if session.onboarding?.state == .ready { return .finished }
+            if session.onboarding?.state == .ready, model?.step != .checkIn { return .finished }
             let entries = session.conversation.entries
             guard let index = entries.firstIndex(where: { $0.id == sent }),
                 session.conversation.turn == nil
@@ -126,6 +132,20 @@ struct OnboardingHost: View {
             }
         }
         return .waiting
+    }
+
+    /// Where getting started opens: the start, or in debug builds the step `ARI_ONBOARDING` names.
+    private static var startingStep: OnboardingModel.Step {
+        #if DEBUG
+            if let step = DebugScript.onboardingStep { return step }
+        #endif
+        return .meet
+    }
+
+    /// One of Kumo's plans in a line: how it comes back, or when, and what it's for.
+    private static func summary(_ plan: WakeUp) -> PlanSummary {
+        let when = plan.repeat == nil ? PlanWords.when(plan.at.date) : PlanWords.repeats(plan)
+        return PlanSummary(id: plan.id.rawValue, when: when, what: plan.what)
     }
 
     /// Kumo's message as a question: its words without the blocks it drew, and the short answers it

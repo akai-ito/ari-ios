@@ -32,6 +32,14 @@ import SwiftUI
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensTopics = environment["ARI_TOPICS"] != nil
+        /// `ARI_ONBOARDING` opens getting started, while it's on, at a step: `knowYou` or `checkIn`.
+        static let onboardingStep: OnboardingModel.Step? = {
+            switch environment["ARI_ONBOARDING"] {
+            case "knowYou": .knowYou
+            case "checkIn": .checkIn
+            default: nil
+            }
+        }()
         /// `ARI_MOODS` opens Ari on Kumo's moods side by side, without a server.
         static let showsMoods = environment["ARI_MOODS"] != nil
         /// `ARI_DESK`: what the Desk opens once it's up.

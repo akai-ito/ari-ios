@@ -82,7 +82,8 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   the server needs you, a quiet "Something's wrong ›" under Kumo's line opens how to fix it;
   Settings lists it first, and both clear on their own once it's fixed.
 - **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
-  questions while Kumo reads three months of mail (or "still true?" for what it already knows),
+  questions while Kumo reads three months of mail (or "still true?" for what it already knows), a
+  short talk about how Kumo should check in, where the first plans it sets show as they come, then
   notifications, then what's in motion. Kumo's questions can offer answers to tap.
   Settings opens it again, with nothing wiped: Kumo reads mail again only for an account you add.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block, a
@@ -139,6 +140,7 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk; `ARI_MOTION` then opens a thing in
 motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going
 further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
+`ARI_ONBOARDING` opens getting started at a step (`knowYou` or `checkIn`) while it's on,
 `ARI_DESK` opens part of the Desk (`upto`, `tracks`, `day`, `problems` or `wrong`),
 `ARI_SETTINGS` opens Settings and
 `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
