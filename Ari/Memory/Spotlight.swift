@@ -21,6 +21,12 @@ enum Spotlight {
         try? await index.indexSearchableItems(items)
     }
 
+    /// Takes every page out of the device's search, as while the You tab is hidden.
+    static func clear() async {
+        try? await CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain]
+        )
+    }
+
     /// The page a search result opens, from the activity Spotlight hands Ari.
     static func page(from activity: NSUserActivity) -> PageAddress? {
         (activity.userInfo?[CSSearchableItemActivityIdentifier] as? String).map(PageAddress.init)

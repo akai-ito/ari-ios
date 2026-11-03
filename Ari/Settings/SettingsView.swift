@@ -43,6 +43,7 @@ struct SettingsView: View {
                         backup: backup, isBackedUp: model.server?.setup?.memoryBackup
                     )
                     .id(SettingsAnchor.memory)
+                    YouTabSection()
                     notifications
                     TalkSettings()
                     Section("App icon") {

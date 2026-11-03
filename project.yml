@@ -50,6 +50,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Ito
         # Only to scan the QR code ito pair shows.
         INFOPLIST_KEY_NSCameraUsageDescription: "Ito uses the camera to scan the pairing code your server shows."
+        # Only to bring back the You tab after you hid it to show Ito to someone.
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "Ito checks it's you before it shows the You tab again."
         # Talking with Ari on a call: your voice goes to your server.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ito listens on a call and sends your voice to your server, so you can talk with Kumo."
         # Opening an event from Coming up in Apple's own event view.

@@ -254,6 +254,7 @@ private struct StepDetails: View {
 
     @Environment(Memory.self) private var memory: Memory?
     @Environment(\.motionOpener) private var opener
+    @Environment(\.hidesYou) private var hidesYou
     @State private var openedPage: PageAddress?
 
     var body: some View {
@@ -277,6 +278,10 @@ private struct StepDetails: View {
                     }
             }
             .tint(.ariText)
+        }
+        // Hiding You closes a page opened from here.
+        .onChange(of: hidesYou) { _, hidden in
+            if hidden { openedPage = nil }
         }
     }
 
@@ -306,6 +311,32 @@ private struct StepDetails: View {
             text.removeFirst("**\(heading)**".count)
         }
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// What a memory step used or changed: an update shows what changed, fetched now, since the
+    /// trail never carries a page's words; each page opens.
+    @ViewBuilder
+    private func memoryDetails(of step: Step) -> some View {
+        if step.memoryAction == .updated, let change = step.change {
+            PageChangeView(memory: memory, change: change)
+        }
+        if step.memoryAction != .updated {
+            ForEach(step.pages ?? []) { page in
+                if page.address.isPage {
+                    Button(page.title + " ›") { openedPage = page.address }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.ariSecondary)
+                } else {
+                    Caption(page.title)
+                }
+            }
+        } else if let page = step.pages?.first {
+            Button("Open \(page.title) ›") { openedPage = page.address }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.ariSecondary)
+        }
     }
 
     @ViewBuilder
@@ -349,26 +380,11 @@ private struct StepDetails: View {
         case .imageView:
             if let path = step.path { CodeBox(text: path) }
         case .memory:
-            // An update shows what changed, fetched now: the trail never carries a page's words.
-            if step.memoryAction == .updated, let change = step.change {
-                PageChangeView(memory: memory, change: change)
-            }
-            if step.memoryAction != .updated {
-                ForEach(step.pages ?? []) { page in
-                    if page.address.isPage {
-                        Button(page.title + " ›") { openedPage = page.address }
-                            .buttonStyle(.plain)
-                            .font(.caption)
-                            .foregroundStyle(.ariSecondary)
-                    } else {
-                        Caption(page.title)
-                    }
-                }
-            } else if let page = step.pages?.first {
-                Button("Open \(page.title) ›") { openedPage = page.address }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(.ariSecondary)
+            if hidesYou {
+                // With You hidden, a memory step names its pages and opens nothing.
+                ForEach(step.pages ?? []) { page in Caption(page.title) }
+            } else {
+                memoryDetails(of: step)
             }
         case .motion:
             // The thing itself, opened full screen: the trail never carries its content.

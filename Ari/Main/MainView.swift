@@ -3,8 +3,8 @@ import CoreSpotlight
 import SwiftUI
 
 /// Ito's four places: the Desk, where Kumo is; Chat, the one conversation with Kumo; In motion,
-/// what you're actually doing, which Kumo keeps current; and You, what Kumo knows. Settings open
-/// from the corner of Chat, In motion and You.
+/// what you're actually doing, which Kumo keeps current; and You, what Kumo knows, unless you hid it
+/// to show Ito to someone. Settings open from the corner of Chat, In motion and You.
 struct MainView: View {
     let session: Session
     let model: AppModel
@@ -22,6 +22,7 @@ struct MainView: View {
     @State private var voices: Voices?
     /// The calls Siri asked for that have started here.
     @State private var startedCalls = 0
+    private let youTab = YouTab.shared
     @Environment(\.scenePhase) private var scenePhase
 
     enum Place: Hashable { case desk, chat, motion, library }
@@ -56,11 +57,14 @@ struct MainView: View {
             Tab("In motion", systemImage: "circle.dotted.circle", value: .motion) {
                 InMotionView { showsSettings = true }
             }
-            Tab("You", systemImage: "person.crop.circle", value: .library) {
-                LibraryView(memory: memory, path: $libraryPath) { showsSettings = true }
+            if !youTab.isHidden {
+                Tab("You", systemImage: "person.crop.circle", value: .library) {
+                    LibraryView(memory: memory, path: $libraryPath) { showsSettings = true }
+                }
             }
         }
         .environment(memory)
+        .environment(\.hidesYou, youTab.isHidden)
         .environment(motions)
         .environment(\.attachmentBytes) { await session.bytes(of: $0) }
         // "What changed" goes back to where in the chat it happened.
@@ -82,14 +86,25 @@ struct MainView: View {
             // Every page in the device's search, from the start, not only once the Library opens.
             if let memory {
                 await memory.refresh()
-                await Spotlight.index(memory)
+                await indexMemory()
             }
         }
-        // A search result opens its page in the Library.
+        // A search result opens its page in the Library; with You hidden, the Desk.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
-            guard let page = Spotlight.page(from: activity) else { return }
+            guard let page = Spotlight.page(from: activity), !youTab.isHidden else {
+                place = .desk
+                return
+            }
             place = .library
             libraryPath = NavigationPath([page])
+        }
+        // Hidden, You leaves the screen and the device's search; shown again, it's all back.
+        .onChange(of: youTab.isHidden) { _, hidden in
+            if hidden {
+                if place == .library { place = .desk }
+                libraryPath = NavigationPath()
+            }
+            Task { await indexMemory() }
         }
         .environment(talk)
         .environment(voices)
@@ -163,6 +178,7 @@ struct MainView: View {
                 place =
                     ["chat": .chat, "motion": .motion, "library": .library, "you": .library][
                         DebugScript.place ?? ""] ?? place
+                if youTab.isHidden, place == .library { place = .desk }
                 showsSettings = DebugScript.opensSettings
             }
         #endif
@@ -172,6 +188,15 @@ struct MainView: View {
 extension MainView {
     /// Whether getting started is still going: Kumo catching up, or the reveal not yet seen.
     fileprivate var onboarding: Bool { session.onboarding.map { $0.state != .done } ?? false }
+
+    /// Every page in the device's search, or none while You is hidden.
+    fileprivate func indexMemory() async {
+        if youTab.isHidden {
+            await Spotlight.clear()
+        } else if let memory {
+            await Spotlight.index(memory)
+        }
+    }
 
     /// Ari's voice and calls, made once there's a server to talk to.
     fileprivate func makeTalk() {
