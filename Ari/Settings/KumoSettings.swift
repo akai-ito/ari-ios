@@ -1,7 +1,7 @@
 import AriKit
 import SwiftUI
 
-/// Settings › Kumo, under the lead's own name: what it's called.
+/// Settings › Kumo, under the lead's own name: what it's called, and where it thinks you are.
 struct KumoSettings: View {
     let model: AppModel
     let client: ItoClient?
@@ -31,10 +31,37 @@ struct KumoSettings: View {
                     model.refreshServer()
                 }
             }
+            LabeledContent("Where you are", value: whereabouts)
+                .foregroundStyle(.ariText)
+            switch model.whereabouts.permission {
+            case .notAsked:
+                Button("Allow rough location", action: model.whereabouts.ask)
+            case .refused:
+                Button("Rough location in iOS Settings…") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            case .allowed:
+                EmptyView()
+            }
         } header: {
             Text(name)
+        } footer: {
+            Text(
+                "Your phone tells \(name) its time zone, and its town when you allow rough location, "
+                    + "for the weather on your Desk and so \(name) follows you when you travel. "
+                    + "Nothing more precise leaves it.")
         }
         .listRowBackground(Color.ariSurface)
+    }
+
+    /// What the box keeps: "London · Europe/London", the time zone alone, or "Not yet".
+    private var whereabouts: String {
+        guard let kept = model.server?.whereabouts else {
+            return model.server?.timeZone ?? "Not yet"
+        }
+        return [kept.area?.name, kept.timeZone].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

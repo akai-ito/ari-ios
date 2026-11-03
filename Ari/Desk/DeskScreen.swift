@@ -7,6 +7,7 @@ import SwiftUI
 /// which Kumo glances at. The thread opens your day. Nothing on it moves Kumo.
 struct DeskScreen: View {
     let session: Session
+    let model: AppModel
 
     @State private var showsUpTo = false
     @State private var showsDay = false
@@ -29,11 +30,16 @@ struct DeskScreen: View {
         }
         .background { DayLight().ignoresSafeArea() }
         .overlay(alignment: .top) {
-            if let ambient = session.desk?.ambient {
-                AmbientLine(ambient: ambient)
-                    .padding(.top, 10)
-                    .transition(.opacity)
+            Group {
+                if let ambient = session.desk?.ambient {
+                    AmbientLine(ambient: ambient)
+                } else if offersWeather {
+                    WeatherOffer(allow: model.whereabouts.ask, decline: model.declineWeather)
+                }
             }
+            .padding(.top, 10)
+            .padding(.horizontal, 24)
+            .transition(.opacity)
         }
         .sheet(isPresented: $showsUpTo) { upTo }
         .sheet(isPresented: $showsDay) { day }
@@ -59,6 +65,12 @@ struct DeskScreen: View {
     }
 
     private var mood: FaceMood { FaceMood(session.desk?.line?.mood) }
+
+    /// Where the weather would sit, the first time it could: once the Desk is up, until you've
+    /// answered, and never again after you closed it.
+    private var offersWeather: Bool {
+        session.desk != nil && model.whereabouts.permission == .notAsked && !model.declinedWeather
+    }
 
     private var waiting: Int { session.desk?.waiting.count ?? 0 }
 

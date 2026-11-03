@@ -31,6 +31,10 @@ final class AppModel {
     var pairing: PairingLink?
 
     @ObservationIgnored let notifications = NotificationStore.forThisApp()
+    /// Where the phone roughly is, for the box: its time zone, and its town once you allow it.
+    let whereabouts = WhereaboutsReporter()
+    /// Whether you closed the Desk's offer to show the weather, so it doesn't come back.
+    private(set) var declinedWeather = false
     @ObservationIgnored private var pushToken: String?
 
     @ObservationIgnored private let tokens: any TokenStore
@@ -43,6 +47,11 @@ final class AppModel {
     init(tokens: (any TokenStore)? = nil, defaults: UserDefaults = .standard) {
         self.tokens = tokens ?? group.tokens
         self.defaults = defaults
+        declinedWeather = defaults.bool(forKey: "declinedWeather")
+        let notifications = notifications
+        whereabouts.report = { [weak self] place in
+            self?.session?.report(place, device: notifications.deviceID)
+        }
         guard let saved = Saved.load(from: defaults) else { return }
         group.address = saved.address
         address = saved.address
@@ -71,6 +80,14 @@ final class AppModel {
         session = Self.session(at: connection.address, token: connection.token)
         session?.start()
         registerDevice()
+        whereabouts.reset()
+    }
+
+    /// You closed the Desk's offer to show the weather: it doesn't come back. Settings can still
+    /// allow rough location.
+    func declineWeather() {
+        declinedWeather = true
+        defaults.set(true, forKey: "declinedWeather")
     }
 
     /// A link Ari was opened with: only pairing links, for now.
