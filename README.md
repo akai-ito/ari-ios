@@ -105,7 +105,9 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   it can't (an iCloud or Gmail app password), so keys go to your box and never come back.
 - **Four places, and Settings.** Desk, Chat, In motion and You in the iOS 26 tab bar. Settings opens
   from the corner of Chat, In motion and You: the server, Kumo's name, notifications, Kumo's voice
-  and model, capabilities, and the app icon.
+  and model, capabilities, and the app icon. To show Ito to someone, hide the You tab there: no
+  search result or step in the chat opens a page while it's hidden, and Face ID or the passcode
+  brings it back. Chat, the Desk and notifications still show what they show.
 - **Where you are, roughly.** Ito tells your box the phone's time zone each time it opens and
   whenever it changes, so Kumo lives by your clock wherever you are. The first time the Desk could
   show the weather, it offers to, in one line: allow rough location (When In Use, approximate) and
