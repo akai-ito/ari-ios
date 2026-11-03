@@ -25,12 +25,15 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
     /// The page as Ari wrote it, in Markdown without its front matter: the present first, then
     /// *Earlier* with dates.
     public let markdown: String
+    /// The photos the page keeps with its story, each where the Markdown shows it.
+    public let photos: [MemoryPhoto]
 
     public var id: PageAddress { address }
 
     public init(
         address: PageAddress, title: String, shelf: String, aliases: [String] = [],
-        links: [MemoryLink] = [], gist: String? = nil, changedAt: Timestamp, markdown: String
+        links: [MemoryLink] = [], gist: String? = nil, changedAt: Timestamp, markdown: String,
+        photos: [MemoryPhoto] = []
     ) {
         self.address = address
         self.title = title
@@ -40,11 +43,42 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
         self.gist = gist
         self.changedAt = changedAt
         self.markdown = markdown
+        self.photos = photos
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        address = try container.decode(PageAddress.self, forKey: .address)
+        title = try container.decode(String.self, forKey: .title)
+        shelf = try container.decode(String.self, forKey: .shelf)
+        aliases = try container.decode([String].self, forKey: .aliases)
+        links = try container.decode([MemoryLink].self, forKey: .links)
+        gist = try container.decodeIfPresent(String.self, forKey: .gist)
+        changedAt = try container.decode(Timestamp.self, forKey: .changedAt)
+        markdown = try container.decode(String.self, forKey: .markdown)
+        // Absent when the page shows none.
+        photos = try container.decodeIfPresent([MemoryPhoto].self, forKey: .photos) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
-        case address, title, shelf, aliases, links, gist, markdown
+        case address, title, shelf, aliases, links, gist, markdown, photos
         case changedAt = "changed_at"
+    }
+}
+
+/// A photo a page keeps with its story: the image's source as the Markdown has it, and its name
+/// in memory, to fetch its bytes by. They never change.
+public struct MemoryPhoto: Sendable, Hashable, Codable {
+    public let source: String
+    public let name: String
+    public let width: Int?
+    public let height: Int?
+
+    public init(source: String, name: String, width: Int? = nil, height: Int? = nil) {
+        self.source = source
+        self.name = name
+        self.width = width
+        self.height = height
     }
 }
 

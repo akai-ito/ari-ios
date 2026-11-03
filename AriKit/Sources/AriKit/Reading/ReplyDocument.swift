@@ -215,7 +215,7 @@ private struct Reader {
 }
 
 /// Turns the parser's locations (a line, and a column in UTF-8 bytes) into UTF-16 offsets.
-private struct SourceMap {
+struct SourceMap {
     private let lines: [Substring]
     private let starts: [Int]
     private let length: Int

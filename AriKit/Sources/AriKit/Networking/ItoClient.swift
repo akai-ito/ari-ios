@@ -336,6 +336,12 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(.get, Self.path("/v0/memory/page", ["address": address.rawValue])))
     }
 
+    /// `GET /v0/memory/media/{media}`: a photo a page keeps, by its name in `photos`. Its bytes
+    /// never change.
+    public func memoryPhoto(_ name: String) async throws(RequestError) -> Data {
+        try await raw(HTTPRequest(.get, "/v0/memory/media/\(Self.segment(name))"))
+    }
+
     /// `GET /v0/memory/changes/{change}`: what one update did to a page.
     public func change(_ change: String) async throws(RequestError) -> PageChange {
         try await call(HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"))
