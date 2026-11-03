@@ -279,7 +279,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v0/jobs": {
+  "/v0/wakeups": {
     parameters: {
       query?: never;
       header?: never;
@@ -287,17 +287,43 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * List Kumo's scheduled looks
-     * @description The follow-ups, check-ins and standing jobs Kumo scheduled, soonest first, with those that
-     *     wait on an event last. To stop one, tell Kumo.
+     * List Kumo's plans
+     * @description Every wake-up, soonest first: what Kumo will look at for you, and when. The Desk's `plans`
+     *     carries the same list.
      */
-    get: operations["listJobs"];
+    get: operations["listWakeUps"];
     put?: never;
     post?: never;
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  "/v0/wakeups/{wake_up}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Cancel one of Kumo's plans
+     * @description Cancels a wake-up, and `desk.changed` follows. Kumo sees it's gone and doesn't set it again unasked.
+     */
+    delete: operations["cancelWakeUp"];
+    options?: never;
+    head?: never;
+    /**
+     * Move or change one of Kumo's plans
+     * @description Moves a wake-up to another time, changes how it repeats (`null` makes it a one-off), or
+     *     rewords what it's for. The answer is the wake-up as it is now, and `desk.changed` follows.
+     *     A time that has passed is refused.
+     */
+    patch: operations["changeWakeUp"];
     trace?: never;
   };
   "/v0/done/{entry}/undo": {
@@ -334,10 +360,9 @@ export interface paths {
      * Tell Kumo it got something wrong
      * @description "That was wrong", on anything Kumo did. Kumo undoes it where it can (as with
      *     `POST /v0/done/{entry}/undo`, and otherwise with its own tools in the background), keeps what
-     *     to do differently as a preference, and records that in Done. When it's one of Kumo's own calls
-     *     (the entry's `work`), that kind of work steps back one rung on the trust ladder, and Kumo's
-     *     next line says so. Say what was wrong in `text`, or send `{}` and Kumo works it out. The answer
-     *     is the entry, with `corrected_at`. Saying it again only adds your words.
+     *     to do differently as a preference, and records that in Done. Say what was wrong in `text`, or
+     *     send `{}` and Kumo works it out. The answer is the entry, with `corrected_at`. Saying it again
+     *     only adds your words.
      */
     post: operations["correctDone"];
     delete?: never;
@@ -355,60 +380,13 @@ export interface paths {
     };
     /**
      * Read the Desk
-     * @description Home: Kumo's line for the moment, Coming up, Waiting on you, how much Kumo handled today
-     *     and when it last read your mail. The snapshot carries it too, and `desk.changed` carries
-     *     the whole Desk whenever it changes.
+     * @description Home: Kumo's plans, Coming up, Waiting on you, how much Kumo handled today and when it last
+     *     read your mail. The snapshot carries it too, and `desk.changed` carries the whole Desk
+     *     whenever it changes.
      */
     get: operations["getDesk"];
     put?: never;
     post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v0/desk/moment/{moment}/read": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Say Kumo's line was seen
-     * @description Tells the box an app showed Kumo's line for the moment on the Desk. It's read from then
-     *     on, in the conversation too: no notification goes out for it, and three hours later it
-     *     gives way to all quiet. Saying it again changes nothing.
-     */
-    post: operations["readMoment"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v0/desk/moment/{moment}/answer": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Answer Kumo's line
-     * @description Answers Kumo's line for the moment, like a card: tap one of its `options`, or type `text`
-     *     when it `allows_text`. The line shows `state: working`, with your `answer`, while Kumo acts
-     *     on it in the background, then gives way to all quiet; Done says what you answered and what
-     *     followed. If Kumo couldn't act, the line comes back to answer again, and Done says why.
-     *     The day's question (`kind` `question`) can also be skipped: it gives way at once, with
-     *     nothing in Done, and Kumo never asks it again.
-     */
-    post: operations["answerMoment"];
     delete?: never;
     options?: never;
     head?: never;
@@ -449,35 +427,12 @@ export interface paths {
      * Read Kumo's work today
      * @description Kumo's work today, local time, for "47 in: 3 need you, 6 handled, 38 cleared": what it
      *     handled, and the mail it read and cleared with nothing needed, each newest first with its
-     *     reason and whether it can be undone. What needs you is the Desk's `waiting`. `trust` is how
-     *     much Kumo checks with you for each kind of work it has done. Another day's work, such as the
-     *     day a review card asks you to glance at, comes with `day`; everything is in `GET /v0/done`.
+     *     reason and whether it can be undone. What needs you is the Desk's `waiting`. Another day's
+     *     work comes with `day`; everything is in `GET /v0/done`.
      */
     get: operations["getWork"];
     put?: never;
     post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v0/trust/{work}/reset": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Show me everything again
-     * @description Puts one kind of Kumo's work back to Learning, whatever its rung: Kumo shows you its calls
-     *     again, with a card a day to glance at them, and climbs only after a fresh clean stretch.
-     *     Saying "show me everything again" in the conversation does the same.
-     */
-    post: operations["resetTrust"];
     delete?: never;
     options?: never;
     head?: never;
@@ -501,7 +456,8 @@ export interface paths {
      *     `answer`, while the box acts, then leaves the Desk when it's done, or comes back changed;
      *     `desk.changed` says which. Once Kumo has acted on an answer to a question, an offer or
      *     times, the Done list says what you answered and what followed. If Kumo couldn't act, the
-     *     card comes back to answer again, and Done says why.
+     *     card comes back to answer again, and Done says why. The same answer sent again while the
+     *     card is working, such as a retry, is taken once; a different one is refused.
      */
     post: operations["answerCard"];
     delete?: never;
@@ -531,6 +487,36 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/calendar/events/{item}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Remove one of Kumo's blocks
+     * @description Removes an item from Kumo's own calendar, such as a block of its plan or a guess. An event on
+     *     your own calendar is refused with `invalid_request`. Done keeps the removal with an undo that
+     *     puts it back. A block in an area Kumo is learning counts as a correction on that track, and
+     *     Kumo sees the removal when it next looks at your day. `desk.changed` follows.
+     */
+    delete: operations["removeEvent"];
+    options?: never;
+    head?: never;
+    /**
+     * Move one of Kumo's blocks
+     * @description Moves an item on Kumo's own calendar, such as a block of its plan or a guess, to a new start
+     *     and end, within 12 hours. An event on your own calendar is refused with `invalid_request`:
+     *     change those in Calendar. Done keeps the move with an undo, Kumo sees it when it next looks
+     *     at your day, and `desk.changed` follows. It never wakes Kumo as a change to your calendar.
+     */
+    patch: operations["moveEvent"];
+    trace?: never;
+  };
   "/v0/lead": {
     parameters: {
       query?: never;
@@ -544,28 +530,6 @@ export interface paths {
      * @description Kumo is the lead's name until you choose another. `GET /v0/server` shows it.
      */
     put: operations["renameLead"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v0/morning": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * Set when your morning starts
-     * @description Kumo's first line of the day comes at the first calm moment after `not_before`, local
-     *     time: when you first open the conversation, or the first gap with nothing on your
-     *     calendar, however late that is.
-     */
-    put: operations["setMorning"];
     post?: never;
     delete?: never;
     options?: never;
@@ -686,8 +650,9 @@ export interface paths {
      *     always encrypts with its latest key. Keep the previous key on the device for a while: a
      *     notification already on its way names the key that encrypted it.
      *
-     *     The server pushes only while you're not looking: when a reply finishes, when a turn fails,
-     *     when the agent asks you something, and once more for an ask still waiting after three hours.
+     *     The server pushes every reply when it finishes, every failed turn, every ask and every
+     *     message Kumo posts, at once and whatever the hour; the phone's Focus decides what makes a
+     *     sound. Only a message Kumo marks urgent is time-sensitive.
      */
     put: operations["registerDevice"];
     post?: never;
@@ -701,7 +666,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v0/devices/{device}/presence": {
+  "/v0/devices/{device}/whereabouts": {
     parameters: {
       query?: never;
       header?: never;
@@ -710,37 +675,17 @@ export interface paths {
     };
     get?: never;
     /**
-     * Say whether you're looking
-     * @description Send `looking: true` when the conversation comes on screen, and `false` when it leaves the
-     *     screen or the app goes to the background. Nothing is pushed while any device is looking and
-     *     holds a live event stream, so a device that crashed or lost its connection is still
-     *     notified. The server forgets presence when it restarts: send it again after reconnecting.
+     * Say where the phone roughly is
+     * @description Send it when the app opens and whenever the time zone or the place changes, such as on a
+     *     trip: its time zone, and when you allow it, roughly where it is. The box keeps only the
+     *     latest one from any device, with the place rounded to about 10 km, and never anything more
+     *     precise.
+     *
+     *     The time zone is the one Kumo lives by: a repeating wake-up comes back at its time there,
+     *     and moving to another zone wakes Kumo to move what should follow you. The place gives the
+     *     Desk the weather around you; without one, there's no `ambient`.
      */
-    put: operations["setPresence"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v0/devices/{device}/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    /**
-     * Say what your phone's Focus is
-     * @description Send it when a Focus you've added Ito to turns on, with what that Focus is for, and with
-     *     no `focus` when it turns off. Kumo reads it as what you're doing now: its lines, plans
-     *     and check-ins fit it, a Sleep Focus ends tonight's check-ins, and nothing is ever sent
-     *     because of it. A Focus never said to be off stops counting after 16 hours. Any device
-     *     can say it, registered for notifications or not.
-     */
-    put: operations["setStatus"];
+    put: operations["setWhereabouts"];
     post?: never;
     delete?: never;
     options?: never;
@@ -1956,13 +1901,13 @@ export interface components {
     /** @description What the device shows, once decrypted. */
     Notification: {
       kind: components["schemas"]["NotificationKind"];
-      /** @description `reply`: the reply's first line, with Markdown stripped, at most 200 characters. `failed`: "Couldn't finish: " and the error's message. `ask`: the question. `reminder`: "Still waiting on one thing: " and the question. `post` and `moment`: its first line. */
+      /** @description `reply`: the reply's first line, with Markdown stripped, at most 200 characters. `failed`: "Couldn't finish: " and the error's message. `ask`: the question. `post`: its first line. */
       text: string;
       /** @description `reply` and `failed`: the turn. */
       turn?: components["schemas"]["TurnId"];
-      /** @description `reply`, `post` and `moment`: the message, so that a tap opens the conversation there; a `moment` opens the Desk. */
+      /** @description `reply` and `post`: the message, so that a tap opens the conversation there. */
       message?: components["schemas"]["MessageId"];
-      /** @description `ask` and `reminder`: what the device needs to answer from the notification. Answering is an ordinary send. */
+      /** @description `ask`: what the device needs to answer from the notification. Answering is an ordinary send. */
       ask?: {
         id: components["schemas"]["AskId"];
         /** @description The options' labels, in order. */
@@ -1998,6 +1943,11 @@ export interface components {
       outcome?: components["schemas"]["Outcome"];
       /** @description Present when the outcome is `failed`. */
       error?: components["schemas"]["Error"];
+      /**
+       * @description Kumo's posts only: it couldn't wait, so its notification was time-sensitive and broke through your Focus. Absent otherwise.
+       * @constant
+       */
+      urgent?: true;
       /** @description User messages only: the Done entry this message replies to, such as a correction to one of Kumo's calls. */
       done?: components["schemas"]["DoneId"];
     } & unknown;
@@ -2157,8 +2107,20 @@ export interface components {
     DoneResult: {
       entry: components["schemas"]["DoneEntry"];
     };
-    JobList: {
-      jobs: components["schemas"]["Job"][];
+    WakeUpList: {
+      wake_ups: components["schemas"]["WakeUp"][];
+    };
+    WakeUpResult: {
+      wake_up: components["schemas"]["WakeUp"];
+    };
+    /** @description What to change; leave out what stays. */
+    WakeUpChange: {
+      /** @description When it's next due; for a repeating one, only this time. */
+      at?: components["schemas"]["Timestamp"];
+      /** @description How it comes back, or `null` for a one-off. */
+      repeat?: components["schemas"]["Repeat"] | null;
+      what?: string;
+      why?: string;
     };
     /** @description Your answer to a card: one of `option`, `slots` or `text`. */
     CardAnswer: {
@@ -2171,18 +2133,6 @@ export interface components {
     };
     CardResult: {
       card: components["schemas"]["Card"];
-    };
-    /** @description Your answer to Kumo's line, one of `option`, `text` or, for the day's question, `skip`. */
-    MomentAnswer: {
-      /** @description The label of the option you tapped. */
-      option?: string;
-      /** @description A typed reply. */
-      text?: string;
-      /**
-       * @description Skips the day's question (`kind` `question`). It gives way at once, and Kumo never asks it again.
-       * @constant
-       */
-      skip?: true;
     };
     /**
      * @description Your answer to one of Kumo's guesses at your day, one of: `right`; the `activity` it really
@@ -2198,10 +2148,7 @@ export interface components {
       /** @description What it really was, in a few words, such as "Dentist, then errands". */
       text?: string;
     };
-    MomentResult: {
-      moment: components["schemas"]["Moment"];
-    };
-    /** @description Kumo's work for a day, today unless you asked for another, and how much it checks with you. */
+    /** @description Kumo's work for a day, today unless you asked for another, and the areas it's learning. */
     Work: {
       /** @description The local day, such as `2026-11-05`. */
       day: string;
@@ -2209,34 +2156,8 @@ export interface components {
       handled: components["schemas"]["DoneEntry"][];
       /** @description The mail Kumo read and left alone that day (`quiet`), newest first. */
       cleared: components["schemas"]["DoneEntry"][];
-      /**
-       * @description The trust ladder, now: one rung for each kind of work Kumo has done, in a fixed order.
-       *     Draw each as three steps filled to its `step`, with its `line` under it.
-       */
-      trust: components["schemas"]["Trust"][];
-    };
-    /**
-     * @description How much Kumo checks with you for one kind of work. `learning`: it shows you its calls, with a
-     *     card a day to glance at them. `spot_checks`: about one call in five may get a quiet "Was this
-     *     right?" card. `trusted`: only what needs you. It climbs a rung after a clean stretch (enough
-     *     calls and about two weeks with no correction), and a "That was wrong" steps it back one.
-     */
-    Trust: {
-      work: components["schemas"]["WorkKind"];
-      /** @description Its name, such as "Sorting mail". */
-      title: string;
-      /**
-       * @description Show a step you don't recognise as Learning.
-       * @enum {unknown}
-       */
-      step: "learning" | "spot_checks" | "trusted";
-      /** @description Kumo's line on where it stands and why, such as "Two weeks without a correction on sorting." */
-      line: string;
-      /** @description When its current stretch began, with its first call, a climb, a correction or a reset. */
-      since: components["schemas"]["Timestamp"];
-    };
-    TrustResult: {
-      trust: components["schemas"]["Trust"];
+      /** @description Every area Kumo is learning, in the order it opened them, now. Draw each with its stage as bars. */
+      tracks: components["schemas"]["Track"][];
     };
     /** @description What was wrong, in your words; `{}` just says it was wrong. */
     CorrectDone: {
@@ -2249,16 +2170,17 @@ export interface components {
       location?: string;
       notes?: string;
     };
+    /** @description Where one of Kumo's blocks goes. */
+    EventMove: {
+      start: components["schemas"]["Timestamp"];
+      end: components["schemas"]["Timestamp"];
+    };
     EventResult: {
       event: components["schemas"]["CalendarItem"];
     };
     Lead: {
       /** @description What the lead is called; Kumo until you choose another name. */
       name: string;
-    };
-    MorningSettings: {
-      /** @description The earliest local time Kumo's first line of the day may come, such as `07:30`. */
-      not_before: string;
     };
     ServerInfo: {
       /** @description The server's name, usually its host name. */
@@ -2268,7 +2190,15 @@ export interface components {
       /** @description The protocol version of this route, as `MAJOR.MINOR`. */
       protocol: string;
       lead: components["schemas"]["Lead"];
-      morning: components["schemas"]["MorningSettings"];
+      /** @description The time zone Kumo lives by now, such as `Europe/London`. The latest a phone said, or the box's own. */
+      time_zone: string;
+      /** @description What the box keeps of where you roughly are, once a phone has said. Show it in Settings. */
+      whereabouts?: {
+        time_zone: string;
+        area?: components["schemas"]["Area"];
+        /** @description When a phone last said. */
+        as_of: components["schemas"]["Timestamp"];
+      };
       /** @description The model Kumo runs on. */
       agent: {
         /**
@@ -2425,26 +2355,33 @@ export interface components {
     DeviceResult: {
       device: components["schemas"]["Device"];
     };
-    Presence: {
-      /** @description Whether the conversation is on this device's screen. */
-      looking: boolean;
+    Whereabouts: {
+      /** @description The phone's time zone, as an IANA name such as `Europe/Rome`. */
+      time_zone: string;
+      /** @description Roughly where it is, when you allow it. The box rounds it to about 10 km. */
+      area?: components["schemas"]["Area"];
     };
-    /** @description Your phone's Focus, when you've added Ito to it; absent while no such Focus is on. */
-    DeviceStatus: {
-      /**
-       * @description What the Focus is for, as you chose when adding Ito to it.
-       * @enum {unknown}
-       */
-      focus?: "sleep" | "work" | "fitness" | "personal" | "other";
+    /** @description Roughly where you are, never more precise than about 10 km. */
+    Area: {
+      latitude: number;
+      longitude: number;
+      /** @description The town or city, such as `Rome`, as the phone names it. */
+      name?: string;
     };
     ErrorResult: {
       error: components["schemas"]["Error"];
     };
+    /**
+     * Format: date-time
+     * @description Server time, RFC 3339 in UTC with milliseconds.
+     * @example 2026-10-12T09:41:07.120Z
+     */
+    Timestamp: string;
     /** @description Something wrong on the server that needs you, shown until it's fixed, when it clears on its own: notifications that can't be sent, a mail or calendar account that keeps failing, a capability that needs setting up, or memory that isn't reaching its backup. A blip that sorts itself out, such as a reconnect, isn't one. */
     Problem: {
       /** @description Stable while it lasts, such as `push` or `mail:outlook`. */
       id: string;
-      /** @description What it's about: `notifications`, `mail`, `calendar`, `contacts`, `capabilities` or `memory`. Show an area you don't know plainly. */
+      /** @description What it's about: `notifications`, `mail`, `calendar`, `contacts`, `capabilities`, `memory`, or `kumo` when its own work in the background can't go on. Show an area you don't know plainly. */
       area: string;
       /** @description One plain line, such as "Notifications can't be sent". */
       title: string;
@@ -2475,12 +2412,6 @@ export interface components {
     CalendarItemId: string;
     /** @description An instant, such as `2026-11-12T14:00:00Z`, or for an all-day event a date, such as `2026-11-12`. */
     When: string;
-    /**
-     * Format: date-time
-     * @description Server time, RFC 3339 in UTC with milliseconds.
-     * @example 2026-10-12T09:41:07.120Z
-     */
-    Timestamp: string;
     /** @description A thing's id: readable, chosen by Ari, unique on the server, such as `florence-with-mira`. */
     MotionId: string;
     /**
@@ -2547,10 +2478,10 @@ export interface components {
     /** @description Opaque. A turn is one run of the agent, from its inputs to an answer, a stop or an error. */
     TurnId: string;
     /**
-     * @description Agent messages only. A `reply` is part of the answer. A `note` is the agent's commentary while it works, such as "I'll check current prices first."; an app may show notes as live detail instead of in the conversation. A `post` is a message Kumo wrote outside a turn, such as its first question while getting started. A `moment` is Kumo's line for the moment, the same words as the Desk's `moment` while it lasts, such as "How did the call with Northwind go?". Hide a kind you don't recognise.
+     * @description Agent messages only. A `reply` is part of the answer. A `note` is the agent's commentary while it works, such as "I'll check current prices first."; an app may show notes as live detail instead of in the conversation. A `post` is a message Kumo wrote outside a turn, such as how a mail it read changes your plans, or its first question while getting started. Hide a kind you don't recognise.
      * @enum {unknown}
      */
-    MessageKind: "reply" | "note" | "post" | "moment";
+    MessageKind: "reply" | "note" | "post";
     /** @description Where a message or a step sits in the conversation: strictly increasing in conversation order, with gaps. Snapshots and history pages carry messages and steps in separate lists; merge them by position. */
     Position: number;
     /** @description Opaque. The server makes it when the agent asks. */
@@ -2658,11 +2589,8 @@ export interface components {
      * @description A random UUID, in lowercase, the app makes before uploading. It is the attachment's id and its retry key.
      */
     UploadId: string;
-    /**
-     * @description A kind of Kumo's work, each with its own place on the trust ladder: `sorting`, the mail it files, bins and clears; `calendar`, what it puts on, moves or takes off your calendars; `drafts`, the replies it writes for you; `contacts`, what it changes in your contacts. Show a kind you don't recognise by the title Kumo's work gives it.
-     * @enum {unknown}
-     */
-    WorkKind: "sorting" | "calendar" | "drafts" | "contacts";
+    /** @description Opaque. The server makes it when Kumo opens a track. */
+    TrackId: string;
     /** @description One thing Kumo did without you, for the Done list. Reply to it with a message whose `done` names it, and the correction becomes a preference. */
     DoneEntry: {
       id: components["schemas"]["DoneId"];
@@ -2685,63 +2613,86 @@ export interface components {
       undo: boolean;
       /** @description A mail Kumo read and left alone: "read, nothing needed". Fold these into one line a day. */
       quiet: boolean;
-      /** @description The kind of work it was, when it's one of Kumo's own calls: what the trust ladder counts. Absent for anything else, such as acting on your answer to a card. */
-      work?: components["schemas"]["WorkKind"];
       /** @description When you said it was wrong, with `POST /v0/done/{entry}/wrong`. Show it as noted rather than offering That was wrong again. */
       corrected_at?: components["schemas"]["Timestamp"];
+      /** @description The track this call belongs to, when it's in an area Kumo is learning. "That was wrong" on it steps the track back. */
+      track?: components["schemas"]["TrackId"];
     };
-    /** @description Opaque. The server makes it when Kumo schedules a look. */
-    JobId: string;
-    /** @description A look Kumo scheduled for itself: a follow-up, a check-in after an event, or a standing job it keeps doing. It's judged when it comes due, and moves itself if the moment is bad. */
-    Job: {
-      id: components["schemas"]["JobId"];
-      /** @description Such as "Ask how the Halcyon interview went". */
-      why: string;
-      /** @description When it's next due. */
-      at?: components["schemas"]["Timestamp"];
-      /** @description Due after this event ends. */
-      after_event?: {
+    /** @description Opaque. The server makes it when a wake-up is set. */
+    WakeUpId: string;
+    /**
+     * @description A day of the week, in your time zone.
+     * @enum {unknown}
+     */
+    Weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+    /** @description A wake-up that comes back: on these days, at this time in your time zone, wherever you are, such as weekdays at 09:00. */
+    Repeat: {
+      days: components["schemas"]["Weekday"][];
+      /** @description Such as `09:00`. */
+      time: string;
+    };
+    /** @description Where it came from: your `chat` with Kumo, a `mail` Kumo read, a `calendar` event, or another `wake_up`. Show a kind you don't recognise by its title. */
+    WakeUpSource: {
+      /** @enum {unknown} */
+      kind: "chat" | "mail" | "calendar" | "wake_up";
+      /** @description A line naming it, such as "Tess Harlow: Thursday's technical" or "Halcyon technical, Thu 14:00". */
+      title: string;
+      /** @description `mail` only: the mail, to open in Mail with `message://` and its Message-ID. */
+      mail?: {
+        account?: string;
+        message_id: string;
+      };
+      /** @description `calendar` only: the event, to open by its uid. */
+      event?: {
         uid: string;
-        title: string;
       };
-      /** @description A standing job, with what it keeps looking for, such as "startups I'd join". */
-      standing?: {
-        ask: string;
-      };
-      motion?: components["schemas"]["MotionId"];
     };
-    /** @description Opaque. The server makes it for each of Kumo's lines for the moment. */
-    MomentId: string;
-    /** @description Kumo's line for the moment, at the top of the Desk: one or two sentences, right for now, which order and connect what's below rather than repeat it. It comes at the first calm moment after your morning time, when something that matters arrives, or when your day changes, and it's the same words as a `moment` message in the conversation. It goes three hours after it was read, at midnight, or once you've answered it and Kumo has acted. Draw its buttons from `options`; `allows_text` offers Reply. */
-    Moment: {
-      id: components["schemas"]["MomentId"];
+    /** @description A time Kumo will wake up and look at something for you: a follow-up, a look after an event, a standing job, or something you asked for. When it comes due, Kumo looks first, then messages you if that's useful, moves it if things changed, or drops it if it's moot, and Done says which. Kumo keeps it current as your life moves, such as a meeting moving or a trip; you can move, change or cancel it too. */
+    WakeUp: {
+      id: components["schemas"]["WakeUpId"];
+      /** @description When it's next due, a concrete time Kumo worked out, such as the end of the event it's for. */
+      at: components["schemas"]["Timestamp"];
+      /** @description What it's for, in a line, such as "Ask how the Halcyon technical went". */
+      what: string;
+      /** @description Why, in Kumo's words: what it will have in mind when it wakes, such as "It ends at 15:30, and you wanted to talk it through while it's fresh." */
+      why: string;
+      /** @description Absent for a one-off. */
+      repeat?: components["schemas"]["Repeat"];
       /**
-       * @description What brought it: `day`, the first line of the day; `news`, something that matters arrived; `change`, your day changed; `checkin`, a commitment you made, such as when to stop tonight, coming due; `drift`, your week's time drifting from what matters; `question`, the day's one small question, which you can skip. Show a kind you don't recognise like any other.
+       * @description Who made it: `you` asked for it, or `kumo` set it itself. Show one you don't recognise as Kumo's.
        * @enum {unknown}
        */
-      kind: "day" | "news" | "change" | "checkin" | "drift" | "question";
-      at: components["schemas"]["Timestamp"];
-      /** @description One or two sentences, plain words. */
+      by: "you" | "kumo";
+      source: components["schemas"]["WakeUpSource"];
+      /** @description The thing in motion it's about. */
+      motion?: components["schemas"]["MotionId"];
+      /** @description When it was set. */
+      set_at: components["schemas"]["Timestamp"];
+    };
+    /** @description Something interesting at the top of the Desk, by Kumo's judgement: its mood, how something's going, a thought, the day around you. It changes when the moment does, and it never notifies. */
+    DeskLine: {
+      /** @description A short line, such as "Quiet morning. Your Northwind prep is two-thirds done." */
       text: string;
-      /** @description A quieter line under the words, such as the plan under a free day: "Easy run · groceries and proper meals · 2h prep · in bed by 00:30". It's in the message too, after the words. */
-      detail?: string;
-      /** @description The `moment` message in the conversation that holds the same words. */
-      message: components["schemas"]["MessageId"];
-      /** @description Up to three short replies, such as "Ask me tonight". A tap answers Kumo, like a card's option. */
-      options: components["schemas"]["AskOption"][];
-      /** @description Whether a typed reply fits, for Reply. */
-      allows_text: boolean;
-      /** @description What Reply says when a typed reply fits, such as "Note it" for the next step tonight. Reply when absent. */
-      reply_label?: string;
-      /** @description When an app first showed it on the Desk, as told with `POST /v0/desk/moment/{moment}/read`. Once it's read, no notification goes out for it. */
-      read_at?: components["schemas"]["Timestamp"];
+      /** @description How Kumo feels, for its face: known moods are `bright`, `calm`, `cosy`, `focused`, `drowsy`, `proud` and `concerned`. Show one you don't recognise as `calm`. */
+      mood: string;
+      /** @description When Kumo set it. */
+      at: components["schemas"]["Timestamp"];
+    };
+    /** @description The weather where you roughly are, read on the box from Open-Meteo every half hour or so. */
+    Ambient: {
+      /** @description Now, in degrees Celsius, rounded. */
+      temperature: number;
       /**
-       * @description `working` while Kumo acts on your answer. Absent otherwise.
-       * @constant
+       * @description `clear`, `partly_cloudy`, `cloudy`, `fog`, `drizzle`, `rain`, `snow` or `thunder`. Show one you don't recognise as `cloudy`.
+       * @enum {unknown}
        */
-      state?: "working";
-      /** @description `working` only: the answer you gave, as you gave it. */
-      answer?: components["schemas"]["CardAnswer"];
+      condition: "clear" | "partly_cloudy" | "cloudy" | "fog" | "drizzle" | "rain" | "snow" | "thunder";
+      /** @description Whether it's daylight there now. */
+      is_day: boolean;
+      /** @description Today's sunset there. */
+      sunset: components["schemas"]["Timestamp"];
+      /** @description Where, when the phone named it, such as "Rome". */
+      place?: string;
     };
     /** @description Opaque. The server makes it for each card. */
     CardId: string;
@@ -2769,8 +2720,6 @@ export interface components {
       title: string;
       options: components["schemas"]["AskOption"][];
       allows_text: boolean;
-      /** @description Whether it can wait, such as asking to unsubscribe from a shop you once wrote to: a quiet card arrives without a sound. Absent means it matters now. */
-      quiet?: boolean;
       /**
        * @description `working` while the box acts on your answer, such as rewriting a draft. Absent while it waits on you.
        * @constant
@@ -2823,22 +2772,20 @@ export interface components {
       question?: {
         text: string;
       };
-      /** @description On a `question` card: Kumo is still learning a kind of work, so once a day it asks you to glance at its calls, such as "Yesterday I sorted 44 mails. Glance?". Its first option opens Kumo's work for `day`, showing only these kinds of work; answer the card with the option you tapped, as for any card. */
-      review?: {
-        /** @description The local day of the calls, such as `2026-11-10`, for `GET /v0/work?day=`. */
-        day: string;
-        work: components["schemas"]["WorkKind"][];
-      };
       /** @description Kumo offers to take something on, such as a need that keeps coming up. Accepting lets Kumo do it in the background. */
       offer?: {
         text: string;
         capability?: string;
       };
     } & (unknown & unknown & unknown & unknown & unknown);
-    /** @description Home: Kumo's line for the moment, what's coming up, what's waiting on you, how much Kumo handled today and when it last read your mail. */
+    /** @description Home: Kumo's line and mood, the weather around you, Kumo's plans, what's coming up, what's waiting on you, how much Kumo handled today and when it last read your mail. */
     Desk: {
-      /** @description Absent while all is quiet: then say so, with `handled`, such as "All quiet. I handled 9 small things." */
-      moment?: components["schemas"]["Moment"];
+      /** @description Absent until Kumo sets one, or after it clears it. */
+      line?: components["schemas"]["DeskLine"];
+      /** @description Absent while the box doesn't know roughly where you are, or couldn't read the weather lately. */
+      ambient?: components["schemas"]["Ambient"];
+      /** @description Kumo's plans: every wake-up, soonest first. Kumo setting one is quiet; it only shows here. */
+      plans: components["schemas"]["WakeUp"][];
       /** @description Events in the next 36 hours or so, plus anything big this week, in time order. */
       coming_up: components["schemas"]["CalendarItem"][];
       /** @description Cards waiting on you, oldest first. */
@@ -2847,6 +2794,40 @@ export interface components {
       handled: number;
       /** @description When Kumo last read a new mail, for "Reading · last mail 2 min ago". Absent while no mail account is connected, and until the first mail. */
       last_mail_at?: components["schemas"]["Timestamp"];
+    };
+    /**
+     * @description How far Kumo has come in an area: `learning`, it shows you its calls and asks when unsure; `spot_checks`, it checks with you now and then; `trusted`, it brings only what needs you. Draw it as three bars filled to the stage; show one you don't recognise as Learning.
+     * @enum {unknown}
+     */
+    TrackStage: "learning" | "spot_checks" | "trusted";
+    /** @description One thing a track stands on: a time you `confirmed` Kumo got it right, `corrected` it, or Kumo `moved` it to another stage, with why. */
+    TrackEvidence: {
+      at: components["schemas"]["Timestamp"];
+      /** @enum {unknown} */
+      kind: "confirmed" | "corrected" | "moved";
+      /** @description In a line, such as "You sent the Tess draft as I wrote it". */
+      text: string;
+      /** @description The stage it moved to, or stepped back to after a correction. */
+      stage?: components["schemas"]["TrackStage"];
+      /** @description The call it was about, in Done. */
+      done?: components["schemas"]["DoneId"];
+    };
+    /** @description An area Kumo is getting to know you in, or learning to do well, such as sorting your mail, writing as you, your food habits or planning your weekends. Kumo opens one when it starts learning something and moves it by judgement; a correction always steps it back. */
+    Track: {
+      id: components["schemas"]["TrackId"];
+      /** @description Such as "Writing as you". */
+      name: string;
+      stage: components["schemas"]["TrackStage"];
+      /** @description When it reached this stage. */
+      since: components["schemas"]["Timestamp"];
+      /** @description Kumo's line on where it stands, such as "Three weeks of drafts you sent as I wrote them." */
+      note?: string;
+      /** @description How many times you've confirmed Kumo got it right. */
+      confirmed: number;
+      /** @description How many times you've corrected it, such as with "That was wrong". */
+      corrected: number;
+      /** @description What it stands on, newest first, the latest ten. */
+      evidence: components["schemas"]["TrackEvidence"][];
     };
     /** @description A thing in motion: something going on that Ari keeps for you, such as a trip being planned. Its content and state come from `GET /v0/motion/{id}`. */
     Motion: {
@@ -2925,7 +2906,7 @@ export interface components {
     };
     /**
      * message.posted
-     * @description Kumo posted a message into the conversation outside any turn: a `post`, or its line for the moment, a `moment`. It arrives whole.
+     * @description Kumo posted a message into the conversation outside any turn, a `post`. It arrives whole, and it notifies every registered device.
      */
     MessagePosted: {
       id: components["schemas"]["EventId"];
@@ -3089,10 +3070,10 @@ export interface components {
       problems: components["schemas"]["Problem"][];
     };
     /**
-     * @description Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or a `reminder` for an ask still waiting after three hours, sent once. `post`: Kumo posted into the conversation outside a turn. `moment`: Kumo's line for the moment matters and you haven't seen it, half a minute after it came; a line read on the Desk sends nothing.
+     * @description Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or Kumo sent a `post` outside a turn.
      * @enum {unknown}
      */
-    NotificationKind: "reply" | "failed" | "ask" | "reminder" | "post" | "moment";
+    NotificationKind: "reply" | "failed" | "ask" | "post";
   };
   responses: {
     /** @description The request is malformed, or not possible in the current state (`invalid_request`). */
@@ -3206,6 +3187,8 @@ export interface components {
     };
   };
   parameters: {
+    /** @description The item's id, from its `CalendarItem` in Coming up. */
+    CalendarItem: components["schemas"]["CalendarItemId"];
     /** @description The thing's id, from its `Motion`. */
     Motion: components["schemas"]["MotionId"];
     /** @description The turn's id, from `turn.started`. */
@@ -3218,6 +3201,7 @@ export interface components {
     Ask: components["schemas"]["AskId"];
     /** @description A random UUID the app makes once per install, and keeps. */
     Device: string;
+    WakeUp: components["schemas"]["WakeUpId"];
     /** @description The id the app chose when it started the call. */
     Call: components["schemas"]["CallId"];
     /** @description The capability's id, such as `reports`. */
@@ -3289,20 +3273,18 @@ export type Discovery = components["schemas"]["Discovery"];
 export type BeliefAnswer = components["schemas"]["BeliefAnswer"];
 export type DonePage = components["schemas"]["DonePage"];
 export type DoneResult = components["schemas"]["DoneResult"];
-export type JobList = components["schemas"]["JobList"];
+export type WakeUpList = components["schemas"]["WakeUpList"];
+export type WakeUpResult = components["schemas"]["WakeUpResult"];
+export type WakeUpChange = components["schemas"]["WakeUpChange"];
 export type CardAnswer = components["schemas"]["CardAnswer"];
 export type CardResult = components["schemas"]["CardResult"];
-export type MomentAnswer = components["schemas"]["MomentAnswer"];
 export type GuessAnswer = components["schemas"]["GuessAnswer"];
-export type MomentResult = components["schemas"]["MomentResult"];
 export type Work = components["schemas"]["Work"];
-export type Trust = components["schemas"]["Trust"];
-export type TrustResult = components["schemas"]["TrustResult"];
 export type CorrectDone = components["schemas"]["CorrectDone"];
 export type NewEvent = components["schemas"]["NewEvent"];
+export type EventMove = components["schemas"]["EventMove"];
 export type EventResult = components["schemas"]["EventResult"];
 export type Lead = components["schemas"]["Lead"];
-export type MorningSettings = components["schemas"]["MorningSettings"];
 export type ServerInfo = components["schemas"]["ServerInfo"];
 export type SendMessage = components["schemas"]["SendMessage"];
 export type MessageResult = components["schemas"]["MessageResult"];
@@ -3319,9 +3301,10 @@ export type AskResult = components["schemas"]["AskResult"];
 export type RegisterDevice = components["schemas"]["RegisterDevice"];
 export type Device = components["schemas"]["Device"];
 export type DeviceResult = components["schemas"]["DeviceResult"];
-export type Presence = components["schemas"]["Presence"];
-export type DeviceStatus = components["schemas"]["DeviceStatus"];
+export type Whereabouts = components["schemas"]["Whereabouts"];
+export type Area = components["schemas"]["Area"];
 export type ErrorResult = components["schemas"]["ErrorResult"];
+export type Timestamp = components["schemas"]["Timestamp"];
 export type Problem = components["schemas"]["Problem"];
 export type EventId = components["schemas"]["EventId"];
 export type BeliefId = components["schemas"]["BeliefId"];
@@ -3329,7 +3312,6 @@ export type MemoryAddress = components["schemas"]["MemoryAddress"];
 export type Belief = components["schemas"]["Belief"];
 export type CalendarItemId = components["schemas"]["CalendarItemId"];
 export type When = components["schemas"]["When"];
-export type Timestamp = components["schemas"]["Timestamp"];
 export type MotionId = components["schemas"]["MotionId"];
 export type Activity = components["schemas"]["Activity"];
 export type Guess = components["schemas"]["Guess"];
@@ -3357,16 +3339,22 @@ export type Call = components["schemas"]["Call"];
 export type TopicId = components["schemas"]["TopicId"];
 export type Topic = components["schemas"]["Topic"];
 export type UploadId = components["schemas"]["UploadId"];
-export type WorkKind = components["schemas"]["WorkKind"];
+export type TrackId = components["schemas"]["TrackId"];
 export type DoneEntry = components["schemas"]["DoneEntry"];
-export type JobId = components["schemas"]["JobId"];
-export type Job = components["schemas"]["Job"];
-export type MomentId = components["schemas"]["MomentId"];
-export type Moment = components["schemas"]["Moment"];
+export type WakeUpId = components["schemas"]["WakeUpId"];
+export type Weekday = components["schemas"]["Weekday"];
+export type Repeat = components["schemas"]["Repeat"];
+export type WakeUpSource = components["schemas"]["WakeUpSource"];
+export type WakeUp = components["schemas"]["WakeUp"];
+export type DeskLine = components["schemas"]["DeskLine"];
+export type Ambient = components["schemas"]["Ambient"];
 export type CardId = components["schemas"]["CardId"];
 export type Slot = components["schemas"]["Slot"];
 export type Card = components["schemas"]["Card"];
 export type Desk = components["schemas"]["Desk"];
+export type TrackStage = components["schemas"]["TrackStage"];
+export type TrackEvidence = components["schemas"]["TrackEvidence"];
+export type Track = components["schemas"]["Track"];
 export type Motion = components["schemas"]["Motion"];
 export type MotionChange = components["schemas"]["MotionChange"];
 export type VoiceState = components["schemas"]["VoiceState"];
@@ -3399,12 +3387,14 @@ export type ResponseIdConflict = components["responses"]["IdConflict"];
 export type ResponseTooLarge = components["responses"]["TooLarge"];
 export type ResponseSlowDown = components["responses"]["SlowDown"];
 export type ResponseUnavailable = components["responses"]["Unavailable"];
+export type ParameterCalendarItem = components["parameters"]["CalendarItem"];
 export type ParameterMotion = components["parameters"]["Motion"];
 export type ParameterTurn = components["parameters"]["Turn"];
 export type ParameterUpload = components["parameters"]["Upload"];
 export type ParameterAttachment = components["parameters"]["Attachment"];
 export type ParameterAsk = components["parameters"]["Ask"];
 export type ParameterDevice = components["parameters"]["Device"];
+export type ParameterWakeUp = components["parameters"]["WakeUp"];
 export type ParameterCall = components["parameters"]["Call"];
 export type ParameterCapability = components["parameters"]["Capability"];
 export type HeaderItoProtocol = components["headers"]["ItoProtocol"];
@@ -3498,9 +3488,6 @@ export interface operations {
            *       "protocol": "0.9",
            *       "lead": {
            *         "name": "Kumo"
-           *       },
-           *       "morning": {
-           *         "not_before": "07:30"
            *       },
            *       "agent": {
            *         "model": "gpt-6.1-sol",
@@ -3808,7 +3795,7 @@ export interface operations {
       404: components["responses"]["NotFound"];
     };
   };
-  listJobs: {
+  listWakeUps: {
     parameters: {
       query?: never;
       header?: never;
@@ -3817,17 +3804,75 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description The jobs. */
+      /** @description The wake-ups. */
       200: {
         headers: {
           "Ito-Protocol": components["headers"]["ItoProtocol"];
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["JobList"];
+          "application/json": components["schemas"]["WakeUpList"];
         };
       };
       401: components["responses"]["TokenRejected"];
+    };
+  };
+  cancelWakeUp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        wake_up: components["parameters"]["WakeUp"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancelled. */
+      204: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  changeWakeUp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        wake_up: components["parameters"]["WakeUp"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "at": "2026-11-12T17:00:00.000Z"
+         *     }
+         */
+        "application/json": components["schemas"]["WakeUpChange"];
+      };
+    };
+    responses: {
+      /** @description Changed. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WakeUpResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
     };
   };
   undoDone: {
@@ -3913,64 +3958,6 @@ export interface operations {
       401: components["responses"]["TokenRejected"];
     };
   };
-  readMoment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        moment: components["schemas"]["MomentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Noted. */
-      204: {
-        headers: {
-          "Ito-Protocol": components["headers"]["ItoProtocol"];
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["TokenRejected"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  answerMoment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        moment: components["schemas"]["MomentId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        /**
-         * @example {
-         *       "option": "Ask me tonight"
-         *     }
-         */
-        "application/json": components["schemas"]["MomentAnswer"];
-      };
-    };
-    responses: {
-      /** @description Taken; Kumo is acting on it. */
-      202: {
-        headers: {
-          "Ito-Protocol": components["headers"]["ItoProtocol"];
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MomentResult"];
-        };
-      };
-      400: components["responses"]["InvalidRequest"];
-      401: components["responses"]["TokenRejected"];
-      404: components["responses"]["NotFound"];
-    };
-  };
   answerGuess: {
     parameters: {
       query?: never;
@@ -4030,32 +4017,6 @@ export interface operations {
         };
       };
       401: components["responses"]["TokenRejected"];
-    };
-  };
-  resetTrust: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        work: components["schemas"]["WorkKind"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Back to Learning. */
-      200: {
-        headers: {
-          "Ito-Protocol": components["headers"]["ItoProtocol"];
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TrustResult"];
-        };
-      };
-      400: components["responses"]["InvalidRequest"];
-      401: components["responses"]["TokenRejected"];
-      404: components["responses"]["NotFound"];
     };
   };
   answerCard: {
@@ -4128,6 +4089,70 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  removeEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The item's id, from its `CalendarItem` in Coming up. */
+        item: components["parameters"]["CalendarItem"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed. */
+      204: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  moveEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The item's id, from its `CalendarItem` in Coming up. */
+        item: components["parameters"]["CalendarItem"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "start": "2026-11-15T11:30:00.000Z",
+         *       "end": "2026-11-15T12:00:00.000Z"
+         *     }
+         */
+        "application/json": components["schemas"]["EventMove"];
+      };
+    };
+    responses: {
+      /** @description Moved. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   renameLead: {
     parameters: {
       query?: never;
@@ -4154,38 +4179,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Lead"];
-        };
-      };
-      400: components["responses"]["InvalidRequest"];
-      401: components["responses"]["TokenRejected"];
-    };
-  };
-  setMorning: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        /**
-         * @example {
-         *       "not_before": "07:30"
-         *     }
-         */
-        "application/json": components["schemas"]["MorningSettings"];
-      };
-    };
-    responses: {
-      /** @description Saved. */
-      200: {
-        headers: {
-          "Ito-Protocol": components["headers"]["ItoProtocol"];
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MorningSettings"];
         };
       };
       400: components["responses"]["InvalidRequest"];
@@ -4456,7 +4449,7 @@ export interface operations {
       401: components["responses"]["TokenRejected"];
     };
   };
-  setPresence: {
+  setWhereabouts: {
     parameters: {
       query?: never;
       header?: never;
@@ -4470,44 +4463,15 @@ export interface operations {
       content: {
         /**
          * @example {
-         *       "looking": true
+         *       "time_zone": "Europe/Rome",
+         *       "area": {
+         *         "latitude": 41.9,
+         *         "longitude": 12.5,
+         *         "name": "Rome"
+         *       }
          *     }
          */
-        "application/json": components["schemas"]["Presence"];
-      };
-    };
-    responses: {
-      /** @description Noted. */
-      204: {
-        headers: {
-          "Ito-Protocol": components["headers"]["ItoProtocol"];
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      400: components["responses"]["InvalidRequest"];
-      401: components["responses"]["TokenRejected"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  setStatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description A random UUID the app makes once per install, and keeps. */
-        device: components["parameters"]["Device"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        /**
-         * @example {
-         *       "focus": "sleep"
-         *     }
-         */
-        "application/json": components["schemas"]["DeviceStatus"];
+        "application/json": components["schemas"]["Whereabouts"];
       };
     };
     responses: {

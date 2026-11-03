@@ -69,8 +69,18 @@ struct SpecCoverageTests {
                 .compactMap(\.string)
         }
         #expect(try values(of: "Card", "kind") == CardKind.known.map(\.rawValue))
-        #expect(try spec.values(of: "WorkKind") == WorkKind.known.map(\.rawValue))
-        #expect(try values(of: "Moment", "kind") == MomentKind.known.map(\.rawValue))
+        #expect(try spec.values(of: "TrackStage") == TrackStage.known.map(\.rawValue))
+        #expect(try values(of: "TrackEvidence", "kind") == TrackEvidence.Kind.known.map(\.rawValue))
+        #expect(try spec.values(of: "Weekday") == Weekday.known.map(\.rawValue))
+        #expect(try values(of: "WakeUp", "by") == WakeUpAuthor.known.map(\.rawValue))
+        #expect(try values(of: "WakeUpSource", "kind") == WakeUpSource.Kind.known.map(\.rawValue))
+        #expect(try values(of: "Ambient", "condition") == Weather.known.map(\.rawValue))
+        // Kumo's moods are an open word; the spec names the known ones in its description.
+        let moods = try #require(
+            spec.definitions["DeskLine"]?["properties"]?["mood"]?["description"]?.string)
+        #expect(
+            Set(moods.matches(of: /`([a-z]+)`/).map { String($0.output.1) })
+                == Set(KumoMood.known.map(\.rawValue)))
         #expect(try spec.values(of: "Activity") == Activity.known.map(\.rawValue))
         #expect(try values(of: "CalendarItem", "status") == CalendarStatus.known.map(\.rawValue))
         let state = spec.definitions["Card"]?["properties"]?["state"]?["const"]?.string

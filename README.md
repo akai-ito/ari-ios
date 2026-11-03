@@ -63,25 +63,21 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   send answers it, from a notification too. An approval shows what it would do, and any pictures
   it would make public, such as a report's screenshots.
 - **The Desk.** Where Ito opens, and home for everything admin, so mail never floods the chat. At
-  the top, Kumo speaks for the moment: a line or two that changes only when the moment does (the
-  first calm moment after your morning, something that matters arriving, a change to your day),
-  with replies to tap and Reply, and otherwise all quiet. Shown here, it's read in the chat too, so
-  no notification follows. Under Kumo's face a tiny line says it's reading, with the last mail, or
-  "Something's wrong ›", and the face looks a little off. Then what's coming up (opening in Apple's
-  own event view), what's waiting on you (drafts to open in Mail, invites, times to check against
-  your work calendar, questions Kumo wasn't sure about), each with a dot when it's new or changed
-  since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's work: today's
-  ledger, each thing with its reason, Undo and "That was wrong" (a word, a tap on a usual word, or
-  just the tap), everything before, and how much Kumo checks with you for each kind of work, on a
-  three-step ladder with "Show me everything again". While Kumo is learning a kind, a quiet card
-  each morning offers yesterday's calls to glance at. Your answer shows on its card
-  while Kumo acts on it, and then a line says what followed. While something on the server needs
-  you, such as notifications it can't send or a mail account that keeps refusing its sign-in, a
-  quiet line says so too, opening how to fix it; Settings lists it first, and both clear on their
-  own once it's fixed. Tell Kumo talks into the chat, with the reply on the Desk.
+  the top, Kumo's line: something it thought worth saying for now, which Kumo changes when the
+  moment does and which never notifies. Under Kumo's face a tiny line says it's reading, with the
+  last mail, or "Something's wrong ›", and the face looks a little off. Then what's coming up
+  (opening in Apple's own event view), what's waiting on you (drafts to open in Mail, invites, times
+  to check against your work calendar, questions Kumo wasn't sure about), each with a dot when it's
+  new or changed since you last looked, and Done in one line, "handled 9 ›", which opens Kumo's
+  work: today's ledger, each thing with its reason, Undo and "That was wrong" (a word, a tap on a
+  usual word, or just the tap), and everything before. Your answer shows on its card while Kumo acts
+  on it, and then a line says what followed. While something on the server needs you, such as
+  notifications it can't send or a mail account that keeps refusing its sign-in, a quiet line says
+  so too, opening how to fix it; Settings lists it first, and both clear on their own once it's
+  fixed. Tell Kumo talks into the chat, with the reply on the Desk.
 - **Getting started.** Five calm steps after pairing: meet Kumo, connect mail and calendar, a few
-  questions while Kumo reads three months of mail (or "still true?" for what it already knows), the
-  morning and notifications, then what's in motion. Kumo's questions can offer answers to tap.
+  questions while Kumo reads three months of mail (or "still true?" for what it already knows),
+  notifications, then what's in motion. Kumo's questions can offer answers to tap.
   Settings opens it again, with nothing wiped: Kumo reads mail again only for an account you add.
 - **In motion.** What you're actually doing, kept current as you talk: a trip, a training block, a
   pursuit such as a job search, an occasion such as a dentist appointment, or a case such as the
@@ -101,8 +97,12 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   provider's own page where it can ("Connect GitHub", "Connect Outlook"), or with guided steps where
   it can't (an iCloud or Gmail app password), so keys go to your box and never come back.
 - **Four places, and Settings.** Desk, Chat, In motion and You in the iOS 26 tab bar. Settings opens
-  from the corner: the server, Kumo's name, the morning time, notifications, Kumo's voice and model,
-  capabilities, and the app icon.
+  from the corner: the server, Kumo's name, notifications, Kumo's voice and model, capabilities, and
+  the app icon.
+- **Messages that reach you.** Every message from Kumo notifies as it's sent, encrypted on the way:
+  a reply, a failure, a question, or something Kumo wrote to you on its own. With Ito open it's a
+  banner, except while you're reading the chat. Your Focus decides what makes a sound; a message
+  that can't wait breaks through it and carries a small "Couldn't wait" mark in the chat.
 - **The look.** A cool slate dark with soft white text and no accent colour. Kumo's answers are in
   New York, Apple's serif, the only serif in the conversation; you write in SF Pro, in a thin
   outline. Kumo's presence is a small pebble of bone-coloured dots whose eyes follow what it's
@@ -133,17 +133,9 @@ further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal'
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
 and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
-*times*, *invite* and *mail* put cards on the Desk, and Kumo's line follows them, and *moment*
-writes Kumo's first line of the day at once. *plan* lays out a day of Kumo's plan and guesses in
-Coming up (`ARI_GUESS` shows the first guess `open`, or with what it really was, `correct`);
-*tonight*, *line* and *past* show the evening check-ins, *question* the day's question and *drift*
-a week that drifted. `ARI_SKETCH` opens the app on a sketch of one of Kumo's moments from samples,
-without a server, such as `sunday`, `quiet`, `wrong` or `work`.
-
-Ito is also a Focus filter: in the Settings app, open Focus, choose one, then Add Filter › Ito and
-say what that Focus is for. iOS then tells Ari whenever it turns on or off, and Ari tells your box,
-even from the background. Each time Ari reaches the box again it checks your real Focus and sends it
-if the box missed a change; Settings › Your Focus shows what the box last heard.
+*times*, *invite* and *mail* put cards on the Desk, *work* fills Kumo's work, and *plan* lays out a
+day of Kumo's plan and guesses in Coming up (`ARI_GUESS` shows the first guess `open`, or with what
+it really was, `correct`).
 
 To use your own server from your iPhone, reach it over your tailnet: `tailscale serve --bg 8787` on
 the server gives an HTTPS address Ari accepts. To run Ari on your iPhone, copy

@@ -43,14 +43,16 @@ struct SessionDeskTests {
         try await bench.open(with: Self.snapshot("e_10"))
 
         let desk = #"""
-            {"moment":\#(Self.moment),
+            {"line":\#(Self.line),"plans":[\#(Self.plan("w_1", at: "2026-11-10T17:30:00.000Z"))],
              "coming_up":[],"waiting":[\#(Self.question("k_1"))],"handled":3}
             """#
         try await bench.push(
             #"{"id":"e_11","type":"desk.changed","at":"2026-11-10T07:40:00.000Z","desk":\#(desk)}"#)
 
         let session = bench.session
-        #expect(session.desk?.moment?.text == "Sam moved climbing to 8, so I moved your prep to 6.")
+        #expect(session.desk?.line?.text == "Sam moved climbing to 8, so your prep is at 6.")
+        #expect(session.desk?.line?.mood == .focused)
+        #expect(session.desk?.plans.map(\.id) == ["w_1"])
         #expect(session.desk?.handled == 3)
         #expect(session.desk?.waiting.map(\.id) == ["k_1"])
         #expect(session.conversation.cursor == "e_11")
@@ -85,39 +87,59 @@ struct SessionDeskTests {
         #expect(session.desk?.waiting.first?.state == .working)
     }
 
-    @Test(
-        "answering Kumo's line shows it at work at once; reading it and today's work are requests")
-    func answerMoment() async throws {
+    @Test("moving and cancelling Kumo's plans show at once; today's work is a request")
+    func plans() async throws {
         let bench = try Bench()
         defer { bench.close() }
-        let desk = #"{"moment":\#(Self.moment),"coming_up":[],"waiting":[],"handled":3}"#
+        let plans = [
+            Self.plan("w_1", at: "2026-11-10T17:30:00.000Z"),
+            Self.plan("w_2", at: "2026-11-10T20:00:00.000Z"),
+        ]
+        let desk = #"{"plans":[\#(plans.joined(separator: ","))],"coming_up":[],"waiting":[]}"#
         try await bench.open(with: Self.snapshot("e_10", desk: desk))
         let session = bench.session
 
-        let reading = Task { try await session.readMoment("o_1") }
-        let read = try await bench.nextRequest()
-        #expect(read.method == .post && read.path == "/v0/desk/moment/o_1/read" && read.body == nil)
-        try await bench.server.answer(204)
-        try await reading.value
-
-        let answering = Task { try await session.answerMoment("o_1", CardAnswer(option: "Fine")) }
-        let request = try await bench.nextRequest()
-        #expect(request.method == .post && request.path == "/v0/desk/moment/o_1/answer")
+        // Moved after the other: still soonest first.
+        let moving = Task {
+            try await session.change("w_1", WakeUpChange(at: Timestamp("2026-11-10T21:00:00.000Z")))
+        }
+        let move = try await bench.nextRequest()
+        #expect(move.method == .patch && move.path == "/v0/wakeups/w_1")
         #expect(
-            try request.body.map { try JSONValue(data: $0) }
-                == JSONValue(json: #"{"option":"Fine"}"#))
-        let working = Self.moment.replacingOccurrences(
-            of: #""allows_text":false"#,
-            with: #""allows_text":false,"state":"working","answer":{"option":"Fine"}"#)
-        try await bench.server.answer(202, json: #"{"moment":\#(working)}"#)
-        try await answering.value
-        #expect(session.desk?.moment?.isWorking == true && session.desk?.handled == 3)
+            try move.body.map { try JSONValue(data: $0) }
+                == JSONValue(json: #"{"at":"2026-11-10T21:00:00.000Z"}"#))
+        try await bench.server.answer(
+            200, json: #"{"wake_up":\#(Self.plan("w_1", at: "2026-11-10T21:00:00.000Z"))}"#)
+        try await moving.value
+        #expect(session.desk?.plans.map(\.id) == ["w_2", "w_1"])
+
+        // Cancelled, and one already gone counts as cancelled too.
+        let cancelling = Task { try await session.cancel("w_2") }
+        let cancel = try await bench.nextRequest()
+        #expect(cancel.method == .delete && cancel.path == "/v0/wakeups/w_2" && cancel.body == nil)
+        try await bench.server.answer(204)
+        try await cancelling.value
+        let gone = Task { try await session.cancel("w_1") }
+        _ = try await bench.nextRequest()
+        try await bench.server.answer(
+            404, json: #"{"error":{"code":"not_found","message":"No such wake-up."}}"#)
+        try await gone.value
+        #expect(session.desk?.plans.isEmpty == true)
+
+        // Asking for them all again replaces the Desk's list.
+        let refreshing = Task { try await session.refreshPlans() }
+        #expect(try await bench.nextRequest().path == "/v0/wakeups")
+        try await bench.server.answer(200, json: #"{"wake_ups":[\#(plans[1])]}"#)
+        try await refreshing.value
+        #expect(session.desk?.plans.map(\.id) == ["w_2"])
 
         let looking = Task { try await session.work() }
         let work = try await bench.nextRequest()
         #expect(work.method == .get && work.path == "/v0/work")
-        try await bench.server.answer(200, json: #"{"day":"2026-11-10","handled":[],"cleared":[]}"#)
-        #expect(try await looking.value == KumoWork(day: "2026-11-10"))
+        try await bench.server.answer(
+            200, json: #"{"day":"2026-11-10","handled":[],"cleared":[],"tracks":[\#(Self.track)]}"#)
+        let today = try await looking.value
+        #expect(today.day == "2026-11-10" && today.tracks.first?.stage == .spotChecks)
 
         let yesterday = Task { try await session.work(day: "2026-11-09") }
         #expect(try await bench.nextRequest().path == "/v0/work?day=2026-11-09")
@@ -125,7 +147,7 @@ struct SessionDeskTests {
         #expect(try await yesterday.value.day == "2026-11-09")
     }
 
-    @Test("That was wrong, with or without words, and show me everything again")
+    @Test("That was wrong, with or without words")
     func corrections() async throws {
         let bench = try Bench()
         defer { bench.close() }
@@ -141,7 +163,7 @@ struct SessionDeskTests {
         try await bench.server.answer(
             200,
             json:
-                #"{"entry":{"id":"d1","at":"2026-11-05T09:14:00.000Z","text":"Undone: Binned a mail","undo":false,"quiet":false,"work":"sorting","corrected_at":"2026-11-05T10:00:00.000Z"}}"#
+                #"{"entry":{"id":"d1","at":"2026-11-05T09:14:00.000Z","text":"Undone: Binned a mail","undo":false,"quiet":false,"track":"l_1","corrected_at":"2026-11-05T10:00:00.000Z"}}"#
         )
         #expect(try await correcting.value.isCorrected)
 
@@ -152,23 +174,12 @@ struct SessionDeskTests {
         try await bench.server.answer(
             200,
             json:
-                #"{"entry":{"id":"d2","at":"2026-11-05T09:14:00.000Z","text":"Moved the dentist","undo":false,"quiet":false,"work":"calendar","corrected_at":"2026-11-05T10:00:00.000Z"}}"#
+                #"{"entry":{"id":"d2","at":"2026-11-05T09:14:00.000Z","text":"Moved the dentist","undo":false,"quiet":false,"corrected_at":"2026-11-05T10:00:00.000Z"}}"#
         )
-        #expect(try await tapped.value.work == .calendar)
-
-        let resetting = Task { try await session.resetTrust(.calendar) }
-        let reset = try await bench.nextRequest()
-        #expect(
-            reset.method == .post && reset.path == "/v0/trust/calendar/reset" && reset.body == nil)
-        try await bench.server.answer(
-            200,
-            json:
-                #"{"trust":{"work":"calendar","title":"Calendar","step":"learning","line":"You asked to see everything again.","since":"2026-11-05T10:01:00.000Z"}}"#
-        )
-        #expect(try await resetting.value.step == .learning)
+        #expect(try await tapped.value.track == nil)
     }
 
-    @Test("Done, jobs and a calendar event are plain requests")
+    @Test("Done and a calendar event are plain requests")
     func deskRequests() async throws {
         let bench = try Bench()
         defer { bench.close() }
@@ -195,19 +206,6 @@ struct SessionDeskTests {
                 #"{"entry":{"id":"d1","at":"2026-11-05T09:14:00.000Z","text":"Domino's: unsubscribed, binned (undone)","undo":false,"quiet":false}}"#
         )
         #expect(try await undoing.value.text.hasSuffix("(undone)"))
-
-        let looking = Task { try await session.jobs() }
-        let jobs = try await bench.nextRequest()
-        #expect(jobs.method == .get && jobs.path == "/v0/jobs")
-        try await bench.server.answer(
-            200,
-            json:
-                #"{"jobs":[{"id":"j_1","why":"Ask how the Halcyon interview went","after_event":{"uid":"halcyon@icloud.com","title":"Halcyon technical"}}]}"#
-        )
-        let job = try #require(try await looking.value.first)
-        #expect(
-            job.why == "Ask how the Halcyon interview went"
-                && job.afterEvent?.title == "Halcyon technical")
 
         let event = NewCalendarEvent(
             title: "Dentist", start: When(year: 2026, month: 11, day: 17),
@@ -368,8 +366,15 @@ struct SessionDeskTests {
         #"{"id":"\#(id)","role":"user","text":"\#(text)","at":"2026-11-10T07:00:00.000Z","position":\#(position)}"#
     }
 
-    private static let moment =
-        #"{"id":"o_1","kind":"change","at":"2026-11-10T11:30:00.000Z","text":"Sam moved climbing to 8, so I moved your prep to 6.","message":"m_9","options":[{"label":"Fine"}],"allows_text":false}"#
+    private static let line =
+        #"{"text":"Sam moved climbing to 8, so your prep is at 6.","mood":"focused","at":"2026-11-10T11:30:00.000Z"}"#
+
+    private static let track =
+        #"{"id":"l_1","name":"Writing as you","stage":"spot_checks","since":"2026-11-01T10:00:00.000Z","confirmed":12,"corrected":1,"evidence":[]}"#
+
+    private static func plan(_ id: String, at: String) -> String {
+        #"{"id":"\#(id)","at":"\#(at)","what":"Ask how the run went","why":"You wanted to talk it through.","by":"kumo","source":{"kind":"chat","title":"Chat"},"set_at":"2026-11-10T09:00:00.000Z"}"#
+    }
 
     private static func question(_ id: String, working: Bool = false) -> String {
         let state = working ? #","state":"working""# : ""

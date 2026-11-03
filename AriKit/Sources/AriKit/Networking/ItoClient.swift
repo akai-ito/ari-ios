@@ -67,7 +67,8 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     // MARK: - The Desk
 
-    /// `GET /v0/desk`: Kumo's line for the moment, what's coming up and what's waiting on you.
+    /// `GET /v0/desk`: Kumo's line and plans, the weather, what's coming up and what's waiting on
+    /// you.
     public func desk() async throws(RequestError) -> Desk {
         try await call(HTTPRequest(.get, "/v0/desk"))
     }
@@ -81,33 +82,6 @@ public struct ItoClient: Sendable, CustomStringConvertible {
             HTTPRequest(
                 .post, "/v0/desk/cards/\(Self.segment(card.rawValue))/answer",
                 body: try Self.json(answer)))
-    }
-
-    /// `POST /v0/desk/moment/{id}/read`: Kumo's line was on the Desk, so it's read, in the
-    /// conversation too, and no notification goes out for it.
-    public func readMoment(_ id: MomentID) async throws(RequestError) {
-        try await callWithoutAnswer(
-            HTTPRequest(.post, "/v0/desk/moment/\(Self.segment(id.rawValue))/read"))
-    }
-
-    /// `POST /v0/desk/moment/{id}/answer`: answers Kumo's line like a card. It comes back
-    /// `working` while Kumo acts on it, then gives way to all quiet.
-    public func answerMoment(_ id: MomentID, _ answer: CardAnswer) async throws(RequestError)
-        -> MomentResult
-    {
-        try await call(
-            HTTPRequest(
-                .post, "/v0/desk/moment/\(Self.segment(id.rawValue))/answer",
-                body: try Self.json(answer)))
-    }
-
-    /// `POST /v0/desk/moment/{id}/answer` with `skip`: skips the day's question. It goes at once,
-    /// and Kumo never asks it again.
-    public func skipMoment(_ id: MomentID) async throws(RequestError) -> MomentResult {
-        try await call(
-            HTTPRequest(
-                .post, "/v0/desk/moment/\(Self.segment(id.rawValue))/answer",
-                body: try Self.json(MomentSkip())))
     }
 
     /// `POST /v0/desk/guesses/{item}/answer`: says one of Kumo's guesses was right, or what it
@@ -124,14 +98,14 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// `GET /v0/work`: Kumo's work today, or on another local day, what it handled and what it
-    /// cleared, with the trust ladder.
+    /// cleared, with the areas it's learning.
     public func work(day: String? = nil) async throws(RequestError) -> KumoWork {
         try await call(
             HTTPRequest(.get, day.map { Self.path("/v0/work", ["day": $0]) } ?? "/v0/work"))
     }
 
     /// `POST /v0/done/{entry}/wrong`: "That was wrong". Kumo undoes it where it can, keeps a
-    /// preference and steps that kind of work back a rung. The answer is the entry, corrected.
+    /// preference and steps its track back. The answer is the entry, corrected.
     public func correct(_ entry: DoneID, text: String? = nil) async throws(RequestError)
         -> DoneEntry
     {
@@ -140,14 +114,6 @@ public struct ItoClient: Sendable, CustomStringConvertible {
                 .post, "/v0/done/\(Self.segment(entry.rawValue))/wrong",
                 body: try Self.json(CorrectDone(text: text))))
         return answer.entry
-    }
-
-    /// `POST /v0/trust/{work}/reset`: show me everything again. The answer is the kind, back to
-    /// Learning.
-    public func resetTrust(_ work: WorkKind) async throws(RequestError) -> TrustRung {
-        let answer: TrustResult = try await call(
-            HTTPRequest(.post, "/v0/trust/\(Self.segment(work.rawValue))/reset"))
-        return answer.trust
     }
 
     /// `GET /v0/done?before=…&limit=…`: what Kumo did without you, newest first.
@@ -165,10 +131,30 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return answer.entry
     }
 
-    /// `GET /v0/jobs`: the looks Kumo scheduled for itself, soonest first.
-    public func jobs() async throws(RequestError) -> [Job] {
-        let answer: JobList = try await call(HTTPRequest(.get, "/v0/jobs"))
-        return answer.jobs
+    // MARK: - Kumo's plans
+
+    /// `GET /v0/wakeups`: every wake-up Kumo set, soonest first.
+    public func wakeUps() async throws(RequestError) -> [WakeUp] {
+        let answer: WakeUpList = try await call(HTTPRequest(.get, "/v0/wakeups"))
+        return answer.wakeUps
+    }
+
+    /// `PATCH /v0/wakeups/{wake_up}`: moves a wake-up, changes how it repeats or rewords it. The
+    /// answer is the wake-up as it is now; a time that has passed is refused.
+    public func changeWakeUp(_ id: WakeUpID, _ change: WakeUpChange) async throws(RequestError)
+        -> WakeUp
+    {
+        let answer: WakeUpResult = try await call(
+            HTTPRequest(
+                .patch, "/v0/wakeups/\(Self.segment(id.rawValue))", body: try Self.json(change)))
+        return answer.wakeUp
+    }
+
+    /// `DELETE /v0/wakeups/{wake_up}`: cancels a wake-up. Kumo sees it's gone and doesn't set it
+    /// again unasked.
+    public func cancelWakeUp(_ id: WakeUpID) async throws(RequestError) {
+        try await callWithoutAnswer(
+            HTTPRequest(.delete, "/v0/wakeups/\(Self.segment(id.rawValue))"))
     }
 
     /// `POST /v0/calendar/events`: the box writes the event into your calendar, and answers with
@@ -238,20 +224,15 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await callWithoutAnswer(HTTPRequest(.delete, "/v0/devices/\(Self.segment(device))"))
     }
 
-    /// `PUT /v0/devices/{device}/presence`: whether the conversation is on screen here, so the
-    /// server doesn't push what you're already watching.
-    public func setPresence(_ device: String, looking: Bool) async throws(RequestError) {
-        let body = try Self.json(Presence(looking: looking))
-        try await callWithoutAnswer(
-            HTTPRequest(.put, "/v0/devices/\(Self.segment(device))/presence", body: body))
-    }
-
-    /// `PUT /v0/devices/{device}/status`: the Focus your phone is in, when Ito is part of it, or
-    /// none once it's off. Kumo's lines and check-ins fit it.
-    public func setStatus(_ device: String, _ status: DeviceStatus) async throws(RequestError) {
+    /// `PUT /v0/devices/{device}/whereabouts`: the phone's time zone, and roughly where it is when
+    /// you allow it. The box keeps only the latest, rounded to about 10 km.
+    public func setWhereabouts(_ device: String, _ whereabouts: Whereabouts)
+        async throws(RequestError)
+    {
         try await callWithoutAnswer(
             HTTPRequest(
-                .put, "/v0/devices/\(Self.segment(device))/status", body: try Self.json(status)))
+                .put, "/v0/devices/\(Self.segment(device))/whereabouts",
+                body: try Self.json(whereabouts)))
     }
 
     /// `GET /v0/capabilities`: every capability, with its state and setup.

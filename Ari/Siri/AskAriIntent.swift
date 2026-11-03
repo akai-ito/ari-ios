@@ -24,8 +24,8 @@ struct AskAriIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let session = model.session else { throw AskAriError.notConnected }
         let message = try await words()
-        // In the background the stream is closed: open it for the reply, and say this device
-        // is looking, so the server doesn't also push what Siri reads out.
+        // In the background the stream is closed: open it for the reply. With Ari in front, the
+        // reply's notification shows no banner while Siri reads it out.
         let wasPaused = session.link == .paused
         let wasLooking = model.isLooking
         if wasPaused { session.start() }

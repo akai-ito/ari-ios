@@ -117,6 +117,12 @@ struct Replay {
     }
 
     private mutating func answer(_ response: Transcript.Response) throws {
+        if case .cancelWakeUp(let plan) = request?.route, !response.lost,
+            (200..<300).contains(response.status) || response.status == 404
+        {
+            desk = desk?.removing(plan: plan)
+            return
+        }
         guard let request, !response.lost, (200..<300).contains(response.status),
             let body = response.body
         else { return }
@@ -140,8 +146,10 @@ struct Replay {
             desk = try body.decode(Desk.self)
         case .answerCard:
             desk = desk?.replacing(card: try body.decode(CardResult.self).card)
-        case .answerMoment:
-            desk = desk?.replacing(moment: try body.decode(MomentResult.self).moment)
+        case .wakeUps:
+            desk = desk?.replacing(plans: try body.decode(WakeUpList.self).wakeUps)
+        case .changeWakeUp:
+            desk = desk?.replacing(plan: try body.decode(WakeUpResult.self).wakeUp)
         default:
             break
         }

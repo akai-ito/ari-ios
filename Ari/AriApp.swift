@@ -9,41 +9,31 @@ struct AriApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
+            app
+                .onOpenURL { model.open($0) }
                 #if DEBUG
-                    if let sketch = DebugScript.sketch {
-                        MomentSketchRoot(sketch: sketch)
-                    } else {
-                        app
-                    }
-                #else
-                    app
+                    .task { if let url = DebugScript.openURL { model.open(url) } }
                 #endif
-            }
-            .onOpenURL { model.open($0) }
-            #if DEBUG
-                .task { if let url = DebugScript.openURL { model.open(url) } }
-            #endif
-            .preferredColorScheme(.dark)
-            .tint(.ariText)
-            .onChange(of: scenePhase, initial: true) { _, phase in
-                // On screen, the stream is live; in the background it closes, while a waiting
-                // message or a Stop still goes. Only the background: Control Center, a permission
-                // prompt or a call's banner make Ari inactive for a moment, and closing the stream
-                // for each made it reconnect.
-                switch phase {
-                case .active:
-                    model.session?.start()
-                    model.collectShares()
-                    model.refreshServer()
-                case .background:
-                    // A call carries on in your pocket: Ari's replies still have to arrive.
-                    if CallEngine.isOn { break }
-                    model.session?.pause()
-                default:
-                    break
+                .preferredColorScheme(.dark)
+                .tint(.ariText)
+                .onChange(of: scenePhase, initial: true) { _, phase in
+                    // On screen, the stream is live; in the background it closes, while a waiting
+                    // message or a Stop still goes. Only the background: Control Center, a permission
+                    // prompt or a call's banner make Ari inactive for a moment, and closing the stream
+                    // for each made it reconnect.
+                    switch phase {
+                    case .active:
+                        model.session?.start()
+                        model.collectShares()
+                        model.refreshServer()
+                    case .background:
+                        // A call carries on in your pocket: Ari's replies still have to arrive.
+                        if CallEngine.isOn { break }
+                        model.session?.pause()
+                    default:
+                        break
+                    }
                 }
-            }
         }
 
     }

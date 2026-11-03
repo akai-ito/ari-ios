@@ -126,8 +126,6 @@ struct OnboardingActions {
     var confirm: (Belief.ID) async throws -> Void
     /// One isn't any more, with what's true now (empty when it simply ended).
     var correct: (Belief.ID, String) async throws -> Void
-    /// The morning's "not before" time, as an hour and minute.
-    var setMorning: (DateComponents) async throws -> Void
     /// Asks iOS for notifications; `true` if they're on.
     var allowNotifications: () async -> Bool
     /// You chose Not now.
@@ -148,8 +146,8 @@ final class OnboardingModel {
         case connect
         /// Kumo's questions while it reads, or "Still true?" for someone with memory.
         case knowYou
-        /// The morning's "not before" time and notifications.
-        case morning
+        /// Notifications.
+        case notifications
         /// What's in motion and what Kumo added; Open the Desk.
         case reveal
 
@@ -163,8 +161,6 @@ final class OnboardingModel {
     var asking: KumoAsking
     /// What Kumo already believes about you. Any at all turns Kumo's questions into "Still true?".
     var beliefs: [Belief]
-    /// The morning's "not before" time.
-    var morning: DateComponents
     /// `nil` until you've chosen, or already decided if iOS has an answer.
     var notifications: NotificationsChoice?
     /// Whether the server can send notifications yet; `false` until it has an Apple push key.
@@ -179,7 +175,6 @@ final class OnboardingModel {
     init(
         step: Step = .meet, sources: [ConnectableSource], progress: OnboardingProgress? = nil,
         asking: KumoAsking = .waiting, beliefs: [Belief] = [],
-        morning: DateComponents = DateComponents(hour: 7, minute: 30),
         notifications: NotificationsChoice? = nil, reveal: OnboardingReveal? = nil,
         actions: OnboardingActions
     ) {
@@ -188,7 +183,6 @@ final class OnboardingModel {
         self.progress = progress
         self.asking = asking
         self.beliefs = beliefs
-        self.morning = morning
         self.notifications = notifications
         self.reveal = reveal
         self.actions = actions
@@ -236,11 +230,7 @@ final class OnboardingModel {
         replies[belief.id] = nil
     }
 
-    // MARK: Morning and notifications
-
-    func saveMorning() async throws {
-        try await actions.setMorning(morning)
-    }
+    // MARK: Notifications
 
     func allowNotifications() async {
         notifications = await actions.allowNotifications() ? .allowed : .off

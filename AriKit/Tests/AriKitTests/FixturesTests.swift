@@ -9,7 +9,7 @@ struct FixturesTests {
         let transcripts = try Fixtures.transcripts()
         #expect(
             transcripts.map(\.header.scenario)
-                == Array(1...77).filter { ![25, 39, 52].contains($0) })
+                == Array(1...84).filter { ![24, 25, 39, 52, 68, 72, 75, 76, 77].contains($0) })
         for transcript in transcripts {
             #expect(transcript.header.transcript == transcript.name)
             #expect(transcript.name.hasPrefix(String(format: "%02d-", transcript.header.scenario)))

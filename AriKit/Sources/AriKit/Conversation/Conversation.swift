@@ -109,6 +109,8 @@ extension Conversation {
         public internal(set) var attachments: [Attachment] = []
         /// Your messages: how one you spoke on a call came to be.
         public internal(set) var spoken: Spoken?
+        /// Kumo's posts: it couldn't wait, so its notification broke through your Focus.
+        public internal(set) var urgent = false
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -124,11 +126,11 @@ extension Conversation {
             case next
         }
 
-        /// Whether the conversation shows it: your messages, the agent's replies, Kumo's posts and
-        /// its lines for the moment. A note becomes the live status's detail instead, and a role or
-        /// kind this version of Ari doesn't know stays hidden.
+        /// Whether the conversation shows it: your messages, the agent's replies and Kumo's posts.
+        /// A note becomes the live status's detail instead, and a role or kind this version of Ari
+        /// doesn't know stays hidden.
         public var isShown: Bool {
-            role == .user || (role == .agent && [.reply, .post, .moment].contains(kind))
+            role == .user || (role == .agent && [.reply, .post].contains(kind))
         }
 
         init(_ message: Message) {
@@ -147,6 +149,7 @@ extension Conversation {
             answers = message.answers
             attachments = message.attachments ?? []
             spoken = message.spoken
+            urgent = message.urgent == true
         }
 
         init(

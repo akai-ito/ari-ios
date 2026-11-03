@@ -89,10 +89,8 @@ struct OnboardingHost: View {
     // MARK: - To the box
 
     private func makeModel() -> OnboardingModel {
-        let morning = app.server?.morning.time ?? (hour: 7, minute: 30)
-        return OnboardingModel(
+        OnboardingModel(
             sources: Self.sources,
-            morning: DateComponents(hour: morning.hour, minute: morning.minute),
             actions: OnboardingActions(
                 connect: { _ in connecting = true },
                 talk: { talk?.start() },
@@ -104,12 +102,6 @@ struct OnboardingHost: View {
                 correct: { id, text in
                     try await session.answerBelief(
                         BeliefID(rawValue: id), answer: .correction(text))
-                },
-                setMorning: { parts in
-                    guard let client = app.client() else { return }
-                    let time = MorningTime(hour: parts.hour ?? 7, minute: parts.minute ?? 30)
-                    _ = try await client.setMorning(time)
-                    app.refreshServer()
                 },
                 allowNotifications: { await app.turnOnNotifications() },
                 declineNotifications: { app.declineNotifications() },

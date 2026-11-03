@@ -154,23 +154,17 @@ struct MainView: View {
             // A sheet takes the environment from where it's attached, outside the one above.
             SettingsView(model: model, session: session).environment(voices)
         }
-        // The server pushes only while you're not looking at the conversation.
+        // Notifications show as banners, except while you're reading the chat.
         .onChange(of: scenePhase == .active && place == .chat, initial: true) { _, looking in
             model.setLooking(looking)
         }
         .onChange(of: session.link) { _, link in
             guard link == .live else { return }
-            model.reconnected()
             // The voice may have changed while the stream was down.
             Task { await voices?.refresh() }
         }
         .onChange(of: model.opening, initial: true) { _, message in
             if message != nil { place = .chat }
-        }
-        .onChange(of: model.opensDesk, initial: true) { _, opens in
-            guard opens else { return }
-            place = .desk
-            model.opensDesk = false
         }
         #if DEBUG
             .task {

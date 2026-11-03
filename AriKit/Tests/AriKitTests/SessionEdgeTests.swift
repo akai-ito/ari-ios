@@ -122,7 +122,7 @@ struct SessionEdgeTests {
         defer { bench.close() }
         bench.session.start()
         _ = try await bench.nextRequest()
-        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.18"])
+        try await bench.server.answer(200, headers: ["Ito-Protocol": "0.19"])
         await bench.settle()
 
         guard case .protocolMismatch(let mismatch) = bench.session.problem else {
@@ -336,35 +336,36 @@ struct SessionEdgeTests {
         #expect(upload.path == "/v0/attachments/\(notes.id)?name=C%2B%2B%20notes.pdf")
     }
 
-    @Test("A Focus turned off reaches the box last, even when the on before it was lost")
-    func focusOffLast() async throws {
+    @Test("Only the latest whereabouts reaches the box, again after a lost answer")
+    func latestWhereabouts() async throws {
         let bench = try await live()
         defer { bench.close() }
-        let session = bench.session
-        let on = Task { await session.setFocus(.sleep, device: "d1") }
-        await bench.settle()
-        let off = Task { await session.setFocus(nil, device: "d1") }
-        await bench.settle()
+        let rome = Whereabouts(
+            timeZone: "Europe/Rome", area: Area(latitude: 41.9028, longitude: 12.4964, name: "Rome")
+        )
+        bench.session.report(Whereabouts(timeZone: "Europe/London"), device: "d1")
+        let first = try await bench.nextRequest()
+        #expect(first.path == "/v0/devices/d1/whereabouts")
 
-        // The on is lost on the way; the off gets through.
-        var made = [try await bench.nextRequest()]
+        // Lost on the way, while the phone reached Rome: only Rome goes again.
+        bench.session.report(rome, device: "d1")
         try await bench.server.answer(
             Transcript.Response(line: 0, at: 0, status: 0, headers: [:], body: nil, lost: true))
         await bench.settle()
-        made.append(try await bench.nextRequest())
+        let second = try await bench.nextRequest()
+        #expect(
+            try JSONValue(data: #require(second.body))
+                == JSONValue(
+                    json: #"""
+                        { "time_zone": "Europe/Rome",
+                          "area": { "latitude": 41.9, "longitude": 12.5, "name": "Rome" } }
+                        """#))
         try await bench.server.answer(204)
-        _ = await (on.value, off.value)
 
-        // Nothing older follows the off.
+        // The same again sends nothing.
+        bench.session.report(rome, device: "d1")
         await bench.advance(to: 60_000)
-        while let request = await bench.server.takeRequest() {
-            made.append(request)
-            try await bench.server.answer(204)
-            await bench.settle()
-        }
-        let focus = try made.map { try $0.body.map { try JSONValue(data: $0) }?["focus"]?.string }
-        #expect(made.allSatisfy { $0.path == "/v0/devices/d1/status" })
-        #expect(focus == ["sleep", nil])
+        #expect(await bench.server.takeRequest() == nil)
     }
 
     private func uploaded(_ attachment: PendingAttachment) -> String {

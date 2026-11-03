@@ -188,13 +188,6 @@ final class Rehearsal {
         case .answerCard(let card):
             guard let answer = try? request.body?.decode(CardAnswer.self) else { return }
             Task { try? await session.answer(card, answer) }
-        case .readMoment(let moment):
-            Task { try? await session.readMoment(moment) }
-        case .answerMoment(let moment) where request.body?["skip"] != nil:
-            Task { try? await session.skipMoment(moment) }
-        case .answerMoment(let moment):
-            guard let answer = try? request.body?.decode(CardAnswer.self) else { return }
-            Task { try? await session.answerMoment(moment, answer) }
         case .answerGuess(let item):
             guard let answer = try? request.body?.decode(GuessAnswer.self) else { return }
             Task { try? await session.answerGuess(item, answer) }
@@ -203,8 +196,13 @@ final class Rehearsal {
         case .correct(let entry):
             let text = request.body?["text"]?.string
             Task { _ = try? await session.correct(entry, text: text) }
-        case .resetTrust(let work):
-            Task { _ = try? await session.resetTrust(work) }
+        case .wakeUps:
+            Task { try? await session.refreshPlans() }
+        case .changeWakeUp(let plan):
+            guard let change = request.body.map(Self.change(from:)) else { return }
+            Task { _ = try? await session.change(plan, change) }
+        case .cancelWakeUp(let plan):
+            Task { try? await session.cancel(plan) }
         case .onboarding:
             Task { try? await session.refreshOnboarding() }
         case .answerBelief(let belief):
@@ -236,15 +234,10 @@ final class Rehearsal {
             } else if let registration = try? request.body?.decode(RegisterDevice.self) {
                 session.register(device: device, registration)
             }
-        case .presence:
+        case .whereabouts:
             let device = String(request.path.split(separator: "/").dropLast().last ?? "")
-            if let presence = try? request.body?.decode(Presence.self) {
-                session.setLooking(presence.looking, device: device)
-            }
-        case .status:
-            let device = String(request.path.split(separator: "/").dropLast().last ?? "")
-            if let status = try? request.body?.decode(DeviceStatus.self) {
-                Task { await session.setFocus(status.focus, device: device) }
+            if let whereabouts = try? request.body?.decode(Whereabouts.self) {
+                session.report(whereabouts, device: device)
             }
         case .stop:
             session.stop()
@@ -308,6 +301,18 @@ final class Rehearsal {
         guard body == expected.body || (body == .object([:]) && expected.body == nil) else {
             throw TranscriptError("\(summary) sent a different body")
         }
+    }
+
+    /// A change to one of Kumo's plans, as the transcript's request body has it.
+    nonisolated static func change(from body: JSONValue) -> WakeUpChange {
+        var change = WakeUpChange()
+        change.at = body["at"]?.string.flatMap { Timestamp($0) }
+        if let repeating = body.object?["repeat"] {
+            change.repeat = .some(try? repeating.decode(Repeat.self))
+        }
+        change.what = body["what"]?.string
+        change.why = body["why"]?.string
+        return change
     }
 
     /// Moves the clock to `milliseconds` since the start, sending the server's pings on the way.

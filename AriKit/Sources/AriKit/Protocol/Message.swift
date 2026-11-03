@@ -30,6 +30,9 @@ public struct Message: Hashable, Sendable, Codable {
     public var spoken: Spoken?
     /// Your messages only: the line of Done it replies to.
     public var done: DoneID?
+    /// Kumo's posts only: it couldn't wait, so its notification was time-sensitive and broke
+    /// through your Focus.
+    public var urgent: Bool?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -50,7 +53,7 @@ public struct Message: Hashable, Sendable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, role, kind, turn, text, at, position, outcome, error, answers, attachments,
-            spoken, done
+            spoken, done, urgent
         case endedAt = "ended_at"
     }
 }

@@ -50,8 +50,6 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(Desk.self)
                 case .answerCard(let card):
                     #expect(try body.decode(CardResult.self).card.id == card, "\(place)")
-                case .answerMoment(let moment):
-                    #expect(try body.decode(MomentResult.self).moment.id == moment, "\(place)")
                 case .answerGuess(let item):
                     let answered = try body.decode(CalendarEventResult.self).event
                     #expect(answered.id == item && answered.guess == nil, "\(place)")
@@ -64,20 +62,19 @@ struct ProtocolDecodingTests {
                 case .correct(let entry):
                     let corrected = try body.decode(DoneResult.self).entry
                     #expect(corrected.id == entry && corrected.isCorrected, "\(place)")
-                case .resetTrust(let work):
-                    let trust = try body.decode(TrustResult.self).trust
-                    #expect(trust.work == work && trust.step == .learning, "\(place)")
-                case .jobs:
-                    _ = try body.decode(JobList.self)
+                case .wakeUps:
+                    _ = try body.decode(WakeUpList.self)
+                case .changeWakeUp(let plan):
+                    #expect(try body.decode(WakeUpResult.self).wakeUp.id == plan, "\(place)")
                 case .addEvent:
                     _ = try body.decode(CalendarEventResult.self)
                 case .onboarding, .finishOnboarding, .replayOnboarding:
                     _ = try body.decode(Onboarding.self)
                 case .problems:
                     _ = try body.decode(ProblemList.self)
-                case .lead, .morningSettings, .readMoment, .answerBelief:
-                    // Settings' requests, a line read on the Desk and a belief's answer, which have
-                    // no answer to read.
+                case .lead, .answerBelief, .cancelWakeUp, .whereabouts:
+                    // Settings' requests, a belief's answer, a cancelled plan and where the phone
+                    // is, which have no answer to read.
                     continue
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
@@ -87,8 +84,6 @@ struct ProtocolDecodingTests {
                     #expect(try body.decode(AskResult.self).ask.id == ask, "\(place)")
                 case .device:
                     #expect(try body.decode(DeviceResult.self).device.keyID.count == 8, "\(place)")
-                case .presence, .status:
-                    continue
                 case .upload(let attachment, let name):
                     let uploaded = try body.decode(AttachmentResult.self).attachment
                     #expect(uploaded.id == attachment && uploaded.name == name, "\(place)")
@@ -162,9 +157,7 @@ struct ProtocolDecodingTests {
                     id: message.id, text: message.text, attachments: message.attachments ?? [],
                     done: message.done)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
-            case .answerMoment where body["skip"] != nil:
-                #expect(try JSONValue(encoding: body.decode(MomentSkip.self)) == body, "\(place)")
-            case .answerCard, .answerMoment:
+            case .answerCard:
                 #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
             case .answerGuess:
                 #expect(try JSONValue(encoding: body.decode(GuessAnswer.self)) == body, "\(place)")
@@ -172,7 +165,7 @@ struct ProtocolDecodingTests {
                 let answer: BeliefAnswer =
                     body["correction"]?.string.map(BeliefAnswer.correction) ?? .confirmed
                 #expect(try JSONValue(encoding: answer) == body, "\(place)")
-            case .morningSettings, .lead:
+            case .lead:
                 // Settings' requests.
                 continue
             case .stop:
@@ -186,15 +179,12 @@ struct ProtocolDecodingTests {
                 let pairing = try body.decode(PairDevice.self)
                 let encoded = PairDevice(code: pairing.code, deviceName: pairing.deviceName)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
-            case .status:
-                let status = try body.decode(DeviceStatus.self)
+            case .whereabouts:
+                let whereabouts = try body.decode(Whereabouts.self)
+                #expect(try JSONValue(encoding: whereabouts) == body, "\(place)")
+            case .changeWakeUp:
                 #expect(
-                    try JSONValue(encoding: DeviceStatus(focus: status.focus)) == body, "\(place)")
-            case .presence:
-                let presence = try body.decode(Presence.self)
-                #expect(
-                    try JSONValue(encoding: Presence(looking: presence.looking)) == body, "\(place)"
-                )
+                    try JSONValue(encoding: Rehearsal.change(from: body)) == body, "\(place)")
             case .switchCapability:
                 let on = try body.decode(SwitchCapability.self).on
                 #expect(try JSONValue(encoding: SwitchCapability(on: on)) == body, "\(place)")
@@ -241,7 +231,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 18) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 19) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }

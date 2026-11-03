@@ -48,6 +48,7 @@ extension ConversationView {
             let document = cache.document(entry.id, text)
             Paced(shown: reveal.shown(entry), length: text.utf16.count) { position in
                 VStack(alignment: .leading, spacing: 8) {
+                    if entry.urgent { UrgentMark() }
                     if !text.isEmpty {
                         ReplyView(document: document, position: position)
                             .environment(\.replyActions, replyActions(for: entry, in: conversation))
@@ -139,5 +140,19 @@ extension ConversationView {
                         ?? ServerError(code: ErrorCode(rawValue: "unknown"), message: "No details.")
                 )
             })
+    }
+}
+
+/// On a message from Kumo that couldn't wait, and so broke through your Focus: a small bone mark.
+private struct UrgentMark: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().fill(Color.ariBone).frame(width: 5, height: 5)
+            Text("Couldn't wait")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.ariBone)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Urgent")
     }
 }
