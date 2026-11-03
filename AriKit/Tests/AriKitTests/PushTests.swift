@@ -13,7 +13,7 @@ struct PushTests {
             let notification = try #require(push.json["notification"]).decode(PushNotification.self)
             let place = "\(transcript.name).jsonl line \(push.line)"
             #expect(notification.kind.isKnown && !notification.text.isEmpty, "\(place)")
-            if notification.kind == .ask || notification.kind == .reminder {
+            if notification.kind == .ask {
                 #expect(notification.ask != nil, "\(place)")
             }
             if notification.kind == .reply { #expect(notification.message != nil, "\(place)") }

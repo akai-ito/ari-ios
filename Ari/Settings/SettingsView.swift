@@ -197,7 +197,7 @@ struct SettingsView: View {
     private var notifications: some View {
         Section {
             Toggle(
-                "When I'm away",
+                "Messages from \(LeadName.current)",
                 isOn: Binding(
                     get: { model.notificationsOn },
                     set: { on in
@@ -222,9 +222,8 @@ struct SettingsView: View {
                         + "they start.")
             } else {
                 Text(
-                    "\(LeadName.current) tells you when it's done or needs you, and only while you're not "
-                        + "looking. Questions are time-sensitive, so they can reach you during "
-                        + "Focus; choose in iOS Settings.")
+                    "Every message from \(LeadName.current) comes as it's sent, and the phone's Focus "
+                        + "decides what makes a sound. Only what can't wait breaks through Focus.")
             }
         }
         .listRowBackground(Color.ariSurface)

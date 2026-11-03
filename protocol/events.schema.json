@@ -193,8 +193,8 @@
       }
     },
     "MessageKind": {
-      "description": "Agent messages only. A `reply` is part of the answer. A `note` is the agent's commentary while it works, such as \"I'll check current prices first.\"; an app may show notes as live detail instead of in the conversation. A `post` is a message Kumo wrote outside a turn, such as its first question while getting started. A `moment` is Kumo's line for the moment, the same words as the Desk's `moment` while it lasts, such as \"How did the call with Northwind go?\". Hide a kind you don't recognise.",
-      "enum": ["reply", "note", "post", "moment"]
+      "description": "Agent messages only. A `reply` is part of the answer. A `note` is the agent's commentary while it works, such as \"I'll check current prices first.\"; an app may show notes as live detail instead of in the conversation. A `post` is a message Kumo wrote outside a turn, such as how a mail it read changes your plans, or its first question while getting started. Hide a kind you don't recognise.",
+      "enum": ["reply", "note", "post"]
     },
     "Message": {
       "description": "One message in the conversation. Messages are ordered by when they began.",
@@ -252,6 +252,10 @@
         "error": {
           "$ref": "#/$defs/Error",
           "description": "Present when the outcome is `failed`."
+        },
+        "urgent": {
+          "description": "Kumo's posts only: it couldn't wait, so its notification was time-sensitive and broke through your Focus. Absent otherwise.",
+          "const": true
         },
         "done": {
           "$ref": "#/$defs/DoneId",
@@ -559,8 +563,14 @@
           "required": ["present", "past"],
           "additionalProperties": false,
           "properties": {
-            "present": { "type": "string", "minLength": 1 },
-            "past": { "type": "string", "minLength": 1 }
+            "present": {
+              "type": "string",
+              "minLength": 1
+            },
+            "past": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "mails": {
@@ -572,11 +582,24 @@
             "required": ["from", "subject", "date"],
             "additionalProperties": false,
             "properties": {
-              "from": { "description": "The sender's name, or address when there's no name.", "type": "string" },
-              "subject": { "type": "string" },
-              "date": { "$ref": "#/$defs/Timestamp" },
-              "text": { "description": "The mail as plain text, without the quoted history.", "type": "string" },
-              "cut": { "description": "Present when `text` stops short of the whole mail.", "const": true }
+              "from": {
+                "description": "The sender's name, or address when there's no name.",
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "date": {
+                "$ref": "#/$defs/Timestamp"
+              },
+              "text": {
+                "description": "The mail as plain text, without the quoted history.",
+                "type": "string"
+              },
+              "cut": {
+                "description": "Present when `text` stops short of the whole mail.",
+                "const": true
+              }
             }
           }
         },
@@ -1658,7 +1681,7 @@
     },
     "MessagePosted": {
       "title": "message.posted",
-      "description": "Kumo posted a message into the conversation outside any turn: a `post`, or its line for the moment, a `moment`. It arrives whole.",
+      "description": "Kumo posted a message into the conversation outside any turn, a `post`. It arrives whole, and it notifies every registered device.",
       "type": "object",
       "required": ["id", "type", "at", "message"],
       "properties": {
@@ -1676,12 +1699,6 @@
         }
       }
     },
-    "MomentId": {
-      "description": "Opaque. The server makes it for each of Kumo's lines for the moment.",
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64
-    },
     "CardId": {
       "description": "Opaque. The server makes it for each card.",
       "type": "string",
@@ -1694,12 +1711,8 @@
       "minLength": 1,
       "maxLength": 64
     },
-    "WorkKind": {
-      "description": "A kind of Kumo's work, each with its own place on the trust ladder: `sorting`, the mail it files, bins and clears; `calendar`, what it puts on, moves or takes off your calendars; `drafts`, the replies it writes for you; `contacts`, what it changes in your contacts. Show a kind you don't recognise by the title Kumo's work gives it.",
-      "enum": ["sorting", "calendar", "drafts", "contacts"]
-    },
-    "JobId": {
-      "description": "Opaque. The server makes it when Kumo schedules a look.",
+    "WakeUpId": {
+      "description": "Opaque. The server makes it when a wake-up is set.",
       "type": "string",
       "minLength": 1,
       "maxLength": 64
@@ -1795,67 +1808,6 @@
       "description": "What you're doing, in Kumo's picture of your day: `people` is seeing people, and `other` anything else, named in the title. Show one you don't recognise by its title.",
       "enum": ["working", "building", "training", "people", "studying", "chilling", "other"]
     },
-    "Moment": {
-      "description": "Kumo's line for the moment, at the top of the Desk: one or two sentences, right for now, which order and connect what's below rather than repeat it. It comes at the first calm moment after your morning time, when something that matters arrives, or when your day changes, and it's the same words as a `moment` message in the conversation. It goes three hours after it was read, at midnight, or once you've answered it and Kumo has acted. Draw its buttons from `options`; `allows_text` offers Reply.",
-      "type": "object",
-      "required": ["id", "kind", "at", "text", "message", "options", "allows_text"],
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/MomentId"
-        },
-        "kind": {
-          "description": "What brought it: `day`, the first line of the day; `news`, something that matters arrived; `change`, your day changed; `checkin`, a commitment you made, such as when to stop tonight, coming due; `drift`, your week's time drifting from what matters; `question`, the day's one small question, which you can skip. Show a kind you don't recognise like any other.",
-          "enum": ["day", "news", "change", "checkin", "drift", "question"]
-        },
-        "at": {
-          "$ref": "#/$defs/Timestamp"
-        },
-        "text": {
-          "description": "One or two sentences, plain words.",
-          "type": "string",
-          "minLength": 1
-        },
-        "detail": {
-          "description": "A quieter line under the words, such as the plan under a free day: \"Easy run · groceries and proper meals · 2h prep · in bed by 00:30\". It's in the message too, after the words.",
-          "type": "string",
-          "minLength": 1
-        },
-        "message": {
-          "$ref": "#/$defs/MessageId",
-          "description": "The `moment` message in the conversation that holds the same words."
-        },
-        "options": {
-          "description": "Up to three short replies, such as \"Ask me tonight\". A tap answers Kumo, like a card's option.",
-          "type": "array",
-          "maxItems": 3,
-          "items": {
-            "$ref": "#/$defs/AskOption"
-          }
-        },
-        "allows_text": {
-          "description": "Whether a typed reply fits, for Reply.",
-          "type": "boolean"
-        },
-        "reply_label": {
-          "description": "What Reply says when a typed reply fits, such as \"Note it\" for the next step tonight. Reply when absent.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 24
-        },
-        "read_at": {
-          "$ref": "#/$defs/Timestamp",
-          "description": "When an app first showed it on the Desk, as told with `POST /v0/desk/moment/{moment}/read`. Once it's read, no notification goes out for it."
-        },
-        "state": {
-          "description": "`working` while Kumo acts on your answer. Absent otherwise.",
-          "const": "working"
-        },
-        "answer": {
-          "$ref": "#/$defs/CardAnswer",
-          "description": "`working` only: the answer you gave, as you gave it."
-        }
-      }
-    },
     "Slot": {
       "description": "A time Kumo offers.",
       "type": "object",
@@ -1940,10 +1892,6 @@
           }
         },
         "allows_text": {
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Whether it can wait, such as asking to unsubscribe from a shop you once wrote to: a quiet card arrives without a sound. Absent means it matters now.",
           "type": "boolean"
         },
         "state": {
@@ -2073,27 +2021,6 @@
             }
           }
         },
-        "review": {
-          "description": "On a `question` card: Kumo is still learning a kind of work, so once a day it asks you to glance at its calls, such as \"Yesterday I sorted 44 mails. Glance?\". Its first option opens Kumo's work for `day`, showing only these kinds of work; answer the card with the option you tapped, as for any card.",
-          "type": "object",
-          "required": ["day", "work"],
-          "additionalProperties": false,
-          "properties": {
-            "day": {
-              "description": "The local day of the calls, such as `2026-11-10`, for `GET /v0/work?day=`.",
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "work": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": {
-                "$ref": "#/$defs/WorkKind"
-              }
-            }
-          }
-        },
         "offer": {
           "description": "Kumo offers to take something on, such as a need that keeps coming up. Accepting lets Kumo do it in the background.",
           "type": "object",
@@ -2205,13 +2132,24 @@
       ]
     },
     "Desk": {
-      "description": "Home: Kumo's line for the moment, what's coming up, what's waiting on you, how much Kumo handled today and when it last read your mail.",
+      "description": "Home: Kumo's line and mood, the weather around you, Kumo's plans, what's coming up, what's waiting on you, how much Kumo handled today and when it last read your mail.",
       "type": "object",
-      "required": ["coming_up", "waiting", "handled"],
+      "required": ["plans", "coming_up", "waiting", "handled"],
       "properties": {
-        "moment": {
-          "$ref": "#/$defs/Moment",
-          "description": "Absent while all is quiet: then say so, with `handled`, such as \"All quiet. I handled 9 small things.\""
+        "line": {
+          "$ref": "#/$defs/DeskLine",
+          "description": "Absent until Kumo sets one, or after it clears it."
+        },
+        "ambient": {
+          "$ref": "#/$defs/Ambient",
+          "description": "Absent while the box doesn't know roughly where you are, or couldn't read the weather lately."
+        },
+        "plans": {
+          "description": "Kumo's plans: every wake-up, soonest first. Kumo setting one is quiet; it only shows here.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WakeUp"
+          }
         },
         "coming_up": {
           "description": "Events in the next 36 hours or so, plus anything big this week, in time order.",
@@ -2235,6 +2173,59 @@
         "last_mail_at": {
           "$ref": "#/$defs/Timestamp",
           "description": "When Kumo last read a new mail, for \"Reading · last mail 2 min ago\". Absent while no mail account is connected, and until the first mail."
+        }
+      }
+    },
+    "DeskLine": {
+      "description": "Something interesting at the top of the Desk, by Kumo's judgement: its mood, how something's going, a thought, the day around you. It changes when the moment does, and it never notifies.",
+      "type": "object",
+      "required": ["text", "mood", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "description": "A short line, such as \"Quiet morning. Your Northwind prep is two-thirds done.\"",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "mood": {
+          "description": "How Kumo feels, for its face: known moods are `bright`, `calm`, `cosy`, `focused`, `drowsy`, `proud` and `concerned`. Show one you don't recognise as `calm`.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "at": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "When Kumo set it."
+        }
+      }
+    },
+    "Ambient": {
+      "description": "The weather where you roughly are, read on the box from Open-Meteo every half hour or so.",
+      "type": "object",
+      "required": ["temperature", "condition", "is_day", "sunset"],
+      "additionalProperties": false,
+      "properties": {
+        "temperature": {
+          "description": "Now, in degrees Celsius, rounded.",
+          "type": "integer"
+        },
+        "condition": {
+          "description": "`clear`, `partly_cloudy`, `cloudy`, `fog`, `drizzle`, `rain`, `snow` or `thunder`. Show one you don't recognise as `cloudy`.",
+          "enum": ["clear", "partly_cloudy", "cloudy", "fog", "drizzle", "rain", "snow", "thunder"]
+        },
+        "is_day": {
+          "description": "Whether it's daylight there now.",
+          "type": "boolean"
+        },
+        "sunset": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "Today's sunset there."
+        },
+        "place": {
+          "description": "Where, when the phone named it, such as \"Rome\".",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -2313,61 +2304,207 @@
           "description": "A mail Kumo read and left alone: \"read, nothing needed\". Fold these into one line a day.",
           "type": "boolean"
         },
-        "work": {
-          "$ref": "#/$defs/WorkKind",
-          "description": "The kind of work it was, when it's one of Kumo's own calls: what the trust ladder counts. Absent for anything else, such as acting on your answer to a card."
-        },
         "corrected_at": {
           "$ref": "#/$defs/Timestamp",
           "description": "When you said it was wrong, with `POST /v0/done/{entry}/wrong`. Show it as noted rather than offering That was wrong again."
+        },
+        "track": {
+          "$ref": "#/$defs/TrackId",
+          "description": "The track this call belongs to, when it's in an area Kumo is learning. \"That was wrong\" on it steps the track back."
         }
       }
     },
-    "Job": {
-      "description": "A look Kumo scheduled for itself: a follow-up, a check-in after an event, or a standing job it keeps doing. It's judged when it comes due, and moves itself if the moment is bad.",
+    "TrackId": {
+      "description": "Opaque. The server makes it when Kumo opens a track.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "TrackStage": {
+      "description": "How far Kumo has come in an area: `learning`, it shows you its calls and asks when unsure; `spot_checks`, it checks with you now and then; `trusted`, it brings only what needs you. Draw it as three bars filled to the stage; show one you don't recognise as Learning.",
+      "enum": ["learning", "spot_checks", "trusted"]
+    },
+    "Track": {
+      "description": "An area Kumo is getting to know you in, or learning to do well, such as sorting your mail, writing as you, your food habits or planning your weekends. Kumo opens one when it starts learning something and moves it by judgement; a correction always steps it back.",
       "type": "object",
-      "required": ["id", "why"],
+      "required": ["id", "name", "stage", "since", "confirmed", "corrected", "evidence"],
       "properties": {
         "id": {
-          "$ref": "#/$defs/JobId"
+          "$ref": "#/$defs/TrackId"
         },
-        "why": {
-          "description": "Such as \"Ask how the Halcyon interview went\".",
+        "name": {
+          "description": "Such as \"Writing as you\".",
           "type": "string",
           "minLength": 1
         },
+        "stage": {
+          "$ref": "#/$defs/TrackStage"
+        },
+        "since": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "When it reached this stage."
+        },
+        "note": {
+          "description": "Kumo's line on where it stands, such as \"Three weeks of drafts you sent as I wrote them.\"",
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed": {
+          "description": "How many times you've confirmed Kumo got it right.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "corrected": {
+          "description": "How many times you've corrected it, such as with \"That was wrong\".",
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence": {
+          "description": "What it stands on, newest first, the latest ten.",
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/TrackEvidence"
+          }
+        }
+      }
+    },
+    "TrackEvidence": {
+      "description": "One thing a track stands on: a time you `confirmed` Kumo got it right, `corrected` it, or Kumo `moved` it to another stage, with why.",
+      "type": "object",
+      "required": ["at", "kind", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "kind": {
+          "enum": ["confirmed", "corrected", "moved"]
+        },
+        "text": {
+          "description": "In a line, such as \"You sent the Tess draft as I wrote it\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "stage": {
+          "$ref": "#/$defs/TrackStage",
+          "description": "The stage it moved to, or stepped back to after a correction."
+        },
+        "done": {
+          "$ref": "#/$defs/DoneId",
+          "description": "The call it was about, in Done."
+        }
+      }
+    },
+    "Weekday": {
+      "description": "A day of the week, in your time zone.",
+      "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    },
+    "WakeUp": {
+      "description": "A time Kumo will wake up and look at something for you: a follow-up, a look after an event, a standing job, or something you asked for. When it comes due, Kumo looks first, then messages you if that's useful, moves it if things changed, or drops it if it's moot, and Done says which. Kumo keeps it current as your life moves, such as a meeting moving or a trip; you can move, change or cancel it too.",
+      "type": "object",
+      "required": ["id", "at", "what", "why", "by", "source", "set_at"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/WakeUpId"
+        },
         "at": {
           "$ref": "#/$defs/Timestamp",
-          "description": "When it's next due."
+          "description": "When it's next due, a concrete time Kumo worked out, such as the end of the event it's for."
         },
-        "after_event": {
-          "description": "Due after this event ends.",
-          "type": "object",
-          "required": ["uid", "title"],
-          "additionalProperties": false,
-          "properties": {
-            "uid": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            }
+        "what": {
+          "description": "What it's for, in a line, such as \"Ask how the Halcyon technical went\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "why": {
+          "description": "Why, in Kumo's words: what it will have in mind when it wakes, such as \"It ends at 15:30, and you wanted to talk it through while it's fresh.\"",
+          "type": "string",
+          "minLength": 1
+        },
+        "repeat": {
+          "$ref": "#/$defs/Repeat",
+          "description": "Absent for a one-off."
+        },
+        "by": {
+          "description": "Who made it: `you` asked for it, or `kumo` set it itself. Show one you don't recognise as Kumo's.",
+          "enum": ["you", "kumo"]
+        },
+        "source": {
+          "$ref": "#/$defs/WakeUpSource"
+        },
+        "motion": {
+          "$ref": "#/$defs/MotionId",
+          "description": "The thing in motion it's about."
+        },
+        "set_at": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "When it was set."
+        }
+      }
+    },
+    "Repeat": {
+      "description": "A wake-up that comes back: on these days, at this time in your time zone, wherever you are, such as weekdays at 09:00.",
+      "type": "object",
+      "required": ["days", "time"],
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Weekday"
           }
         },
-        "standing": {
-          "description": "A standing job, with what it keeps looking for, such as \"startups I'd join\".",
+        "time": {
+          "description": "Such as `09:00`.",
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+        }
+      }
+    },
+    "WakeUpSource": {
+      "description": "Where it came from: your `chat` with Kumo, a `mail` Kumo read, a `calendar` event, or another `wake_up`. Show a kind you don't recognise by its title.",
+      "type": "object",
+      "required": ["kind", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["chat", "mail", "calendar", "wake_up"]
+        },
+        "title": {
+          "description": "A line naming it, such as \"Tess Harlow: Thursday's technical\" or \"Halcyon technical, Thu 14:00\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "mail": {
+          "description": "`mail` only: the mail, to open in Mail with `message://` and its Message-ID.",
           "type": "object",
-          "required": ["ask"],
+          "required": ["message_id"],
           "additionalProperties": false,
           "properties": {
-            "ask": {
+            "account": {
+              "type": "string"
+            },
+            "message_id": {
               "type": "string",
               "minLength": 1
             }
           }
         },
-        "motion": {
-          "$ref": "#/$defs/MotionId"
+        "event": {
+          "description": "`calendar` only: the event, to open by its uid.",
+          "type": "object",
+          "required": ["uid"],
+          "additionalProperties": false,
+          "properties": {
+            "uid": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
@@ -2467,7 +2604,7 @@
           "minLength": 1
         },
         "area": {
-          "description": "What it's about: `notifications`, `mail`, `calendar`, `contacts`, `capabilities` or `memory`. Show an area you don't know plainly.",
+          "description": "What it's about: `notifications`, `mail`, `calendar`, `contacts`, `capabilities`, `memory`, or `kumo` when its own work in the background can't go on. Show an area you don't know plainly.",
           "type": "string",
           "minLength": 1
         },

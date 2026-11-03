@@ -2,19 +2,27 @@ import AriKit
 import Foundation
 import Testing
 
-/// The Desk as the box sends it: Kumo's line for the moment, what's coming up, what's waiting on
-/// you, and Done, read from JSON written as the 0.17 contract has it.
+/// The Desk as the box sends it: Kumo's line and mood, the weather, Kumo's plans, what's coming up,
+/// what's waiting on you, and Done, read from JSON written as the 0.18 contract has it.
 @Suite("Desk")
 struct DeskTests {
-    @Test("the Desk decodes whole: Kumo's line, coming up, waiting, handled and the last mail")
+    @Test("the Desk decodes whole: Kumo's line, the weather, plans, coming up, waiting and more")
     func desk() throws {
         let desk = try JSONValue(json: Self.desk).decode(Desk.self)
-        let moment = try #require(desk.moment)
-        #expect(moment.id == "o_0001" && moment.kind == .news && moment.message == "m_0042")
-        #expect(moment.at == Timestamp("2026-11-05T15:20:00.000Z"))
-        #expect(moment.text.hasPrefix("How did the call with Northwind go?"))
-        #expect(moment.options.map(\.label) == ["Ask me tonight"] && moment.allowsText)
-        #expect(moment.readAt == nil && !moment.isWorking && moment.answer == nil)
+        let line = try #require(desk.line)
+        #expect(line.text == "Big day: Northwind at 2. You've prepped well.")
+        #expect(line.mood == .bright && line.at == Timestamp("2026-11-05T09:00:00.000Z"))
+        let ambient = try #require(desk.ambient)
+        #expect(ambient.temperature == 14 && ambient.condition == .partlyCloudy && ambient.isDay)
+        #expect(
+            ambient.sunset == Timestamp("2026-11-05T16:21:00.000Z") && ambient.place == "London")
+        #expect(desk.plans.map(\.id) == ["w_1", "w_2"])
+        let weekday = desk.plans[1]
+        #expect(weekday.repeat == Repeat(days: Weekday.weekdays, time: "08:30"))
+        #expect(weekday.by == .you && weekday.source.kind == .chat)
+        let mail = desk.plans[0].source
+        #expect(mail.kind == .mail && mail.mail?.messageID == "tess-1104@halcyon.example")
+        #expect(desk.plans[0].motion == "job-search" && desk.plans[0].repeat == nil)
         #expect(desk.handled == 9)
         #expect(desk.lastMailAt == Timestamp("2026-11-05T15:18:00.000Z"))
         #expect(desk.comingUp.map(\.id) == ["prep", "halcyon", "florence"])
@@ -23,35 +31,47 @@ struct DeskTests {
         #expect(desk.waiting[1].changedAt == nil)
     }
 
-    @Test("Kumo's line at work on your answer, and the same Desk with it")
-    func workingMoment() throws {
+    @Test("a mood or a sky Ari doesn't know shows as calm, or cloudy")
+    func unknownMoodAndSky() throws {
         var json = try JSONValue(json: Self.desk)
-        json["moment"]?["state"] = .string("working")
-        json["moment"]?["answer"] = .object(["option": .string("Ask me tonight")])
-        json["moment"]?["read_at"] = .string("2026-11-05T15:20:02.000Z")
-        let working = try #require(try json.decode(Desk.self).moment)
-        #expect(working.isWorking && working.answer == CardAnswer(option: "Ask me tonight"))
-        #expect(working.readAt == Timestamp("2026-11-05T15:20:02.000Z"))
-        let desk = try JSONValue(json: Self.desk).decode(Desk.self)
-        #expect(desk.replacing(moment: working).moment == working)
-        #expect(desk.replacing(moment: working).handled == 9)
+        json["line"]?["mood"] = .string("wistful")
+        json["ambient"]?["condition"] = .string("hail")
+        let desk = try json.decode(Desk.self)
+        #expect(desk.line?.mood.rawValue == "wistful" && desk.line?.mood.shown == .calm)
+        #expect(desk.ambient?.condition.shown == .cloudy)
+        #expect(KumoMood.proud.shown == .proud && Weather.snow.shown == .snow)
     }
 
-    @Test("a guess in Coming up, the plan under the day's line, and answers that change them")
+    @Test("Kumo's plans as you change them: moved, still soonest first, then cancelled")
+    func plans() throws {
+        let desk = try JSONValue(json: Self.desk).decode(Desk.self)
+        let later = desk.plans[0]
+        let moved = WakeUp(
+            id: later.id, at: try #require(Timestamp("2026-11-07T09:00:00.000Z")),
+            what: later.what, why: later.why, source: later.source, setAt: later.setAt)
+        #expect(desk.replacing(plan: moved).plans.map(\.id) == ["w_2", "w_1"])
+        #expect(desk.removing(plan: "w_1").plans.map(\.id) == ["w_2"])
+        #expect(desk.replacing(plans: []).plans.isEmpty)
+        #expect(desk.replacing(plans: []).line == desk.line)
+        #expect(
+            try JSONValue(encoding: WakeUpChange(repeat: .some(nil), what: "Plan the week"))
+                == JSONValue(json: #"{"repeat":null,"what":"Plan the week"}"#))
+        #expect(
+            try JSONValue(
+                encoding: WakeUpChange(repeat: Repeat(days: [.saturday], time: "10:00")))
+                == JSONValue(json: #"{"repeat":{"days":["sat"],"time":"10:00"}}"#))
+        #expect(try JSONValue(encoding: WakeUpChange()) == JSONValue(json: "{}"))
+    }
+
+    @Test("a guess in Coming up, and answers that change it")
     func picture() throws {
         var json = try JSONValue(json: Self.desk)
-        json["moment"]?["kind"] = .string("question")
-        json["moment"]?["detail"] = .string("Easy run · groceries · 2h prep")
-        json["moment"]?["reply_label"] = .string("Note it")
         var items = try #require(json["coming_up"]?.array)
         items[0]["guess"] = .object([
             "activity": .string("chilling"), "why": .string("Sunday evenings you switch off."),
         ])
         json["coming_up"] = .array(items)
         let desk = try json.decode(Desk.self)
-        let moment = try #require(desk.moment)
-        #expect(moment.kind == .question && moment.detail == "Easy run · groceries · 2h prep")
-        #expect(moment.replyLabel == "Note it")
         let guessed = desk.comingUp[0]
         #expect(guessed.guess == Guess(activity: .chilling, why: "Sunday evenings you switch off."))
         let yours = CalendarItem(
@@ -59,13 +79,10 @@ struct DeskTests {
             end: guessed.end, calendar: guessed.calendar)
         #expect(desk.replacing(item: yours).comingUp[0] == yours)
         #expect(desk.replacing(item: yours).comingUp[1] == desk.comingUp[1])
-        #expect(desk.withoutMoment(moment.id).moment == nil)
-        #expect(desk.withoutMoment("o_other").moment == moment)
         #expect(try JSONValue(encoding: GuessAnswer.right) == JSONValue(json: #"{"right":true}"#))
         #expect(
             try JSONValue(encoding: GuessAnswer(activity: .people))
                 == JSONValue(json: #"{"activity":"people"}"#))
-        #expect(try JSONValue(encoding: MomentSkip()) == JSONValue(json: #"{"skip":true}"#))
     }
 
     @Test("Kumo's work today: what it handled and what it cleared")
@@ -82,44 +99,39 @@ struct DeskTests {
         #expect(work.day == "2026-11-05")
         #expect(work.handled.map(\.id) == ["d1"] && work.handled[0].undo)
         #expect(work.cleared.map(\.id) == ["q1"] && work.cleared[0].quiet)
-        #expect(work.trust.isEmpty)
+        #expect(work.tracks.isEmpty)
     }
 
-    @Test("Kumo's work carries the trust ladder, and each call its kind of work")
-    func trust() throws {
+    @Test("Kumo's work carries the areas it's learning, and a call its track")
+    func tracks() throws {
         let work = try JSONValue(
             json: """
                 {"day":"2026-11-05",
-                 "handled":[{"id":"d1","at":"2026-11-05T15:02:00.000Z","text":"Undone: Binned a mail",
-                             "undo":false,"quiet":false,"work":"sorting",
+                 "handled":[{"id":"d1","at":"2026-11-05T15:02:00.000Z","text":"Drafted a reply to Clara",
+                             "undo":false,"quiet":false,"track":"l_1",
                              "corrected_at":"2026-11-05T16:00:00.000Z"}],
                  "cleared":[],
-                 "trust":[{"work":"sorting","title":"Sorting mail","step":"spot_checks",
-                           "line":"You said it was wrong.","since":"2026-11-05T16:00:00.000Z"},
-                          {"work":"filing","title":"Filing","step":"climbing",
-                           "line":"Something new.","since":"2026-11-01T09:00:00.000Z"}]}
+                 "tracks":[{"id":"l_1","name":"Writing as you","stage":"learning",
+                            "since":"2026-11-05T16:00:00.000Z","note":"Back to learning.",
+                            "confirmed":12,"corrected":1,
+                            "evidence":[{"at":"2026-11-05T16:00:00.000Z","kind":"corrected",
+                                         "text":"Too formal for Clara","stage":"learning",
+                                         "done":"d1"},
+                                        {"at":"2026-11-01T09:00:00.000Z","kind":"moved",
+                                         "text":"Three weeks of drafts you sent","stage":"spot_checks"}]},
+                           {"id":"l_2","name":"Your weekends","stage":"climbing",
+                            "since":"2026-11-01T09:00:00.000Z","confirmed":0,"corrected":0,
+                            "evidence":[]}]}
                 """
         ).decode(KumoWork.self)
-        #expect(work.handled[0].work == .sorting && work.handled[0].isCorrected)
-        #expect(work.trust.map(\.step.rung) == [1, 0])
-        #expect(work.trust.map(\.work.isKnown) == [true, false])
-        #expect(work.trust[0].title == "Sorting mail")
-    }
-
-    @Test("a card to glance at a day's calls opens Kumo's work with its first option")
-    func review() throws {
-        let card = try JSONValue(
-            json: """
-                {"id":"k1","kind":"question","at":"2026-11-06T07:30:00.000Z",
-                 "title":"Yesterday I sorted 44 mails. Glance?",
-                 "options":[{"label":"Glance","acts":true},{"label":"Looks fine"}],
-                 "allows_text":false,"quiet":true,"question":{"text":"I'm still learning."},
-                 "review":{"day":"2026-11-05","work":["sorting"]}}
-                """
-        ).decode(DeskCard.self)
-        #expect(card.review == ReviewCard(day: "2026-11-05", work: [.sorting]))
-        #expect(card.glances(CardAnswer(option: "Glance")))
-        #expect(!card.glances(CardAnswer(option: "Looks fine")))
+        #expect(work.handled[0].track == "l_1" && work.handled[0].isCorrected)
+        #expect(work.tracks.map(\.stage.rung) == [0, 0])
+        #expect(work.tracks.map(\.stage.isKnown) == [true, false])
+        let writing = work.tracks[0]
+        #expect(writing.name == "Writing as you" && writing.note == "Back to learning.")
+        #expect(writing.confirmed == 12 && writing.corrected == 1)
+        #expect(writing.evidence.map(\.kind) == [.corrected, .moved])
+        #expect(writing.evidence[0].done == "d1" && writing.evidence[1].stage == .spotChecks)
         #expect(CorrectDone(text: "  ").text == nil && CorrectDone(text: " Mine ").text == "Mine")
     }
 
@@ -216,12 +228,10 @@ struct DeskTests {
     @Test("values Ari doesn't know decode and keep their text")
     func unknownValues() throws {
         var json = try JSONValue(json: Self.desk)
-        json["moment"]?["kind"] = .string("evening")
         var item = try #require(json["coming_up"]?.array?.first)
         item["status"] = .string("pencilled")
         json["coming_up"] = .array([item])
         let desk = try json.decode(Desk.self)
-        #expect(desk.moment?.kind.rawValue == "evening" && desk.moment?.kind.isKnown == false)
         #expect(desk.comingUp.first?.status?.rawValue == "pencilled")
     }
 
@@ -359,11 +369,28 @@ struct DeskTests {
     /// `GET /v0/desk` on the Thursday of Halcyon.
     static let desk = """
         {
-          "moment": {
-            "id": "o_0001", "kind": "news", "at": "2026-11-05T15:20:00.000Z",
-            "text": "How did the call with Northwind go? Tell me and I'll draft the thank-you.",
-            "message": "m_0042", "options": [{"label": "Ask me tonight"}], "allows_text": true
+          "line": {
+            "text": "Big day: Northwind at 2. You've prepped well.", "mood": "bright",
+            "at": "2026-11-05T09:00:00.000Z"
           },
+          "ambient": {
+            "temperature": 14, "condition": "partly_cloudy", "is_day": true,
+            "sunset": "2026-11-05T16:21:00.000Z", "place": "London"
+          },
+          "plans": [
+            {"id": "w_1", "at": "2026-11-05T15:30:00.000Z",
+             "what": "Ask how the Halcyon technical went",
+             "why": "It ends at 15:30, and you wanted to talk it through while it's fresh.",
+             "by": "kumo", "motion": "job-search", "set_at": "2026-11-04T18:00:00.000Z",
+             "source": {"kind": "mail", "title": "Tess Harlow: Thursday's technical",
+                        "mail": {"account": "icloud", "message_id": "tess-1104@halcyon.example"}}},
+            {"id": "w_2", "at": "2026-11-06T08:30:00.000Z",
+             "what": "Shape the day with you if it's unplanned",
+             "why": "You asked for a look at each weekday morning.",
+             "repeat": {"days": ["mon", "tue", "wed", "thu", "fri"], "time": "08:30"},
+             "by": "you", "set_at": "2026-11-01T19:00:00.000Z",
+             "source": {"kind": "chat", "title": "Chat"}}
+          ],
           "handled": 9,
           "last_mail_at": "2026-11-05T15:18:00.000Z",
           "coming_up": [

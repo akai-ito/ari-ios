@@ -62,7 +62,7 @@ struct ThatWasWrong: View {
     /// What happens next, in a line.
     private var promise: String {
         let fix = entry.undo ? "I'll undo it" : "I'll put it right where I can"
-        return entry.work == nil
+        return entry.track == nil
             ? "\(fix) and remember for next time."
             : "\(fix), remember for next time, and check with you more for a while."
     }
@@ -71,16 +71,12 @@ struct ThatWasWrong: View {
         Task { await sending.send(key) { try await send(said) } }
     }
 
-    /// The usual things wrong with each kind of call, one tap each.
+    /// The usual things wrong with a call, one tap each: about a mail it read, or an event.
     static func usualWords(for entry: DoneEntry) -> [String] {
-        switch entry.work {
-        case .sorting?:
-            entry.quiet ? ["I needed this", "Not junk"] : ["I needed this", "Wrong folder"]
-        case .calendar?: ["Wrong time", "Not for me"]
-        case .drafts?: ["No reply needed", "Wrong tone"]
-        case .contacts?: ["Wrong person"]
-        default: []
-        }
+        if entry.quiet { return ["I needed this", "Not junk"] }
+        if entry.event != nil { return ["Wrong time", "Not for me"] }
+        if entry.mail != nil { return ["I needed this", "Wrong folder"] }
+        return []
     }
 }
 
@@ -90,7 +86,9 @@ struct ThatWasWrong: View {
             entry: DoneEntry(
                 id: "d1", at: DeskSamples.at(9, 14),
                 text: "Binned \"Your Acme order is on its way\" from Acme",
-                reason: "Acme selling something", undo: true, work: .sorting),
+                reason: "Acme selling something",
+                mail: DoneMail(messageID: "acme-1", from: "Acme", subject: "On its way"),
+                undo: true),
             send: { _ in try await Task.sleep(for: .seconds(1)) }, cancel: {}
         )
         .padding(20)

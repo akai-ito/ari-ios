@@ -23,9 +23,12 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     public let protocolVersion: ProtocolVersion
     /// Who leads: Kumo, until you choose another name.
     public let lead: Lead
-    /// When your morning starts: the earliest Kumo's first line of the day may come.
-    public let morning: MorningTime
     public let agent: Agent
+    /// The time zone Kumo lives by now, such as `Europe/London`: the latest a phone said, or the
+    /// box's own.
+    public let timeZone: String?
+    /// What the box keeps of where you roughly are, once a phone has said.
+    public let whereabouts: KeptWhereabouts?
 
     /// The lead's name, as Settings shows it.
     public var leadName: String { lead.name }
@@ -79,8 +82,9 @@ public struct ServerInfo: Sendable, Equatable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, version, lead, morning, agent, setup, capabilities
+        case name, version, lead, agent, setup, capabilities, whereabouts
         case protocolVersion = "protocol"
+        case timeZone = "time_zone"
     }
 }
 
@@ -210,14 +214,5 @@ public struct DeviceResult: Sendable, Equatable, Decodable {
             case keyID = "key_id"
             case registeredAt = "registered_at"
         }
-    }
-}
-
-/// The body of `PUT /v0/devices/{device}/presence`.
-public struct Presence: Sendable, Equatable, Codable {
-    public let looking: Bool
-
-    public init(looking: Bool) {
-        self.looking = looking
     }
 }

@@ -107,7 +107,6 @@
                 skip: { id in try await next(after: id) },
                 confirm: { _ in try await Task.sleep(for: .milliseconds(500)) },
                 correct: { _, _ in try await Task.sleep(for: .milliseconds(500)) },
-                setMorning: { _ in try await Task.sleep(for: .milliseconds(300)) },
                 allowNotifications: {
                     try? await Task.sleep(for: .milliseconds(500))
                     return true

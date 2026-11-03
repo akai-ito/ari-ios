@@ -69,6 +69,6 @@ extension KumoWork {
     /// The day's work with one entry as it is now, wherever it sits.
     public func replacing(_ entry: DoneEntry) -> KumoWork {
         let swap = { (entries: [DoneEntry]) in entries.map { $0.id == entry.id ? entry : $0 } }
-        return KumoWork(day: day, handled: swap(handled), cleared: swap(cleared), trust: trust)
+        return KumoWork(day: day, handled: swap(handled), cleared: swap(cleared), tracks: tracks)
     }
 }

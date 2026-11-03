@@ -1,55 +1,6 @@
 import AriKit
 import SwiftUI
 
-/// What Kumo says for the moment, at the top of the Desk: one or two sentences, right for now. It
-/// changes only when the moment does, or something important happens, and never repeats the cards
-/// below it. Otherwise it's all quiet, in words the app puts together without a model.
-struct KumoMoment: Identifiable, Equatable {
-    let id: String
-    /// Kumo's own words: one or two sentences.
-    let text: String
-    /// A quieter line under them, such as the plan under a free day.
-    var detail: String?
-    /// Small actions under it, where they fit.
-    var actions: [Action] = []
-    /// The day's one question: labelled as such, and skippable.
-    var asks = false
-    /// Your answer, while Kumo acts on it.
-    var answered: String?
-
-    struct Action: Identifiable, Equatable {
-        var id: String { title }
-        let title: String
-        /// Opens a field for your words, such as Reply: drawn with a chevron.
-        var opens = false
-    }
-}
-
-extension KumoMoment {
-    /// Reply, which opens a field for words, right under the line, when Kumo's line takes them.
-    static let reply = Action(title: "Reply", opens: true)
-
-    /// Kumo's line as the box sends it: its quieter line under it, its options as short replies,
-    /// and Reply, or what the box calls it, when words fit. The day's question can be skipped.
-    init(_ moment: Moment) {
-        let reply = moment.replyLabel.map { Action(title: $0, opens: true) } ?? Self.reply
-        self.init(
-            id: moment.id.rawValue, text: moment.text, detail: moment.detail,
-            actions: moment.options.map { Action(title: $0.label) }
-                + (moment.allowsText ? [reply] : []),
-            asks: moment.kind == .question,
-            answered: moment.isWorking ? (moment.answer?.option ?? moment.answer?.text ?? "") : nil)
-    }
-
-    /// All quiet: no model's words, only how much Kumo handled today. With cards still waiting,
-    /// nothing new has come since Kumo last spoke.
-    static func quiet(handled: Int, waiting: Bool) -> KumoMoment {
-        let things = handled == 1 ? "1 small thing" : "\(handled) small things"
-        let start = waiting ? "Nothing new." : "All quiet."
-        return KumoMoment(id: "quiet", text: handled == 0 ? start : "\(start) I handled \(things).")
-    }
-}
-
 /// Whether Kumo is keeping up: reading, with when the last mail came in, or something's wrong; or
 /// nothing to say, with no mail connected.
 enum KumoLiveness: Equatable {
@@ -69,21 +20,15 @@ enum KumoLiveness: Equatable {
     }
 }
 
-/// The top of the Desk: Kumo's face, a tiny line on how it is, and what it says for the moment.
-/// Tapping the face, or the line while all's well, opens Kumo's work.
+/// The top of the Desk: Kumo's face, a tiny line on how it is, and Kumo's line, when it has set
+/// one. Tapping the face, or the line while all's well, opens Kumo's work.
 struct KumoSays: View {
-    let moment: KumoMoment?
+    let line: DeskLine?
     let liveness: KumoLiveness
     let openWork: () -> Void
     let openSettings: () -> Void
     /// Opens what's wrong, from "Something's wrong ›".
     let openProblems: () -> Void
-    /// Answers Kumo's line: with one of its replies, or your words.
-    var answer: (CardAnswer) async throws -> Void = { _ in }
-    /// Skips the day's question.
-    var skip: () async throws -> Void = {}
-    /// Your answer on its way, and why it didn't go through.
-    var sending = DeskSending()
 
     @State private var presence = PoseHistory()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -98,15 +43,20 @@ struct KumoSays: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(LeadName.current)'s work")
-                .accessibilityHint(
-                    "Shows what \(LeadName.current) did today, and how much it checks with you"
-                )
+                .accessibilityHint("Shows what \(LeadName.current) did today")
                 .padding(.bottom, 2)
                 KumoStatusLine(
                     liveness: liveness, open: liveness == .wrong ? openProblems : openWork)
-                if let moment {
-                    MomentView(moment: moment, sending: sending, answer: answer, skip: skip)
-                        .id(moment.id)
+                if let line {
+                    Text(line.text)
+                        .font(.system(.title3, design: .serif))
+                        .foregroundStyle(.ariText)
+                        .lineSpacing(4)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 340)
+                        .padding(.horizontal, 8)
+                        .id(line.at)
                         .transition(
                             reduceMotion
                                 ? .opacity : .opacity.combined(with: .offset(y: 6))
@@ -118,19 +68,13 @@ struct KumoSays: View {
             SettingsButton(action: openSettings)
         }
         .padding(.top, 12)
-        .animation(.smooth(duration: 0.4), value: moment)
+        .animation(.smooth(duration: 0.4), value: line)
         .onChange(of: pose, initial: true) { _, pose in presence.set(pose) }
     }
 
-    /// Asking, with its question mark, when Kumo asks you something; awake and looking at you when
-    /// it has something for you to act on; a quiet stone when all's quiet; a little off when
-    /// something's wrong.
+    /// A little off when something's wrong; a quiet stone otherwise.
     private var pose: Pose {
-        if liveness == .wrong { return .unwell }
-        guard let moment else { return .resting }
-        if moment.answered != nil { return .thinking }
-        if moment.asks || moment.text.hasSuffix("?") { return .asking }
-        return moment.actions.isEmpty ? .resting : .noticed
+        liveness == .wrong ? .unwell : .resting
     }
 }
 
@@ -175,121 +119,6 @@ struct KumoStatusLine: View {
         if minutes < 60 { return "\(minutes) min ago" }
         if calendar.isDate(date, inSameDayAs: now) { return "at \(date.formatted(DeskTime.time))" }
         return "on \(date.formatted(DeskTime.weekdayDay))"
-    }
-}
-
-/// Kumo's words for the moment, in its own hand and a size up from the cards, with the small
-/// actions under them. Reply, or what the line calls it, opens a field right here, with the
-/// keyboard. The day's question carries a small label and a Skip.
-private struct MomentView: View {
-    let moment: KumoMoment
-    let sending: DeskSending
-    let answer: (CardAnswer) async throws -> Void
-    let skip: () async throws -> Void
-
-    /// The action whose field is open, such as Reply.
-    @State private var replying: KumoMoment.Action?
-    @State private var words = ""
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        VStack(spacing: 12) {
-            if moment.asks {
-                Text("Today's question")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.ariBone)
-                    .padding(.bottom, -4)
-            }
-            Text(moment.text)
-                .font(.system(.title3, design: .serif))
-                .foregroundStyle(.ariText)
-                .lineSpacing(4)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            if let detail = moment.detail {
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .lineSpacing(3)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let answered = moment.answered {
-                // Your answer, then Kumo at work on it, as on a card.
-                VStack(alignment: .leading, spacing: 8) {
-                    DeskAnswerLine(text: answered)
-                    DeskWorkingLine(text: "\(LeadName.current)'s on it…")
-                }
-                .padding(.top, 2)
-            } else if !moment.actions.isEmpty || moment.asks {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) { buttons }
-                    VStack(spacing: 8) { buttons }
-                }
-                .disabled(sending.isSending)
-                .padding(.top, 2)
-                if replying != nil {
-                    InlineField(
-                        prompt: "Your answer", text: $words,
-                        buttonLabel: "Send your answer to \(LeadName.current)",
-                        opensKeyboard: true, busy: sending.key == "text",
-                        waits: sending.isSending, send: sendWords
-                    )
-                    .transition(
-                        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
-                }
-            }
-            if let problem = sending.problem { DeskProblemLine(text: problem) }
-        }
-        .frame(maxWidth: 340)
-        .padding(.horizontal, 8)
-        .accessibilityElement(children: .contain)
-        .animation(.smooth(duration: 0.3), value: replying)
-    }
-
-    @ViewBuilder
-    private var buttons: some View {
-        ForEach(moment.actions) { action in
-            if action.opens {
-                let open = replying == action
-                DeskPill(
-                    title: open ? "Cancel" : "\(action.title) ›",
-                    label: open ? "Cancel your answer" : action.title
-                ) {
-                    sending.clearProblem()
-                    replying = open ? nil : action
-                    if open { words = "" }
-                }
-            } else {
-                DeskPill(title: action.title, busy: sending.key == action.title) {
-                    send(action.title) { try await answer(CardAnswer(option: action.title)) }
-                }
-            }
-        }
-        if moment.asks {
-            Button("Skip") { send("Skip", skip) }
-                .font(.subheadline)
-                .foregroundStyle(.ariTertiary)
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .accessibilityHint("Skips today's question")
-        }
-    }
-
-    private func send(_ key: String, _ deliver: @escaping () async throws -> Void) {
-        Task { await sending.send(key, deliver) }
-    }
-
-    private func sendWords() {
-        let text = InlineField.trimmed(words)
-        guard !text.isEmpty else { return }
-        Task {
-            if await sending.send("text", { try await answer(CardAnswer(text: text)) }) {
-                replying = nil
-                words = ""
-            }
-        }
     }
 }
 

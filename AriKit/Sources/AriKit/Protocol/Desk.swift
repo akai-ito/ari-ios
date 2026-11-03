@@ -1,27 +1,35 @@
 import Foundation
 
-// Kumo's Desk: where Ito opens. It rolls and never resets: Kumo's line for the moment, what's coming
-// up, what's waiting on you, and how much Kumo did without you today.
+// Kumo's Desk: where Ito opens. It rolls and never resets: Kumo's line and mood, the weather around
+// you, Kumo's plans, what's coming up, what's waiting on you, and how much Kumo did without you today.
 
 /// Everything on the Desk at once. It's small, so `desk.changed` carries all of it.
 public struct Desk: Sendable, Equatable, Decodable {
-    /// Kumo's line for the moment, or `nil` while all is quiet.
-    public let moment: Moment?
+    /// Kumo's line and mood, or `nil` until Kumo sets one, or after it clears it.
+    public let line: DeskLine?
+    /// The weather where you roughly are; `nil` while the box doesn't know where that is, or
+    /// couldn't read the weather lately.
+    public let ambient: Ambient?
+    /// Kumo's plans: every wake-up, soonest first.
+    public let plans: [WakeUp]
     /// The next day and a half, and anything big this week, in time order.
     public let comingUp: [CalendarItem]
     /// Drafts, invites, times to check and questions, oldest first, until each is done.
     public let waiting: [DeskCard]
-    /// How many things Kumo did without you today, for "Done · handled 9".
+    /// How many things Kumo did without you today.
     public let handled: Int
-    /// When Kumo last read a new mail, for "Reading · last mail 2 min ago"; `nil` while no mail
-    /// account is connected, and until the first mail.
+    /// When Kumo last read a new mail; `nil` while no mail account is connected, and until the
+    /// first mail.
     public let lastMailAt: Timestamp?
 
     public init(
-        moment: Moment? = nil, comingUp: [CalendarItem] = [], waiting: [DeskCard] = [],
-        handled: Int = 0, lastMailAt: Timestamp? = nil
+        line: DeskLine? = nil, ambient: Ambient? = nil, plans: [WakeUp] = [],
+        comingUp: [CalendarItem] = [], waiting: [DeskCard] = [], handled: Int = 0,
+        lastMailAt: Timestamp? = nil
     ) {
-        self.moment = moment
+        self.line = line
+        self.ambient = ambient
+        self.plans = plans
         self.comingUp = comingUp
         self.waiting = waiting
         self.handled = handled
@@ -30,142 +38,144 @@ public struct Desk: Sendable, Equatable, Decodable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        moment = try container.decodeIfPresent(Moment.self, forKey: .moment)
+        line = try container.decodeIfPresent(DeskLine.self, forKey: .line)
+        ambient = try container.decodeIfPresent(Ambient.self, forKey: .ambient)
+        plans = try container.decodeIfPresent([WakeUp].self, forKey: .plans) ?? []
         comingUp = try container.decode([CalendarItem].self, forKey: .comingUp)
         waiting = try container.decode([DeskCard].self, forKey: .waiting)
         handled = try container.decodeIfPresent(Int.self, forKey: .handled) ?? 0
         lastMailAt = try container.decodeIfPresent(Timestamp.self, forKey: .lastMailAt)
     }
 
-    /// The same Desk with a card, or Kumo's line, as an answer just left them.
-    public func replacing(card: DeskCard? = nil, moment replaced: Moment? = nil) -> Desk {
+    /// The same Desk with some of its parts changed.
+    func with(
+        plans: [WakeUp]? = nil, comingUp: [CalendarItem]? = nil, waiting: [DeskCard]? = nil
+    ) -> Desk {
         Desk(
-            moment: replaced.flatMap { $0.id == moment?.id ? $0 : nil } ?? moment,
-            comingUp: comingUp,
-            waiting: waiting.map { $0.id == card?.id ? card ?? $0 : $0 },
+            line: line, ambient: ambient, plans: plans ?? self.plans,
+            comingUp: comingUp ?? self.comingUp, waiting: waiting ?? self.waiting,
             handled: handled, lastMailAt: lastMailAt)
+    }
+
+    /// The same Desk with a card as an answer just left it.
+    public func replacing(card: DeskCard) -> Desk {
+        with(waiting: waiting.map { $0.id == card.id ? card : $0 })
     }
 
     /// The same Desk with one of Coming up's items as it is now, such as a guess you answered.
     public func replacing(item: CalendarItem) -> Desk {
-        Desk(
-            moment: moment, comingUp: comingUp.map { $0.id == item.id ? item : $0 },
-            waiting: waiting, handled: handled, lastMailAt: lastMailAt)
+        with(comingUp: comingUp.map { $0.id == item.id ? item : $0 })
     }
 
-    /// The same Desk once Kumo's line has gone, such as the day's question you skipped.
-    public func withoutMoment(_ id: MomentID) -> Desk {
-        Desk(
-            moment: moment?.id == id ? nil : moment, comingUp: comingUp, waiting: waiting,
-            handled: handled, lastMailAt: lastMailAt)
+    /// The same Desk with one of Kumo's plans as it is now, such as one you moved: still soonest
+    /// first.
+    public func replacing(plan: WakeUp) -> Desk {
+        let plans = plans.map { $0.id == plan.id ? plan : $0 }
+        return with(plans: plans.sorted { $0.at.date < $1.at.date })
+    }
+
+    /// The same Desk with all of Kumo's plans as the box listed them.
+    public func replacing(plans: [WakeUp]) -> Desk {
+        with(plans: plans)
+    }
+
+    /// The same Desk without one of Kumo's plans, such as one you cancelled.
+    public func removing(plan: WakeUpID) -> Desk {
+        with(plans: plans.filter { $0.id != plan })
     }
 
     enum CodingKeys: String, CodingKey {
-        case moment, waiting, handled
+        case line, ambient, plans, waiting, handled
         case comingUp = "coming_up"
         case lastMailAt = "last_mail_at"
     }
 }
 
-/// The id of one of Kumo's lines for the moment.
-public struct MomentID: OpaqueIdentifier {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
+/// Something interesting at the top of the Desk, by Kumo's judgement: its mood, how something's
+/// going, a thought, the day around you. It changes when the moment does, and never notifies.
+public struct DeskLine: Sendable, Equatable, Decodable {
+    /// A short line, such as "Quiet morning. Your Northwind prep is two-thirds done."
+    public let text: String
+    /// How Kumo feels, for its face.
+    public let mood: KumoMood
+    /// When Kumo set it.
+    public let at: Timestamp
+
+    public init(text: String, mood: KumoMood = .calm, at: Timestamp) {
+        self.text = text
+        self.mood = mood
+        self.at = at
+    }
 }
 
-/// Kumo's line for the moment, at the top of the Desk: one or two sentences, right for now, which
-/// order and connect what's below rather than repeat it. The same words are a message in the
-/// conversation. It goes three hours after it was read, at midnight, or once Kumo has acted on your
-/// answer, and then all is quiet.
-public struct Moment: Sendable, Equatable, Decodable, Identifiable {
-    public let id: MomentID
-    public let kind: MomentKind
-    public let at: Timestamp
-    /// One or two sentences, plain words.
-    public let text: String
-    /// A quieter line under the words, such as the plan under a free day. The message holds it
-    /// too, after the words.
-    public let detail: String?
-    /// The message in the conversation that holds the same words.
-    public let message: MessageID
-    /// Up to three short replies, such as "Ask me tonight". A tap answers Kumo, like a card.
-    public let options: [Ask.Option]
-    /// Whether a typed reply fits, for Reply.
-    public let allowsText: Bool
-    /// What Reply says when words fit, such as "Note it"; Reply when `nil`.
-    public let replyLabel: String?
-    /// When an app first showed it on the Desk. Once read, no notification goes out for it.
-    public let readAt: Timestamp?
-    /// `working` while Kumo acts on your answer.
-    public let state: CardState?
-    /// While it's `working`: the answer you gave.
-    public let answer: CardAnswer?
+/// How Kumo feels, for its face. One Ari doesn't know shows as calm.
+public struct KumoMood: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let bright = KumoMood(rawValue: "bright")
+    public static let calm = KumoMood(rawValue: "calm")
+    public static let cosy = KumoMood(rawValue: "cosy")
+    public static let focused = KumoMood(rawValue: "focused")
+    public static let drowsy = KumoMood(rawValue: "drowsy")
+    public static let proud = KumoMood(rawValue: "proud")
+    public static let concerned = KumoMood(rawValue: "concerned")
+    public static let known = [bright, calm, cosy, focused, drowsy, proud, concerned]
+
+    /// The mood to draw: this one, or calm for one Ari doesn't know.
+    public var shown: KumoMood { Self.known.contains(self) ? self : .calm }
+}
+
+/// The weather where you roughly are, read on the box every half hour or so.
+public struct Ambient: Sendable, Equatable, Decodable {
+    /// Now, in degrees Celsius, rounded.
+    public let temperature: Int
+    public let condition: Weather
+    /// Whether it's daylight there now.
+    public let isDay: Bool
+    /// Today's sunset there.
+    public let sunset: Timestamp
+    /// Where, when the phone named it, such as "Rome".
+    public let place: String?
 
     public init(
-        id: MomentID, kind: MomentKind = .news, at: Timestamp, text: String,
-        detail: String? = nil, message: MessageID, options: [Ask.Option] = [],
-        allowsText: Bool = false, replyLabel: String? = nil, readAt: Timestamp? = nil,
-        state: CardState? = nil, answer: CardAnswer? = nil
+        temperature: Int, condition: Weather, isDay: Bool, sunset: Timestamp,
+        place: String? = nil
     ) {
-        self.id = id
-        self.kind = kind
-        self.at = at
-        self.text = text
-        self.detail = detail
-        self.message = message
-        self.options = options
-        self.allowsText = allowsText
-        self.replyLabel = replyLabel
-        self.readAt = readAt
-        self.state = state
-        self.answer = answer
+        self.temperature = temperature
+        self.condition = condition
+        self.isDay = isDay
+        self.sunset = sunset
+        self.place = place
     }
 
-    /// Whether Kumo is acting on your answer.
-    public var isWorking: Bool { state == .working }
-
     enum CodingKeys: String, CodingKey {
-        case id, kind, at, text, detail, message, options, state, answer
-        case allowsText = "allows_text"
-        case replyLabel = "reply_label"
-        case readAt = "read_at"
+        case temperature, condition, sunset, place
+        case isDay = "is_day"
     }
 }
 
-/// What brought Kumo's line. A kind Ari doesn't know draws like any other.
-public struct MomentKind: OpenValue {
+/// The sky, in a word. One Ari doesn't know shows as cloudy.
+public struct Weather: OpenValue {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 
-    /// The first line of the day, at the first calm moment after your morning time.
-    public static let day = MomentKind(rawValue: "day")
-    /// Something that matters arrived.
-    public static let news = MomentKind(rawValue: "news")
-    /// Your day changed.
-    public static let change = MomentKind(rawValue: "change")
-    /// A commitment you made, such as when you'd stop tonight, coming due.
-    public static let checkin = MomentKind(rawValue: "checkin")
-    /// Your week's time drifting from what matters.
-    public static let drift = MomentKind(rawValue: "drift")
-    /// The day's one small question, which you can skip.
-    public static let question = MomentKind(rawValue: "question")
-    public static let known = [day, news, change, checkin, drift, question]
+    public static let clear = Weather(rawValue: "clear")
+    public static let partlyCloudy = Weather(rawValue: "partly_cloudy")
+    public static let cloudy = Weather(rawValue: "cloudy")
+    public static let fog = Weather(rawValue: "fog")
+    public static let drizzle = Weather(rawValue: "drizzle")
+    public static let rain = Weather(rawValue: "rain")
+    public static let snow = Weather(rawValue: "snow")
+    public static let thunder = Weather(rawValue: "thunder")
+    public static let known = [clear, partlyCloudy, cloudy, fog, drizzle, rain, snow, thunder]
+
+    /// The sky to show: this one, or cloudy for one Ari doesn't know.
+    public var shown: Weather { Self.known.contains(self) ? self : .cloudy }
 }
 
-/// The body that skips the day's question: it goes at once, and Kumo never asks it again.
-public struct MomentSkip: Sendable, Equatable, Codable {
-    public let skip: Bool
-
-    public init() { skip = true }
-}
-
-/// `POST /v0/desk/moment/{id}/answer`'s answer: Kumo's line, `working` with your answer.
-public struct MomentResult: Sendable, Equatable, Decodable {
-    public let moment: Moment
-}
-
-/// `GET /v0/work`: Kumo's work for a day, for "47 in: 3 need you, 6 handled, 38 cleared", and how
-/// much it checks with you. What needs you is the Desk's `waiting`.
+/// `GET /v0/work`: Kumo's work for a day, for "47 in: 3 need you, 6 handled, 38 cleared", and the
+/// areas it's learning. What needs you is the Desk's `waiting`.
 public struct KumoWork: Sendable, Equatable, Decodable {
     /// The local day, such as `2026-11-05`: today, unless you asked for another.
     public let day: String
@@ -173,16 +183,16 @@ public struct KumoWork: Sendable, Equatable, Decodable {
     public let handled: [DoneEntry]
     /// The mail Kumo read and left alone that day, newest first.
     public let cleared: [DoneEntry]
-    /// The trust ladder: each kind of work Kumo has done, on its rung, in a fixed order.
-    public let trust: [TrustRung]
+    /// Every area Kumo is learning, in the order it opened them, now.
+    public let tracks: [Track]
 
     public init(
-        day: String, handled: [DoneEntry] = [], cleared: [DoneEntry] = [], trust: [TrustRung] = []
+        day: String, handled: [DoneEntry] = [], cleared: [DoneEntry] = [], tracks: [Track] = []
     ) {
         self.day = day
         self.handled = handled
         self.cleared = cleared
-        self.trust = trust
+        self.tracks = tracks
     }
 
     public init(from decoder: any Decoder) throws {
@@ -190,73 +200,12 @@ public struct KumoWork: Sendable, Equatable, Decodable {
         day = try container.decode(String.self, forKey: .day)
         handled = try container.decode([DoneEntry].self, forKey: .handled)
         cleared = try container.decode([DoneEntry].self, forKey: .cleared)
-        trust = try container.decodeIfPresent([TrustRung].self, forKey: .trust) ?? []
+        tracks = try container.decodeIfPresent([Track].self, forKey: .tracks) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
-        case day, handled, cleared, trust
+        case day, handled, cleared, tracks
     }
-}
-
-/// A kind of Kumo's work, each with its own rung on the trust ladder. A kind Ari doesn't know shows
-/// by the title Kumo's work gives it.
-public struct WorkKind: OpenValue {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-
-    /// The mail Kumo files, bins and clears.
-    public static let sorting = WorkKind(rawValue: "sorting")
-    /// What Kumo puts on, moves or takes off your calendars.
-    public static let calendar = WorkKind(rawValue: "calendar")
-    /// The replies Kumo writes for you.
-    public static let drafts = WorkKind(rawValue: "drafts")
-    /// What Kumo changes in your contacts.
-    public static let contacts = WorkKind(rawValue: "contacts")
-    public static let known = [sorting, calendar, drafts, contacts]
-}
-
-/// How much Kumo checks with you for one kind of work: Learning, then Spot checks, then Trusted. It
-/// climbs after a clean stretch, and a "That was wrong" steps it back one.
-public struct TrustRung: Sendable, Equatable, Decodable, Identifiable {
-    public var id: WorkKind { work }
-    public let work: WorkKind
-    /// Its name, such as "Sorting mail".
-    public let title: String
-    public let step: TrustStep
-    /// Kumo's line on where it stands and why, such as "Two weeks without a correction on sorting."
-    public let line: String
-    /// When its current stretch began: its first call, a climb, a correction or a reset.
-    public let since: Timestamp
-
-    public init(work: WorkKind, title: String, step: TrustStep, line: String, since: Timestamp) {
-        self.work = work
-        self.title = title
-        self.step = step
-        self.line = line
-        self.since = since
-    }
-}
-
-/// A rung on the trust ladder. One Ari doesn't know shows as Learning.
-public struct TrustStep: OpenValue {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-
-    /// Kumo shows you its calls, with a card a day to glance at them.
-    public static let learning = TrustStep(rawValue: "learning")
-    /// About one call in five may get a quiet "Was this right?" card.
-    public static let spotChecks = TrustStep(rawValue: "spot_checks")
-    /// Only what needs you.
-    public static let trusted = TrustStep(rawValue: "trusted")
-    public static let known = [learning, spotChecks, trusted]
-
-    /// Where it stands, from 0 for Learning to 2 for Trusted.
-    public var rung: Int { Self.known.firstIndex(of: self) ?? 0 }
-}
-
-/// `POST /v0/trust/{work}/reset`'s answer: the kind, back to Learning.
-public struct TrustResult: Sendable, Equatable, Decodable {
-    public let trust: TrustRung
 }
 
 /// The body of `POST /v0/done/{entry}/wrong`: what was wrong in your words, or nothing.
@@ -301,9 +250,6 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public let times: TimesCard?
     public let question: QuestionCard?
     public let offer: OfferCard?
-    /// On a question: Kumo is still learning, so it asks you to glance at a day's calls. Its first
-    /// option opens Kumo's work for that day, showing only these kinds of work.
-    public let review: ReviewCard?
 
     public init(
         id: CardID, kind: CardKind, motion: MotionID? = nil, at: Timestamp,
@@ -311,7 +257,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         allowsText: Bool = false,
         state: CardState? = nil, answer: CardAnswer? = nil, draft: DraftCard? = nil,
         invite: InviteCard? = nil, times: TimesCard? = nil, question: QuestionCard? = nil,
-        offer: OfferCard? = nil, review: ReviewCard? = nil
+        offer: OfferCard? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -328,17 +274,11 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         self.times = times
         self.question = question
         self.offer = offer
-        self.review = review
-    }
-
-    /// Whether answering with this option opens Kumo's work to glance at a day's calls.
-    public func glances(_ answer: CardAnswer) -> Bool {
-        review != nil && answer.option != nil && answer.option == options.first?.label
     }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, motion, at, title, options, state, answer, draft, invite, times, question
-        case offer, review
+        case offer
         case allowsText = "allows_text"
         case changedAt = "changed_at"
     }
@@ -463,18 +403,6 @@ public struct TimeSlot: Sendable, Equatable, Decodable {
         self.start = start
         self.end = end
         self.note = note
-    }
-}
-
-/// A day of Kumo's calls to glance at while it's learning: the day, for `GET /v0/work?day=`, and
-/// the kinds of work to show.
-public struct ReviewCard: Sendable, Equatable, Decodable {
-    public let day: String
-    public let work: [WorkKind]
-
-    public init(day: String, work: [WorkKind]) {
-        self.day = day
-        self.work = work
     }
 }
 
@@ -704,15 +632,16 @@ public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
     public let undo: Bool
     /// A mail Kumo read and left alone, "read, nothing needed": folded into one line a day.
     public let quiet: Bool
-    /// The kind of work, when it was one of Kumo's own calls: what the trust ladder counts.
-    public let work: WorkKind?
     /// When you said it was wrong.
     public let correctedAt: Timestamp?
+    /// The track this call belongs to, when it's in an area Kumo is learning. "That was wrong" on
+    /// it steps the track back.
+    public let track: TrackID?
 
     public init(
         id: DoneID, at: Timestamp, text: String, reason: String? = nil, mail: DoneMail? = nil,
         event: CalendarItem? = nil, motion: MotionID? = nil, undo: Bool = false,
-        quiet: Bool = false, work: WorkKind? = nil, correctedAt: Timestamp? = nil
+        quiet: Bool = false, correctedAt: Timestamp? = nil, track: TrackID? = nil
     ) {
         self.id = id
         self.at = at
@@ -723,15 +652,15 @@ public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
         self.motion = motion
         self.undo = undo
         self.quiet = quiet
-        self.work = work
         self.correctedAt = correctedAt
+        self.track = track
     }
 
     /// Whether you've said it was wrong.
     public var isCorrected: Bool { correctedAt != nil }
 
     enum CodingKeys: String, CodingKey {
-        case id, at, text, reason, mail, event, motion, undo, quiet, work
+        case id, at, text, reason, mail, event, motion, undo, quiet, track
         case correctedAt = "corrected_at"
     }
 }
@@ -776,44 +705,4 @@ public struct DonePage: Sendable, Equatable, Decodable {
 /// The answer to `POST /v0/done/{entry}/undo`: the entry, marked undone in its text.
 public struct DoneResult: Sendable, Equatable, Decodable {
     public let entry: DoneEntry
-}
-
-/// A scheduled look's id.
-public struct JobID: OpaqueIdentifier {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-}
-
-/// A look Kumo scheduled for itself: a follow-up, a check-in after an event, or a
-/// standing job it keeps doing. It moves itself if the moment is bad; to stop one, you tell Kumo.
-public struct Job: Sendable, Equatable, Decodable, Identifiable {
-    public let id: JobID
-    /// Such as "Ask how the Halcyon interview went".
-    public let why: String
-    /// When it's next due.
-    public let at: Timestamp?
-    /// Due after this event ends.
-    public let afterEvent: AfterEvent?
-    /// What a standing job keeps looking for, such as "startups I'd join".
-    public let standing: Standing?
-    public let motion: MotionID?
-
-    public struct AfterEvent: Sendable, Equatable, Decodable {
-        public let uid: String
-        public let title: String
-    }
-
-    public struct Standing: Sendable, Equatable, Decodable {
-        public let ask: String
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id, why, at, standing, motion
-        case afterEvent = "after_event"
-    }
-}
-
-/// The answer to `GET /v0/jobs`: soonest first.
-public struct JobList: Sendable, Equatable, Decodable {
-    public let jobs: [Job]
 }

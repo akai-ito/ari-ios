@@ -37,11 +37,10 @@ public struct MessageKind: OpenValue {
     public static let reply = MessageKind(rawValue: "reply")
     /// The agent's commentary while it works, such as "I'll check current prices first."
     public static let note = MessageKind(rawValue: "note")
-    /// A message Kumo posted outside any turn, such as its first question while getting started.
+    /// A message Kumo posted outside any turn, such as how a mail it read changes your plans, or
+    /// its first question while getting started.
     public static let post = MessageKind(rawValue: "post")
-    /// Kumo's line for the moment: the same words as the Desk's line while it lasts.
-    public static let moment = MessageKind(rawValue: "moment")
-    public static let known = [reply, note, post, moment]
+    public static let known = [reply, note, post]
 }
 
 /// How a message or a turn ended. An outcome Ari doesn't know means only that it ended.

@@ -38,7 +38,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         model.failedToRegister(error)
     }
 
-    /// While you're looking at the conversation, a notification about it would only repeat it.
+    /// Every message notifies, even with Ari open: a banner, unless you're reading the chat, where
+    /// it would only repeat what's on screen.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
         withCompletionHandler completionHandler:
@@ -51,7 +52,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     /// An option or a typed answer goes to the server at once; a tap opens the conversation, at
-    /// the reply it was about, or the Desk, for Kumo's line. iOS's completion handler must be called on the main thread:
+    /// the message it was about. iOS's completion handler must be called on the main thread:
     /// called from the async version's background task, it made UIKit abort, so tapping a
     /// notification crashed Ari.
     nonisolated func userNotificationCenter(
@@ -64,13 +65,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             action: response.actionIdentifier, typed: typed,
             options: info["options"] as? [String] ?? [])
         let message = (info["message"] as? String).map(MessageID.init(rawValue:))
-        let isMoment = info["kind"] as? String == NotificationKind.moment.rawValue
         let done = Handler(completionHandler)
         Task { @MainActor in
             if let answer {
                 await model.answer(fromNotification: answer)
-            } else if isMoment {
-                model.opensDesk = true
             } else {
                 model.opening = message
             }

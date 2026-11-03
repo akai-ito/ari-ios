@@ -1,9 +1,9 @@
 import AriKit
 import SwiftUI
 
-/// Step 4: the morning's "not before" time, and notifications, with an honest line about how loud
-/// Kumo may be. Allow asks iOS; Not now is fine too. Either way the time is saved on the way out.
-struct OnboardingMorningStep: View {
+/// Step 4: notifications, with an honest line about when they come. Allow asks iOS; Not now is
+/// fine too.
+struct OnboardingNotificationsStep: View {
     let model: OnboardingModel
 
     @State private var poses = PoseHistory(.asking)
@@ -12,31 +12,21 @@ struct OnboardingMorningStep: View {
     var body: some View {
         OnboardingPage {
             VStack(alignment: .leading, spacing: 32) {
-                OnboardingHeader(poses: poses, title: "When can I bring you the morning?")
-                VStack(alignment: .leading, spacing: 10) {
-                    DatePicker("Not before", selection: time, displayedComponents: .hourAndMinute)
-                        .font(.body)
-                        .foregroundStyle(.ariText)
-                        .deskCard(padding: 14, cornerRadius: 16)
-                    Text(
-                        "\(LeadName.current)'s first line of the day comes at the first calm moment after this, however late: when you open Ito, or the first gap in your calendar."
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.ariTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
+                OnboardingHeader(poses: poses, title: "Can I message you?")
                 VStack(alignment: .leading, spacing: 10) {
                     DeskSectionLabel("Notifications")
                     Text(
-                        "At most one with sound an hour; the rest arrive quietly. Urgent things always sound."
+                        "When I've something to tell you, it comes as a message, the moment I send it."
                     )
                     .font(.body)
                     .foregroundStyle(.ariText)
                     .fixedSize(horizontal: false, vertical: true)
-                    Text("Nothing sounds during an event in your calendar, and Focus is respected.")
-                        .font(.footnote)
-                        .foregroundStyle(.ariTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        "Your Focus decides what makes a sound. Only what can't wait breaks through."
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.ariTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
                     if !model.serverSends {
                         // Said plainly: allowing them here is still worth it, but nothing arrives
                         // until the server can send.
@@ -55,7 +45,6 @@ struct OnboardingMorningStep: View {
             }
             .animation(.smooth(duration: 0.35), value: model.notifications)
         } footer: {
-            if let problem = sending.problem { DeskProblemLine(text: problem) }
             if model.notifications == nil {
                 OnboardingButton("Allow notifications", busy: sending.key == "allow") {
                     go("allow") { await model.allowNotifications() }
@@ -65,9 +54,7 @@ struct OnboardingMorningStep: View {
                 }
                 .disabled(sending.isSending)
             } else {
-                OnboardingButton("Continue", busy: sending.key == "continue") {
-                    go("continue") {}
-                }
+                OnboardingButton("Continue") { model.advance() }
             }
         }
     }
@@ -93,34 +80,20 @@ struct OnboardingMorningStep: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Saves the morning time, then does what you chose, then moves on, unless iOS turned
-    /// notifications down: then the step stays to say so honestly, with Continue.
+    /// Does what you chose, then moves on, unless iOS turned notifications down: then the step
+    /// stays to say so honestly, with Continue.
     private func go(_ key: String, _ then: @escaping () async -> Void) {
         Task {
-            let done = await sending.send(key, failure: "Couldn't save your morning time") {
-                try await model.saveMorning()
-                await then()
-            }
-            if done, key == "continue" || model.notifications != .off { model.advance() }
-        }
-    }
-
-    /// The morning time as the picker wants it: today at that hour.
-    private var time: Binding<Date> {
-        Binding {
-            Calendar.current.date(
-                bySettingHour: model.morning.hour ?? 7, minute: model.morning.minute ?? 30,
-                second: 0, of: .now) ?? .now
-        } set: { date in
-            model.morning = Calendar.current.dateComponents([.hour, .minute], from: date)
+            await sending.send(key) { await then() }
+            if model.notifications != .off { model.advance() }
         }
     }
 }
 
 #if DEBUG
-    #Preview("4 · Morning and notifications") {
+    #Preview("4 · Notifications") {
         @Previewable @State var model = OnboardingSamples.model(
-            step: .morning, connected: ["icloud"],
+            step: .notifications, connected: ["icloud"],
             progress: OnboardingProgress(read: 2480, total: 3100))
         OnboardingFlow(model: model)
             .preferredColorScheme(.dark)

@@ -272,19 +272,17 @@ enum Route: Equatable {
     case send
     case earlierMessages(before: MessageID, limit: Int?)
     case done
-    case jobs
+    case wakeUps
+    case changeWakeUp(WakeUpID)
+    case cancelWakeUp(WakeUpID)
     case undo(DoneID)
     case correct(DoneID)
-    case resetTrust(WorkKind)
     case desk
     case answerCard(CardID)
-    case readMoment(MomentID)
-    case answerMoment(MomentID)
     case answerGuess(CalendarItemID)
     case work
     case addEvent
     case lead
-    case morningSettings
     case onboarding
     case answerBelief(BeliefID)
     case finishOnboarding
@@ -295,9 +293,8 @@ enum Route: Equatable {
     case cancelAsk(AskID)
     /// Registering a device for notifications, or forgetting it.
     case device
-    case presence
-    /// Your phone's Focus, from Ito's Focus filter.
-    case status
+    /// Where the phone roughly is.
+    case whereabouts
     /// Uploading a photo or file's bytes.
     case upload(AttachmentID, name: String)
     /// Fetching an attachment's bytes.
@@ -344,23 +341,19 @@ enum Route: Equatable {
             self = .earlierMessages(
                 before: MessageID(query["before"] ?? ""), limit: query["limit"].flatMap { Int($0) })
         case ("GET", 2) where parts == ["v0", "done"]: self = .done
-        case ("GET", 2) where parts == ["v0", "jobs"]: self = .jobs
+        case ("GET", 2) where parts == ["v0", "wakeups"]: self = .wakeUps
+        case ("PATCH", 3) where parts[0] == "v0" && parts[1] == "wakeups":
+            self = .changeWakeUp(WakeUpID(parts[2]))
+        case ("DELETE", 3) where parts[0] == "v0" && parts[1] == "wakeups":
+            self = .cancelWakeUp(WakeUpID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "done" && parts[3] == "undo":
             self = .undo(DoneID(parts[2]))
         case ("POST", 4) where parts[0] == "v0" && parts[1] == "done" && parts[3] == "wrong":
             self = .correct(DoneID(parts[2]))
-        case ("POST", 4) where parts[0] == "v0" && parts[1] == "trust" && parts[3] == "reset":
-            self = .resetTrust(WorkKind(rawValue: parts[2]))
         case ("GET", 2) where parts == ["v0", "desk"]: self = .desk
         case ("POST", 5)
         where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "cards" && parts[4] == "answer":
             self = .answerCard(CardID(parts[3]))
-        case ("POST", 5)
-        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "moment" && parts[4] == "read":
-            self = .readMoment(MomentID(parts[3]))
-        case ("POST", 5)
-        where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "moment" && parts[4] == "answer":
-            self = .answerMoment(MomentID(parts[3]))
         case ("POST", 5)
         where parts[0] == "v0" && parts[1] == "desk" && parts[2] == "guesses"
             && parts[4] == "answer":
@@ -368,7 +361,6 @@ enum Route: Equatable {
         case ("GET", 2) where parts == ["v0", "work"]: self = .work
         case ("POST", 3) where parts == ["v0", "calendar", "events"]: self = .addEvent
         case ("PUT", 2) where parts == ["v0", "lead"]: self = .lead
-        case ("PUT", 2) where parts == ["v0", "morning"]: self = .morningSettings
         case ("GET", 2) where parts == ["v0", "onboarding"]: self = .onboarding
         case ("POST", 4)
         where parts[0] == "v0" && parts[1] == "onboarding" && parts[2] == "beliefs":
@@ -390,10 +382,9 @@ enum Route: Equatable {
         case ("GET", 3) where parts[0] == "v0" && parts[1] == "attachments":
             self = .attachment(AttachmentID(parts[2]))
         case ("POST", 2) where parts == ["v0", "pair"]: self = .pair
-        case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "status":
-            self = .status
-        case ("PUT", 4) where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "presence":
-            self = .presence
+        case ("PUT", 4)
+        where parts[0] == "v0" && parts[1] == "devices" && parts[3] == "whereabouts":
+            self = .whereabouts
         case ("GET", 2) where parts == ["v0", "capabilities"]: self = .capabilities
         case ("PUT", 3) where parts[0] == "v0" && parts[1] == "capabilities":
             self = .switchCapability(CapabilityID(parts[2]))
@@ -442,7 +433,7 @@ enum Route: Equatable {
     /// Settings, the Library and a call ask for these, not the session.
     var isOutsideSession: Bool {
         switch self {
-        case .lead, .morningSettings:
+        case .lead, .server:
             true
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability,
             .connectCapability,

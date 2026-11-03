@@ -29,14 +29,11 @@ import SwiftUI
             return (address, token)
         }
 
-        /// `ARI_SKETCH` opens the app on a sketch of the Desk from samples, without a server: one of
-        /// Kumo's moments, such as `sunday` or `work` (see MomentSketch).
-        static let sketch = environment["ARI_SKETCH"].flatMap(MomentSketch.init(rawValue:))
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensTopics = environment["ARI_TOPICS"] != nil
         static let opensKumosWork = environment["ARI_KUMOS_WORK"] != nil
-        /// `trust` opens Kumo's work at the ladder; `wrong` asks "That was wrong" of its first entry.
+        /// `wrong` asks "That was wrong" of its first entry.
         static let kumosWork = environment["ARI_KUMOS_WORK"]
         /// `ARI_GUESS` shows the Desk's first guess open (`open`), or with what it really was
         /// (`correct`).

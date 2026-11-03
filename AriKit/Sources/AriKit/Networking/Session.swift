@@ -14,9 +14,11 @@ import Observation
 /// - **Try again** has its own lane too; the failed turn's id makes repeats safe.
 /// - **Cancelling an ask** (Stop while it waits) has its own lane as well, and repeats are safe.
 /// - **Calls** start and end on their own lane, in order; a call's stream carries the rest.
-/// - **The Desk's answers** (a card, Kumo's line answered or seen, Done and its undo, a calendar
-///   event, today's work) are
-///   plain requests: you're watching for them, so they say at once when they fail.
+/// - **Where the phone is** (its time zone, and roughly its place) goes on its own lane too, only the
+///   latest, retried until the server has it.
+/// - **The Desk's answers** (a card, a guess, one of Kumo's plans moved or cancelled, Done and its
+///   undo, a calendar event, today's work) are plain requests: you're watching for them, so they
+///   say at once when they fail.
 @MainActor
 @Observable
 public final class Session {
@@ -83,11 +85,8 @@ public final class Session {
     /// The device to register for notifications (or forget, with no registration), until the
     /// server has it.
     @ObservationIgnored private var deviceRequest: (id: String, registration: RegisterDevice?)?
-    /// Whether Ari is on screen here, as the server should next hear it.
-    @ObservationIgnored private var presenceRequest: (device: String, looking: Bool)?
-    /// The latest Focus on its way to the box: each waits for the one before, so an older one
-    /// never lands after a newer one.
-    @ObservationIgnored private var statusSending: Task<Bool, Never>?
+    /// Where the phone roughly is, until the server has it: only the latest goes.
+    @ObservationIgnored private var whereaboutsRequest: (device: String, whereabouts: Whereabouts)?
     /// Attachments still to upload, in the order you attached them.
     @ObservationIgnored private var uploadQueue: [PendingAttachment] = []
 
@@ -188,7 +187,7 @@ public final class Session {
                 Task { await self.runRetries() },
                 Task { await self.runCancels() },
                 Task { await self.runDevice() },
-                Task { await self.runPresence() },
+                Task { await self.runWhereabouts() },
                 Task { await self.runUploads() },
                 Task { await self.runCalls() },
             ]
@@ -214,7 +213,7 @@ public final class Session {
 
     // MARK: - What you do
 
-    /// You tapped Send, in the chat or in Tell Kumo on the Desk. Your message shows at once, is
+    /// You tapped Send, in the chat or from the Desk. Your message shows at once, is
     /// saved on the device, and goes as soon as it can. Returns its id, or `nil` if there's nothing
     /// to send or it's longer than the server takes.
     ///
@@ -317,32 +316,12 @@ public final class Session {
         wake(.device)
     }
 
-    /// Ari came on screen here, or left it. The server pushes nothing while any device is looking
-    /// with a live stream; it forgets this when it restarts, so say it again after reconnecting.
-    public func setLooking(_ looking: Bool, device: String) {
-        presenceRequest = (device, looking)
-        wake(.presence)
-    }
-
-    /// Your phone's Focus turned on or off, with Ito part of it. It goes at once, even while Ari is
-    /// in the background, after any still on its way, and isn't tried again here: the app tells the
-    /// box your real Focus each time it can reach it, so one that failed can't land after a newer
-    /// one. Returns whether the box has it.
-    @discardableResult
-    public func setFocus(_ focus: FocusKind?, device: String) async -> Bool {
-        let before = statusSending
-        let client = client
-        let sending = Task {
-            _ = await before?.value
-            do throws(RequestError) {
-                try await client.setStatus(device, DeviceStatus(focus: focus))
-                return true
-            } catch {
-                return false
-            }
-        }
-        statusSending = sending
-        return await sending.value
+    /// Where the phone roughly is: its time zone, and its place when you allow it. Only the latest
+    /// goes, as soon as it can, and again after a failure that may pass.
+    public func report(_ whereabouts: Whereabouts, device: String) {
+        guard whereaboutsRequest?.whereabouts != whereabouts else { return }
+        whereaboutsRequest = (device, whereabouts)
+        wake(.whereabouts)
     }
 
     /// You started a call: it starts on the server as soon as it can. Returns its id, for its
@@ -434,19 +413,6 @@ public final class Session {
         desk = desk?.replacing(card: result.card)
     }
 
-    /// You answered Kumo's line: with one of its options, or words. It shows Kumo at work on it
-    /// until the Desk says it's done.
-    public func answerMoment(_ moment: MomentID, _ answer: CardAnswer) async throws(RequestError) {
-        let result = try await client.answerMoment(moment, answer)
-        desk = desk?.replacing(moment: result.moment)
-    }
-
-    /// You skipped the day's question: it leaves the Desk at once, and Kumo never asks it again.
-    public func skipMoment(_ moment: MomentID) async throws(RequestError) {
-        _ = try await client.skipMoment(moment)
-        desk = desk?.withoutMoment(moment)
-    }
-
     /// You answered one of Kumo's guesses at your day: it shows as yours at once, no longer a
     /// guess, until the Desk says how it is.
     public func answerGuess(_ item: CalendarItemID, _ answer: GuessAnswer)
@@ -456,13 +422,8 @@ public final class Session {
         desk = desk?.replacing(item: answered)
     }
 
-    /// Kumo's line has been on the Desk, so it's read and no notification goes out for it.
-    public func readMoment(_ id: MomentID) async throws(RequestError) {
-        try await client.readMoment(id)
-    }
-
     /// Kumo's work today, or on another local day: what it handled and what it cleared, with the
-    /// trust ladder.
+    /// areas it's learning.
     public func work(day: String? = nil) async throws(RequestError) -> KumoWork {
         try await client.work(day: day)
     }
@@ -474,12 +435,6 @@ public final class Session {
         -> DoneEntry
     {
         try await client.correct(entry, text: text)
-    }
-
-    /// Show me everything again: one kind of Kumo's work back to Learning.
-    @discardableResult
-    public func resetTrust(_ work: WorkKind) async throws(RequestError) -> TrustRung {
-        try await client.resetTrust(work)
     }
 
     /// You pulled the Desk down: ask for all of it again.
@@ -500,9 +455,33 @@ public final class Session {
         try await client.undo(entry)
     }
 
-    /// The looks Kumo scheduled for itself, soonest first.
-    public func jobs() async throws(RequestError) -> [Job] {
-        try await client.jobs()
+    /// Asks for all of Kumo's plans again, such as when What I'm up to opens.
+    public func refreshPlans() async throws(RequestError) {
+        let plans = try await client.wakeUps()
+        desk = desk?.replacing(plans: plans)
+    }
+
+    /// You moved one of Kumo's plans, changed how it repeats, or reworded it. It shows as it is
+    /// now at once, until the Desk says how it is.
+    @discardableResult
+    public func change(_ plan: WakeUpID, _ change: WakeUpChange) async throws(RequestError)
+        -> WakeUp
+    {
+        let changed = try await client.changeWakeUp(plan, change)
+        desk = desk?.replacing(plan: changed)
+        return changed
+    }
+
+    /// You cancelled one of Kumo's plans. It leaves the Desk at once; Kumo doesn't set it again
+    /// unasked.
+    public func cancel(_ plan: WakeUpID) async throws(RequestError) {
+        do throws(RequestError) {
+            try await client.cancelWakeUp(plan)
+        } catch {
+            // Already gone, such as one that came due meanwhile, is cancelled too.
+            guard error.status == 404 else { throw error }
+        }
+        desk = desk?.removing(plan: plan)
     }
 
     /// You tapped Add to calendar: the box writes the event into your calendar. Returns it as the
@@ -829,13 +808,13 @@ public final class Session {
         }
     }
 
-    private func runPresence() async {
-        await runLane(.presence) {
-            presenceRequest
+    private func runWhereabouts() async {
+        await runLane(.whereabouts) {
+            whereaboutsRequest
         } send: { request throws(RequestError) in
-            try await client.setPresence(request.device, looking: request.looking)
+            try await client.setWhereabouts(request.device, request.whereabouts)
         } done: { request in
-            if presenceRequest?.looking == request.looking { presenceRequest = nil }
+            if whereaboutsRequest?.whereabouts == request.whereabouts { whereaboutsRequest = nil }
         }
     }
 
@@ -882,7 +861,7 @@ public final class Session {
         static let retry = Wake(rawValue: 1 << 4)
         static let cancel = Wake(rawValue: 1 << 5)
         static let device = Wake(rawValue: 1 << 6)
-        static let presence = Wake(rawValue: 1 << 7)
+        static let whereabouts = Wake(rawValue: 1 << 7)
         static let upload = Wake(rawValue: 1 << 8)
         static let call = Wake(rawValue: 1 << 9)
     }

@@ -40,20 +40,67 @@ struct SettingsTests {
         #expect(try await renaming.value == Lead(name: "Tess"))
     }
 
-    @Test("the morning time goes as HH:mm, and comes back as saved")
-    func setsTheMorning() async throws {
+    @Test("whereabouts go with the time zone and a place rounded to about 10 km")
+    func whereabouts() async throws {
         let server = ScriptedServer()
-        let setting = Task { [client = try client(server)] in
-            try await client.setMorning(MorningTime(hour: 6, minute: 5))
+        let place = Area(latitude: 51.5072, longitude: -0.1276, name: "London")
+        let telling = Task { [client = try client(server)] in
+            try await client.setWhereabouts(
+                "phone", Whereabouts(timeZone: "Europe/London", area: place))
         }
         let sent = try await request(from: server)
         #expect(sent.method == .put)
-        #expect(sent.path == "/v0/morning")
-        #expect(try json(sent) == JSONValue(json: #"{ "not_before": "06:05" }"#))
-        try await server.answer(200, json: #"{ "not_before": "06:05" }"#)
-        let saved = try await setting.value
-        #expect(saved.notBefore == "06:05")
-        #expect(saved.time?.hour == 6 && saved.time?.minute == 5)
+        #expect(sent.path == "/v0/devices/phone/whereabouts")
+        #expect(
+            try json(sent)
+                == JSONValue(
+                    json: #"""
+                        { "time_zone": "Europe/London",
+                          "area": { "latitude": 51.5, "longitude": -0.1, "name": "London" } }
+                        """#))
+        try await server.answer(204)
+        try await telling.value
+    }
+
+    @Test("the time zone alone goes without a place")
+    func timeZoneAlone() throws {
+        let body = try JSONValue(encoding: Whereabouts(timeZone: "Europe/Rome"))
+        #expect(body == (try JSONValue(json: #"{ "time_zone": "Europe/Rome" }"#)))
+    }
+
+    @Test("a plan moves, turns into a one-off, and is cancelled")
+    func changesAPlan() async throws {
+        let server = ScriptedServer()
+        let moving = Task { [client = try client(server)] in
+            try await client.changeWakeUp(
+                "w_1",
+                WakeUpChange(at: Timestamp("2026-11-11T10:00:00.000Z"), repeat: .some(nil)))
+        }
+        let sent = try await request(from: server)
+        #expect(sent.method == .patch)
+        #expect(sent.path == "/v0/wakeups/w_1")
+        #expect(
+            try json(sent)
+                == JSONValue(json: #"{ "at": "2026-11-11T10:00:00.000Z", "repeat": null }"#))
+        try await server.answer(
+            200,
+            json: #"""
+                { "wake_up": { "id": "w_1", "at": "2026-11-11T10:00:00.000Z", "what": "Plan the day",
+                  "why": "You asked.", "by": "you", "source": { "kind": "chat", "title": "Chat" },
+                  "set_at": "2026-11-10T19:00:00.000Z" } }
+                """#)
+        let moved = try await moving.value
+        #expect(moved.repeat == nil && moved.by == .you && moved.what == "Plan the day")
+
+        let cancelling = Task { [client = try client(server)] in
+            try await client.cancelWakeUp("w_1")
+        }
+        let cancel = try await request(from: server)
+        #expect(cancel.method == .delete)
+        #expect(cancel.path == "/v0/wakeups/w_1")
+        #expect(cancel.body == nil)
+        try await server.answer(204)
+        try await cancelling.value
     }
 
     @Test("a refusal keeps the server's reason")
@@ -93,25 +140,21 @@ struct SettingsTests {
         }
     }
 
-    @Test("the server's info carries the lead and the morning time")
+    @Test("the server's info carries the lead, the time zone and where you roughly are")
     func serverInfo() throws {
         let info = try JSONDecoder().decode(
             ServerInfo.self,
             from: Data(
                 """
-                { "name": "box", "version": "0.17.0", "protocol": "0.17", "agent": { "model": "gpt" },
+                { "name": "box", "version": "0.18.0", "protocol": "0.18", "agent": { "model": "gpt" },
                   "setup": { "notifications": true }, "capabilities": [],
-                  "lead": { "name": "Tess" }, "morning": { "not_before": "08:15" } }
+                  "lead": { "name": "Tess" }, "time_zone": "Europe/Rome",
+                  "whereabouts": { "time_zone": "Europe/Rome",
+                    "area": { "latitude": 41.9, "longitude": 12.5, "name": "Rome" },
+                    "as_of": "2026-11-12T09:00:00.000Z" } }
                 """.utf8))
         #expect(info.leadName == "Tess")
-        #expect(info.morning.time?.hour == 8 && info.morning.time?.minute == 15)
-    }
-
-    @Test("a morning time that isn't HH:mm reads as no time")
-    func oddTimes() {
-        #expect(MorningTime(notBefore: "7:30").time?.hour == 7)
-        #expect(MorningTime(notBefore: "24:00").time == nil)
-        #expect(MorningTime(notBefore: "soon").time == nil)
-        #expect(MorningTime.standard.notBefore == "07:30")
+        #expect(info.timeZone == "Europe/Rome")
+        #expect(info.whereabouts?.area?.name == "Rome")
     }
 }
