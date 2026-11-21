@@ -324,6 +324,16 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/memory/recent"))
     }
 
+    /// `GET /v0/memory/chapters`: the chapters of your life Kumo noticed, those still going first.
+    public func chapters() async throws(RequestError) -> ChapterList {
+        try await call(HTTPRequest(.get, "/v0/memory/chapters"))
+    }
+
+    /// `GET /v0/memory/learnt`: what Kumo learnt about you lately, newest first.
+    public func learnt() async throws(RequestError) -> LearntLines {
+        try await call(HTTPRequest(.get, "/v0/memory/learnt"))
+    }
+
     /// `GET /v0/memory/pages?shelf=…`: the pages on a shelf.
     public func pages(on shelf: String) async throws(RequestError) -> PageList {
         try await call(HTTPRequest(.get, Self.path("/v0/memory/pages", ["shelf": shelf])))

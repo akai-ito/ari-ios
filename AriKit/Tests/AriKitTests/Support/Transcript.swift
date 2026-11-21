@@ -309,6 +309,8 @@ enum Route: Equatable {
     case memoryShelves
     case memoryPages
     case memoryRecent
+    case memoryChapters
+    case memoryLearnt
     case memoryPage
     case memoryChange(String)
     case models
@@ -402,6 +404,8 @@ enum Route: Equatable {
             case "shelves": self = .memoryShelves
             case "pages": self = .memoryPages
             case "recent": self = .memoryRecent
+            case "chapters": self = .memoryChapters
+            case "learnt": self = .memoryLearnt
             case "page": self = .memoryPage
             default: self = .other
             }
@@ -438,7 +442,8 @@ enum Route: Equatable {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability,
             .connectCapability,
             .memoryInMind,
-            .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
+            .memoryShelves, .memoryPages, .memoryRecent, .memoryChapters, .memoryLearnt,
+            .memoryPage, .memoryChange, .models,
             .chooseModel, .voices, .chooseVoice, .forgetVoiceprint, .speech,
             .callStream, .motions, .motion, .motionState:
             true

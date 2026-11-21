@@ -77,6 +77,37 @@ struct MemoryTests {
         #expect(await server.unanswered == 0)
     }
 
+    @Test("plays transcript 90: chapters in their own row, what Kumo learnt, a chapter's facts")
+    func chapters() async throws {
+        let transcript = try Fixtures.transcript("90-chapters-and-what-kumo-learnt")
+        let server = TranscriptServer(
+            transcript,
+            only: { [.memoryChapters, .memoryLearnt, .memoryPage, .memoryShelves].contains($0) })
+        let chapters = try await server.client.chapters().chapters
+        #expect(chapters.map(\.title) == ["Florence with Mira"])
+        #expect(chapters.first?.began == LocalTime("2026-11-04"))
+        #expect(chapters.first?.isGoing == false)
+        let learnt = try await server.client.learnt().lines
+        #expect(
+            learnt.map(\.text) == [
+                "You want an empty day in every trip now: the unplanned one tends to be the best.",
+                "Half marathons suit you more than 5Ks.",
+            ])
+        let page = try await server.client.page("memory:chapters/florence-with-mira")
+        #expect(
+            page.chapter
+                == ChapterFacts(
+                    began: LocalTime("2026-11-04")!, ended: LocalTime("2026-11-09"),
+                    noticed: LocalTime("2026-11-10"),
+                    drawnFrom: .init(journalDays: 2, photos: 0)))
+        #expect(page.links.map(\.title) == ["Mira", "5 November 2026", "6 November 2026"])
+        let shelves = try await server.client.shelves().shelves
+        #expect(!shelves.map(\.shelf).contains("chapters"))
+        let mismatches = await server.mismatches
+        #expect(mismatches.isEmpty, "\(mismatches)")
+        #expect(await server.unanswered == 0)
+    }
+
     @Test("names a link readably from its address alone")
     func plainNames() {
         #expect(PageAddress("memory:places/lisbon-trip").plainName == "Lisbon trip")
@@ -115,7 +146,10 @@ struct MemoryTests {
     }
 
     /// The Library's requests in the contract's transcripts, made through the real client.
-    @Test(arguments: ["35-ari-updates-what-it-knows", "36-forget-that"])
+    @Test(
+        arguments: [
+            "35-ari-updates-what-it-knows", "36-forget-that", "90-chapters-and-what-kumo-learnt",
+        ])
     func transcripts(_ name: String) async throws {
         let transcript = try Fixtures.transcript(name)
         let server = TranscriptServer(transcript, only: { $0.isOutsideSession })
@@ -128,6 +162,8 @@ struct MemoryTests {
             case .memoryInMind: _ = try await client.inMind()
             case .memoryShelves: _ = try await client.shelves()
             case .memoryRecent: _ = try await client.recentChanges()
+            case .memoryChapters: _ = try await client.chapters()
+            case .memoryLearnt: _ = try await client.learnt()
             case .memoryPages: _ = try await memory.pages(on: value("shelf"))
             case .memoryPage: _ = try? await memory.page(PageAddress(value("address")))
             case .memoryChange(let change): _ = try await memory.change(change)

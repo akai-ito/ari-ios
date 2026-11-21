@@ -103,6 +103,10 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(PageList.self)
                 case .memoryRecent:
                     _ = try body.decode(RecentChanges.self)
+                case .memoryChapters:
+                    _ = try body.decode(ChapterList.self)
+                case .memoryLearnt:
+                    _ = try body.decode(LearntLines.self)
                 case .memoryPage:
                     #expect(try !body.decode(MemoryPage.self).title.isEmpty, "\(place)")
                 case .memoryChange(let change):

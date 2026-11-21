@@ -14,8 +14,10 @@ public final class Memory {
 
     /// Portrait, Now and How to help you, in full.
     public private(set) var inMind: [MemoryPage] = []
-    /// What Ari changed lately, newest first, with its notes.
-    public private(set) var recent: [RecentChange] = []
+    /// The chapters of your life Kumo noticed, those still going first.
+    public private(set) var chapters: [Chapter] = []
+    /// What Kumo learnt about you lately, newest first.
+    public private(set) var learnt: [LearntLine] = []
     public private(set) var shelves: [Shelf] = []
     /// Each shelf's pages, most recently changed first, as of the last refresh.
     public private(set) var shelfPages: [String: [PageSummary]] = [:]
@@ -33,18 +35,22 @@ public final class Memory {
         self.client = client
     }
 
-    /// Asks for In mind, the recent changes and the shelves together.
+    /// Asks for In mind, the shelves, the chapters and what Kumo learnt together. Chapters or what
+    /// Kumo learnt that fail keep what they had, and leave the rest of the Library showing.
     public func refresh() async {
         async let mind = client.inMind()
-        async let changed = client.recentChanges()
         async let counts = client.shelves()
+        async let noticed = try? client.chapters()
+        async let learning = try? client.learnt()
         do {
-            (inMind, recent, shelves) = try await (mind.pages, changed.changes, counts.shelves)
+            (inMind, shelves) = try await (mind.pages, counts.shelves)
             load = .loaded
         } catch {
             if load != .loaded { load = .failed(RequestError(error)) }
             return
         }
+        if let noticed = await noticed { chapters = noticed.chapters }
+        if let learning = await learning { learnt = learning.lines }
         // Every shelf's pages, for a peek at what's on each. A shelf that fails keeps what it had.
         let client = client
         await withTaskGroup(of: (String, [PageSummary]?).self) { group in

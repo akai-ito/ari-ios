@@ -3,15 +3,21 @@ import QuickLook
 import SwiftUI
 
 /// A page's words with the photos it keeps standing where the story shows them. Tap a photo to
-/// see it full screen.
+/// see it full screen. A photo shown already, such as a chapter's cover, can be left out.
 struct PageStory: View {
     let page: MemoryPage
     let memory: Memory?
+    var leavingOut: String?
 
     @State private var looking: URL?
 
     var body: some View {
-        let pieces = ReplyDocument.pieces(of: page, reading: PageLink.reading(page))
+        let pieces = ReplyDocument.pieces(of: page, reading: PageLink.reading(page)).compactMap {
+            piece -> PagePiece? in
+            guard case .photos(let photos) = piece, let leavingOut else { return piece }
+            let kept = photos.filter { $0.photo.name != leavingOut }
+            return kept.isEmpty ? nil : .photos(kept)
+        }
         VStack(alignment: .leading, spacing: Rhythm.ariParagraphGap) {
             ForEach(pieces.indices, id: \.self) { index in
                 switch pieces[index] {
@@ -83,7 +89,8 @@ private struct PagePhotoGroup: View {
     }
 }
 
-/// A photo, once its bytes are here; a quiet tile until then, and its words if it won't come.
+/// A photo, once its bytes are here; a quiet tile until then, and its words if it won't come. It
+/// fills the tile it's given and is cropped to it, so a wide photo in a square never spills over.
 private struct PagePhotoImage: View {
     let photo: PagePhoto
     let memory: Memory?
@@ -92,29 +99,33 @@ private struct PagePhotoImage: View {
     @State private var failed = false
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(.ariSurface)
-            if let image {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFill()
-                    .transition(.opacity)
-            } else if failed {
-                Text(photo.alt)
-                    .font(.footnote)
-                    .foregroundStyle(.ariTertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(12)
+        Rectangle()
+            .fill(.ariSurface)
+            .overlay {
+                if let image {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                        .transition(.opacity)
+                } else if failed {
+                    Text(photo.alt)
+                        .font(.footnote)
+                        .foregroundStyle(.ariTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(12)
+                }
             }
-        }
-        .task(id: photo.photo.name) {
-            guard let memory else { return }
-            let loaded = await PagePhotoImages.image(for: photo.photo) { await memory.photo($0) }
-            withAnimation(.easeOut(duration: 0.2)) {
-                image = loaded
-                failed = loaded == nil
+            .clipped()
+            .task(id: photo.photo.name) {
+                guard let memory else { return }
+                let loaded = await PagePhotoImages.image(for: photo.photo) {
+                    await memory.photo($0)
+                }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    image = loaded
+                    failed = loaded == nil
+                }
             }
-        }
     }
 }
 

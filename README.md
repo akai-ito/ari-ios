@@ -93,9 +93,12 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   days, a map whose pins show their place, its places by kind (each with a page of its own, where
   you say whether it's an idea, in the plan or not for you), and travel; what Ari changed is behind
   a button at the top.
-- **What Kumo knows.** You shows Kumo's memory: In mind, shelves of pages (each with its glyph
-  in Ari's dots; people by circle), and the journal, all in the device's search. A photo you shared
-  stays where Kumo put it in the story; tap it to see it full screen. Settings › Memory
+- **What Kumo knows.** You shows Kumo's memory, read as a reflection: Now in a few lines, the
+  chapters of your life Kumo noticed (each a short story with its photos, what changed, its links
+  and where it came from; those still going ringed in dots), what Kumo learnt about you lately in
+  its own words, then the shelves of pages (each with its glyph in Ari's dots; people by circle),
+  and the journal, all in the device's search. A photo you shared stays where Kumo put it in the
+  story; tap it to see it full screen. Settings › Memory
   backs it up to GitHub: approve a code, install Ito Memory on just your private `ito-thread`, and
   your server pushes after each change; it says when that stops, and Disconnect keeps the
   repository.

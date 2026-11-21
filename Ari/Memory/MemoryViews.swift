@@ -36,6 +36,9 @@ struct LibraryView: View {
             .navigationDestination(for: ShelfRoute.self) { route in
                 ShelfView(memory: memory, shelf: route.shelf)
             }
+            .navigationDestination(for: ChaptersRoute.self) { _ in
+                ChapterListView(memory: memory)
+            }
         }
     }
 }
@@ -70,6 +73,14 @@ struct PageView: View {
     @State private var opened: PageAddress?
 
     var body: some View {
+        if let page, let facts = page.chapter {
+            ChapterView(page: page, facts: facts, memory: memory)
+        } else {
+            reading
+        }
+    }
+
+    private var reading: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let page {
