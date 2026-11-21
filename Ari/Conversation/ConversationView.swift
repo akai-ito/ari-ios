@@ -281,6 +281,13 @@ struct ConversationView: View {
         .onChange(of: liveStatus(revealing: revealing), initial: true) { _, next in
             header.show(status: next) { liveStatus(revealing: reveal.isRevealing) }
         }
+        // How long Kumo has been working, for the line once it goes quiet.
+        .onChange(of: workingClock, initial: true) { _, clock in
+            header.follow(clock)
+        }
+        .onChange(of: conversation.revision) { _, _ in
+            header.heard()
+        }
         .onChange(of: session.link, initial: true) { _, link in
             header.notice(link: link) { session.link }
         }
@@ -428,6 +435,16 @@ struct ConversationView: View {
         }
         if revealing { return .writing }
         return session.conversation.waitingAsk == nil ? .resting : .asking
+    }
+
+    /// The running turn while Kumo works on it by itself: not while it stops or waits on you.
+    var workingClock: HeaderState.Clock? {
+        let conversation = session.conversation
+        guard let turn = conversation.turn, conversation.pendingStop == nil,
+            conversation.waitingAsk == nil
+        else { return nil }
+        return HeaderState.Clock(
+            turn: turn.id, startedAt: turn.startedAt, keepsLabel: turn.status?.kind == .waiting)
     }
 
     func liveStatus(revealing: Bool) -> StatusText? {

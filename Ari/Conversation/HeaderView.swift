@@ -66,7 +66,10 @@ struct HeaderView: View {
             .buttonStyle(.plain)
             .disabled(openTopics == nil)
             .animation(.easeInOut(duration: 0.3), value: title)
-            StatusLine(status: status)
+            // A quiet turn's line gains how long it's been going, a tick at a time.
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                StatusLine(status: header.clocked(status, at: context.date))
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -87,8 +90,8 @@ struct HeaderView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            [name, title == name ? nil : title, status?.spoken].compactMap(\.self).joined(
-                separator: ", ")
+            [name, title == name ? nil : title, header.clocked(status, at: .now)?.spoken]
+                .compactMap(\.self).joined(separator: ", ")
         )
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(openTopics == nil ? "" : "Shows the topics")

@@ -83,12 +83,16 @@ public struct LiveTurn: Hashable, Sendable, Codable {
     public var read: [MessageID]
     /// Present when the turn is a new attempt at a failed one.
     public var retryOf: TurnID?
+    /// When it started, so Ari can say how long Kumo has been at it; absent when the server no
+    /// longer knows.
+    public var startedAt: Timestamp?
     /// The live status, if there is one yet.
     public var status: Status?
 
     enum CodingKeys: String, CodingKey {
         case id, inputs, read, status
         case retryOf = "retry_of"
+        case startedAt = "started_at"
     }
 }
 

@@ -1,3 +1,5 @@
+import Foundation
+
 /// The conversation as Ari shows it. All of it comes from the server: its events, applied in order,
 /// and its answers to what Ari asks. Ari changes it ahead of the server only for what you do (your
 /// message the moment you send it, Stop's freeze, and Try again), and the server then confirms each.
@@ -173,6 +175,9 @@ extension Conversation {
         public var retryOf: TurnID?
         /// What the agent is doing now, in plain words; `nil` until the first status.
         public var status: Status?
+        /// When it started, by the server's clock; `nil` from a snapshot that didn't say. No timer
+        /// ends a turn, so this is how Ari says how long Kumo has been working.
+        public var startedAt: Date?
     }
 
     /// How a turn ended.
@@ -281,7 +286,9 @@ extension Conversation {
 
         hasEarlierMessages = snapshot.hasMore
         turn = snapshot.turn.map {
-            Turn(id: $0.id, inputs: $0.inputs, retryOf: $0.retryOf, status: $0.status)
+            Turn(
+                id: $0.id, inputs: $0.inputs, retryOf: $0.retryOf, status: $0.status,
+                startedAt: $0.startedAt?.date)
         }
         for id in snapshot.turn?.read ?? [] { mark(id, .read) }
         for id in snapshot.next { mark(id, .next) }
@@ -350,7 +357,9 @@ extension Conversation {
     }
 
     private mutating func start(_ started: TurnStarted) {
-        turn = Turn(id: started.turn, inputs: started.inputs, retryOf: started.retryOf, status: nil)
+        turn = Turn(
+            id: started.turn, inputs: started.inputs, retryOf: started.retryOf, status: nil,
+            startedAt: started.at.date)
         lastEndedTurn = nil
         if pendingStop != started.turn { pendingStop = nil }
         // The turn answers its inputs now, so none of them waits as Next any more.
