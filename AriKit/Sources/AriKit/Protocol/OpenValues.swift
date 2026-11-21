@@ -55,7 +55,10 @@ public struct Outcome: OpenValue {
     public static let interrupted = Outcome(rawValue: "interrupted")
     /// It failed, with an error.
     public static let failed = Outcome(rawValue: "failed")
-    public static let known = [completed, stopped, interrupted, failed]
+    /// A message only: the agent took it back unfinished, such as a reply whose model stream dropped
+    /// and that it writes again from the start. Ari drops it from the conversation.
+    public static let discarded = Outcome(rawValue: "discarded")
+    public static let known = [completed, stopped, interrupted, failed, discarded]
 }
 
 /// What the agent is doing, coarsely, for animating its presence. For a kind Ari doesn't know, the

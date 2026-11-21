@@ -346,6 +346,15 @@ extension Conversation {
         guard let index = positions[ended.message],
             (0...entries[index].length).contains(ended.length)
         else { return false }
+        // Taken back whole: the agent writes it again from the start, so it leaves the conversation
+        // rather than standing as half a reply above the whole one.
+        if ended.outcome == .discarded {
+            positions[ended.message] = nil
+            entries.remove(at: index)
+            if index < serverCount { serverCount -= 1 }
+            reindex(from: index)
+            return true
+        }
         if ended.length < entries[index].length {
             entries[index].text = entries[index].text.prefix(utf16: ended.length)
             entries[index].length = entries[index].text.utf16.count

@@ -265,7 +265,7 @@ struct ConversationTranscriptTests {
     }
 
     @Test(
-        "Scenario 85: a quiet turn keeps running from when it started, says when it's reconnecting, and ends when you stop it"
+        "Scenario 85: a quiet turn keeps running from when it started, drops a half reply when the stream does, and ends when you stop it"
     )
     func longQuietStretch() throws {
         var replay = Replay(try Fixtures.transcript("85-a-long-quiet-stretch"))
@@ -273,16 +273,23 @@ struct ConversationTranscriptTests {
         try replay.play(throughLine: 24, expecting: "message.ended e_0019_27413")
         #expect(replay.conversation.turn?.startedAt == started)
         let quietSince = try #require(Timestamp("2026-10-12T08:41:04.040Z")).date
-
         // Four minutes with nothing new: no timer ended it, and Ari can say how long it's been.
-        try replay.play(throughLine: 25, expecting: "turn.status e_0020_04972")
-        #expect(
-            replay.conversation.turn?.status
-                == Status(kind: .waiting, label: "Reconnecting to the model", detail: nil))
         #expect(
             StillWorking.elapsed(
                 since: started, lastHeard: quietSince, at: quietSince.addingTimeInterval(240))
                 == "4 min")
+
+        // A reply begins, then the stream drops: the half reply leaves the conversation whole.
+        let half: MessageID = "m_0003_93533"
+        try replay.play(throughLine: 29, expecting: "message.delta e_0024_42596")
+        #expect(replay.conversation[half] != nil)
+        let before = replay.conversation.entries.map(\.id)
+        try replay.play(throughLine: 31, expecting: "turn.status e_0026_63409")
+        #expect(replay.conversation[half] == nil)
+        #expect(replay.conversation.entries.map(\.id) == before.filter { $0 != half })
+        #expect(
+            replay.conversation.turn?.status
+                == Status(kind: .waiting, label: "Reconnecting to the model", detail: nil))
 
         try replay.play()
         #expect(replay.conversation.turn == nil)
@@ -499,6 +506,9 @@ extension ConversationTranscriptTests {
                     if let id = json["message"]?.string, let text = json["text"]?.string {
                         seen[id]?.text += Array(text.utf16)
                     }
+                case "message.ended" where json["outcome"]?.string == "discarded":
+                    // Taken back whole, so it leaves the conversation.
+                    if let id = json["message"]?.string { seen[id] = nil }
                 case "message.ended":
                     if let id = json["message"]?.string {
                         seen[id]?.outcome = json["outcome"]?.string
