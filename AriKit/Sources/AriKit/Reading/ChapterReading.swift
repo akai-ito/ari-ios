@@ -40,8 +40,7 @@ public enum ChapterReading {
         } else {
             let sameYear = calendar.isDate(start, equalTo: end, toGranularity: .year)
             let first = start.formatted(
-                .dateTime.day().month(.wide).year(sameYear ? .omitted : .defaultDigits)
-                    .locale(calendar.locale ?? .current))
+                style(calendar).day().month(.wide).year(sameYear ? .omitted : .defaultDigits))
             dates = "\(first) – \(day(ended, short: false, now: now, calendar: calendar))"
         }
         return "\(dates) · \(length(from: began, to: ended, calendar: calendar))"
@@ -134,12 +133,10 @@ public enum ChapterReading {
                 [.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)
             ).day ?? 0
         if days == 1 { return "Yesterday" }
-        let locale = calendar.locale ?? .current
-        if (2..<7).contains(days) { return date.formatted(.dateTime.weekday(.wide).locale(locale)) }
+        if (2..<7).contains(days) { return date.formatted(style(calendar).weekday(.wide)) }
         let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
         return date.formatted(
-            .dateTime.day().month(.abbreviated).year(sameYear ? .omitted : .defaultDigits).locale(
-                locale))
+            style(calendar).day().month(.abbreviated).year(sameYear ? .omitted : .defaultDigits))
     }
 
     /// How fresh a page is, for Now's card: "this morning", "this afternoon", "this evening",
@@ -161,6 +158,12 @@ public enum ChapterReading {
 
     // MARK: - Words
 
+    /// Dates as `calendar` reads them: its locale and its time zone, so a day is never a day off.
+    private static func style(_ calendar: Calendar) -> Date.FormatStyle {
+        Date.FormatStyle(
+            locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone)
+    }
+
     private static let numbers = [
         "no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
         "eleven", "twelve",
@@ -176,8 +179,8 @@ public enum ChapterReading {
         let date = day.date(in: calendar)
         let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
         return date.formatted(
-            .dateTime.day().month(short ? .abbreviated : .wide)
-                .year(sameYear ? .omitted : .defaultDigits).locale(calendar.locale ?? .current))
+            style(calendar).day().month(short ? .abbreviated : .wide)
+                .year(sameYear ? .omitted : .defaultDigits))
     }
 
     private static func month(_ date: Date, now: Date, calendar: Calendar, withYear: Bool = true)
@@ -185,8 +188,7 @@ public enum ChapterReading {
     {
         let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
         return date.formatted(
-            .dateTime.month(.wide).year(sameYear || !withYear ? .omitted : .defaultDigits)
-                .locale(calendar.locale ?? .current))
+            style(calendar).month(.wide).year(sameYear || !withYear ? .omitted : .defaultDigits))
     }
 
     private static func shortSpan(
