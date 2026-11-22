@@ -331,6 +331,9 @@ enum Route: Equatable {
     case changeThread(ThreadID)
     case seeThread(ThreadID)
     case moveMessage(MessageID)
+    case madePages
+    case madePage(MadeID)
+    case madeState(MadeID)
     case other
 
     init(method: String, path: String) {
@@ -444,6 +447,11 @@ enum Route: Equatable {
             self = .motion(MotionID(parts[2]))
         case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "motion" && parts[3] == "state":
             self = .motionState(MotionID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "made"]: self = .madePages
+        case ("GET", 3) where parts[0] == "v0" && parts[1] == "made":
+            self = .madePage(MadeID(parts[2]))
+        case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "made" && parts[3] == "state":
+            self = .madeState(MadeID(parts[2]))
         default: self = .other
         }
     }
@@ -459,7 +467,7 @@ enum Route: Equatable {
             .memoryShelves, .memoryPages, .memoryRecent, .memoryChapters, .memoryLearnt,
             .memoryPage, .memoryChange, .models,
             .chooseModel, .voices, .chooseVoice, .forgetVoiceprint, .speech,
-            .callStream, .motions, .motion, .motionState:
+            .callStream, .motions, .motion, .motionState, .madePages, .madePage, .madeState:
             true
         default: false
         }

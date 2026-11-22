@@ -39,6 +39,7 @@ struct LibraryView: View {
             .navigationDestination(for: ChaptersRoute.self) { _ in
                 ChapterListView(memory: memory)
             }
+            .navigationDestination(for: MadeShelfRoute.self) { _ in MadeShelfView() }
         }
     }
 }

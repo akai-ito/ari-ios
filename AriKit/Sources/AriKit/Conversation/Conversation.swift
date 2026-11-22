@@ -292,6 +292,9 @@ extension Conversation {
         // In motion follows these, not the conversation.
         case .motionStarted, .motionChanged, .motionFinished, .motionState, .motionRemoved:
             break
+        // So do the pages Kumo made.
+        case .madeCreated, .madeChanged, .madeState, .madeRemoved:
+            break
         // The Desk, getting started and the server's problems are the session's.
         case .deskChanged, .onboardingChanged, .problemsChanged:
             break

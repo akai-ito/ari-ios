@@ -412,6 +412,30 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return answer.state
     }
 
+    // MARK: - Made
+
+    /// `GET /v0/made`: the Made shelf, most recently changed first.
+    public func madePages() async throws(RequestError) -> MadeList {
+        try await call(HTTPRequest(.get, "/v0/made"))
+    }
+
+    /// `GET /v0/made/{id}`: one page, with its content, your ticks and what changed.
+    public func madePage(_ id: MadeID) async throws(RequestError) -> MadeDetail {
+        try await call(HTTPRequest(.get, "/v0/made/\(Self.segment(id.rawValue))"))
+    }
+
+    /// `PATCH /v0/made/{id}/state`: ticks an item off at a time, or takes the tick back with
+    /// `nil`. Every device hears it as `made.state`. The answer is all of the page's ticks.
+    public func tick(_ made: MadeID, item: String, at time: Timestamp?)
+        async throws(RequestError) -> MadeState
+    {
+        let answer: MadeStateBody = try await call(
+            HTTPRequest(
+                .patch, "/v0/made/\(Self.segment(made.rawValue))/state",
+                body: try Self.json(MadeTickPatch(item: item, at: time))))
+        return answer.state
+    }
+
     // MARK: - Talk
 
     /// `PUT /v0/calls/{call}`: start a call under the id Ari chose, so starting it again is safe.
@@ -679,6 +703,30 @@ public enum RequestError: Error, Equatable, Sendable {
     /// The server's reason, in its own words, if it gave one.
     public var serverError: ServerError? {
         if case .refused(_, let error, _) = self { error } else { nil }
+    }
+}
+
+/// One tick on a made page, or `null` to take it back.
+private struct MadeTickPatch: Encodable {
+    let item: String
+    let at: Timestamp?
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        var ticks = c.nestedContainer(keyedBy: Key.self, forKey: Key("ticks"))
+        if let at {
+            try ticks.encode(at, forKey: Key(item))
+        } else {
+            try ticks.encodeNil(forKey: Key(item))
+        }
+    }
+
+    private struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(_ string: String) { stringValue = string }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
     }
 }
 

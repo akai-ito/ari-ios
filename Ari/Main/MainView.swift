@@ -16,6 +16,13 @@ struct MainView: View {
     @State private var memory: Memory?
     /// What's in motion, for its tab, the pinned line and compact lines in the chat.
     @State private var motions: Motions?
+    /// The pages Kumo made, for their cards in the chat and the Made shelf.
+    @State private var made: MadePages?
+    #if DEBUG
+        /// A page or a name's card `ARI_MADE` or `ARI_NAME` opens.
+        @State private var debugMade: MadeID?
+        @State private var debugName: NameLink?
+    #endif
     /// Calls with Ari, registered with iOS.
     @State private var talk: Talk?
     /// Ari's voice on the server, and whether it can talk.
@@ -53,7 +60,19 @@ struct MainView: View {
         .environment(memory)
         .environment(\.hidesYou, youTab.isHidden)
         .environment(motions)
+        .environment(made)
+        // A Desk item in the chat is the Desk's own card, as it is now.
+        .environment(
+            \.deskItems,
+            DeskItems(
+                card: { id in
+                    guard let desk = session.desk else { return .loading }
+                    return desk.waiting.first { $0.id == id }.map { .waiting($0) } ?? .settled
+                },
+                answer: { try await session.answer($0, $1) })
+        )
         .environment(\.attachmentBytes) { await session.bytes(of: $0) }
+        .environment(\.askKumo) { session.send($0) }
         // "What changed" goes back to where in the chat it happened.
         .environment(\.openInChat) { model.openingPosition = $0 }
         .task {
@@ -64,6 +83,29 @@ struct MainView: View {
             }
             await motions?.refresh()
         }
+        .task {
+            if made == nil, let client = model.client() {
+                let pages = MadePages(client: client)
+                session.made = pages
+                made = pages
+            }
+            await made?.refresh()
+            #if DEBUG
+                debugMade = DebugScript.made
+                debugName = DebugScript.name
+            #endif
+        }
+        #if DEBUG
+            .fullScreenCover(item: $debugMade) {
+                MadePageView(id: $0).environment(made)
+                .environment(\.attachmentBytes) { await session.bytes(of: $0) }
+            }
+            .sheet(item: $debugName) { name in
+                NameCardContent(name: name).padding(20).presentationDetents([.medium])
+                .presentationBackground(Color.ariSurface)
+                .environment(made).environment(motions).environment(memory)
+            }
+        #endif
         // Initial too: a notification tapped as Ari launches can set these before this view is up.
         .onChange(of: model.openingPosition, initial: true) { _, position in
             if position != nil { place = .chat }

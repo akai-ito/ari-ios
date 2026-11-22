@@ -47,9 +47,14 @@ memory pages, in the iOS Simulator.</sub></p>
   conversation on the server, so talking in one never steers another aside. Kumo starts one for a
   one-off, a new subject or long work; replying to any message starts one under it. A resting thread
   is one quiet line in the chat, and Threads by day lists them, open ones first.
-- **Replies shaped by what they are.** Where Markdown can't, Kumo writes an `ari:` block the app
-  draws: a place on Apple's map, short answers to tap, pictures it found, or a line that opens a
-  thing in motion.
+- **Replies that show.** Where Markdown can't, Kumo writes an `ari:` block the app draws: a table
+  that fits a phone with a verdict chip on each row, its picks with pictures, the number that
+  matters, short answers to tap, pictures it found, or a line that opens a thing in motion. What you
+  can act on comes as a card: a place with Directions, an event with Add, a Desk card exactly as the
+  Desk has it, and a person. A name Kumo keeps is dotted; tap it for a small card about them.
+- **Pages Kumo made.** A rich answer worth keeping, such as a gallery guide, comes as a card that
+  opens a page with sections that fold and things to tick off, kept current by Kumo. Share sends it
+  as clean text, and every page is on the Library's Made shelf.
 - **In motion.** What you're actually doing, kept current as you talk, pinned above the composer and
   in its own tab, in six sections that never move: Career, Body, Trips, Projects, Learning and
   Other. The loudest thing in a section is big and the quiet ones fold away. A role shows its

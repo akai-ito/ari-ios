@@ -139,7 +139,8 @@ struct DraftCardView: View {
         }
     }
 
-    /// The options the card carries, such as Drop it: quiet, since sending is the way on.
+    /// The options the card carries, such as Drop it: quieter than Open in Mail, since sending is
+    /// the way on, but outlined, so it reads as a button. Bare grey words went unseen.
     private var options: some View {
         ForEach(card.options, id: \.label) { option in
             Button {
@@ -155,9 +156,10 @@ struct DraftCardView: View {
                             ProgressView().controlSize(.small).tint(.ariSecondary)
                         }
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Capsule().strokeBorder(Color.ariLine.opacity(0.7), lineWidth: 1))
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityHint("Asks first, then deletes it from your Drafts")
@@ -240,12 +242,14 @@ struct DraftCardView: View {
 #endif
 
 extension DraftCard {
-    /// The words as they read in Mail: bold, italics and links drawn, line breaks kept. Words that
-    /// aren't valid Markdown show as they are.
+    /// The words as they read in Mail: bold, italics and links drawn, line breaks kept, and no
+    /// Markdown marks left (a picture is listed under the words, a list's items get bullets).
+    /// Words that aren't valid Markdown show as they are.
     var formattedBody: AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: body, options: options)) ?? AttributedString(body)
+        return (try? AttributedString(markdown: readableBody, options: options))
+            ?? AttributedString(readableBody)
     }
 
     /// The words without their formatting, for previews and VoiceOver.

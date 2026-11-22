@@ -67,9 +67,11 @@ struct ReplyView: View {
             if run.style.contains(.strikethrough) { attributes.strikethroughStyle = .single }
             if let link = run.link {
                 attributes.link = link
-                // Another page of memory is a quiet dotted line; the web, a full one.
+                // Another page of memory, or a name Kumo keeps, is a quiet dotted line; the web, a
+                // full one.
                 attributes.underlineStyle =
-                    link.scheme == PageLink.scheme ? Text.LineStyle(pattern: .dot) : .single
+                    link.scheme == PageLink.scheme || NameLink.isName(link)
+                    ? Text.LineStyle(pattern: .dot) : .single
             }
             let fullyShown =
                 position == .infinity || Double(run.start + run.text.utf16.count) + edge <= position
@@ -121,6 +123,19 @@ private struct BlockView: View {
     var shape: ReplyShape??
 
     var body: some View {
+        if hasNames {
+            framed.opensNames()
+        } else {
+            framed
+        }
+    }
+
+    /// Whether a name Kumo keeps is linked here, to open its card when tapped.
+    private var hasNames: Bool {
+        block.runs.contains { run in run.link.map(NameLink.isName) ?? false }
+    }
+
+    private var framed: some View {
         content
             .padding(.leading, CGFloat(max(0, block.depth - 1)) * 18)
             .padding(.leading, block.quoted ? 14 : 0)
