@@ -20,7 +20,7 @@ struct HistoryView: View {
                             ForEach(month.items) { motion in
                                 row(motion)
                                 if motion.id != month.items.last?.id {
-                                    Hairline().padding(.leading, 62)
+                                    Hairline().padding(.leading, 14)
                                 }
                             }
                         }
@@ -69,29 +69,28 @@ struct HistoryView: View {
         return Button {
             opener.open?(motion.id, source)
         } label: {
-            HStack(alignment: .top, spacing: 12) {
-                HalftoneArt(
-                    art: motion.section, side: 36, across: 20, faded: motion.outcome != .achieved)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(motion.title).font(.headline).foregroundStyle(.ariText).lineLimit(1)
-                        Spacer(minLength: 6)
-                        Text(
-                            InMotionReading.endedAt(motion),
-                            format: .dateTime.day().month(.abbreviated)
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.ariTertiary)
-                    }
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        OutcomeLabel(outcome: motion.outcome, plain: true)
-                        Text(motion.summary)
-                            .font(.footnote)
-                            .foregroundStyle(.ariSecondary)
-                            .lineLimit(2)
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(motion.title).font(.headline).foregroundStyle(.ariText).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text(
+                        "\(motion.section.kicker) · "
+                            + InMotionReading.endedAt(motion).formatted(
+                                .dateTime.day().month(.abbreviated))
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.ariTertiary)
+                    .fixedSize()
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    OutcomeLabel(outcome: motion.outcome, plain: true)
+                    Text(motion.summary)
+                        .font(.footnote)
+                        .foregroundStyle(.ariSecondary)
+                        .lineLimit(2)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
@@ -115,9 +114,7 @@ struct StoryView: View {
 
     var body: some View {
         MotionPage {
-            MotionPageHead(
-                art: motion.section, kicker: kicker, title: motion.title,
-                faded: motion.outcome != .achieved)
+            MotionPageHead(kicker: kicker, title: motion.title)
             OutcomeLabel(outcome: motion.outcome, large: true).padding(.top, 12)
             KumoLine(motion.summary).padding(.top, 14)
 
@@ -223,8 +220,14 @@ struct StoryView: View {
         } label: {
             MotionCard(padding: 14) {
                 HStack(spacing: 12) {
-                    HalftoneArt(art: other?.section ?? .other, side: 40, across: 22)
                     VStack(alignment: .leading, spacing: 2) {
+                        if let other {
+                            Text(other.section.kicker)
+                                .font(.caption.weight(.semibold))
+                                .kerning(0.8)
+                                .textCase(.uppercase)
+                                .foregroundStyle(.ariTertiary)
+                        }
                         Text(other?.title ?? line ?? id.rawValue).font(.headline).foregroundStyle(
                             .ariText)
                         if let summary = other?.summary ?? (other == nil ? nil : line) {

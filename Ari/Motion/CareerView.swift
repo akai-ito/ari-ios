@@ -12,7 +12,6 @@ struct CareerView: View {
     var body: some View {
         MotionPage {
             MotionPageHead(
-                art: .career,
                 kicker: "Career · \(career.stage.rawValue)",
                 title: career.org,
                 subtitle: [career.role, career.where].compactMap(\.self).joined(separator: " · "))

@@ -21,28 +21,15 @@ struct MotionPage<Content: View>: View {
     }
 }
 
-/// A page's head: its art, the kind and when in small caps, the title in the serif, and a line
-/// under it.
+/// A page's head: the kind and when in small caps, the title in the serif, and the accent's
+/// hairline under it. Type only; the page's pipelines, weeks and charts are its pictures.
 struct MotionPageHead: View {
-    let art: MotionSection
     let kicker: String
     let title: String
     var subtitle: String?
-    /// For something ended: dusk instead of bone.
-    var faded = false
-    /// A symbol to print instead of the section's art, such as a run within Body.
-    var symbol: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Group {
-                if let symbol {
-                    SymbolHalftone(symbol: symbol)
-                } else {
-                    HalftoneArt(art: art, side: 64, across: 28, faded: faded)
-                }
-            }
-            .padding(.bottom, 8)
             Text(kicker)
                 .font(.caption.weight(.semibold))
                 .kerning(0.8)
@@ -53,8 +40,24 @@ struct MotionPageHead: View {
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle).font(.subheadline).foregroundStyle(.ariSecondary)
             }
+            AccentRule().padding(.top, 10)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// The accent's hairline under a serif title: a section of In motion, or a page's head.
+struct AccentRule: View {
+    /// For an empty section: fainter still.
+    var quiet = false
+
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.ariBone.opacity(quiet ? 0.12 : 0.28))
+            .frame(height: 1 / displayScale)
+            .accessibilityHidden(true)
     }
 }
 
@@ -508,12 +511,40 @@ struct MiniLine: View {
 }
 
 extension MotionSection {
-    /// The art's section, as a page's kicker says it: "Career", "Body", "Trip"…
+    /// The section, as a page's kicker says it: "Career", "Body", "Trip"…
     var kicker: String {
         switch self {
         case .trips: "Trip"
         case .projects: "Project"
         default: name
         }
+    }
+}
+
+/// An area filled with an even grid of small dots: something planned, not yet done. Done things
+/// are solid; plans are printed in dots.
+struct DotFill: View {
+    var step: CGFloat = 3.4
+    var size: CGFloat = 0.3
+    var color: Color = .ariBone
+
+    var body: some View {
+        Canvas { context, canvas in
+            var dots = Path()
+            var y = step / 2
+            var row = 0
+            while y < canvas.height + step {
+                var x = step / 2 + (row.isMultiple(of: 2) ? 0 : step / 2)
+                while x < canvas.width + step {
+                    let r = step * size
+                    dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
+                    x += step
+                }
+                y += step * 0.866
+                row += 1
+            }
+            context.fill(dots, with: .color(color))
+        }
+        .accessibilityHidden(true)
     }
 }
