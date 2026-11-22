@@ -72,7 +72,7 @@ public final class Session {
     /// The longest message the server takes, in characters.
     public static let maximumLength = 32_000
 
-    @ObservationIgnored private let client: ItoClient
+    @ObservationIgnored let client: ItoClient
     @ObservationIgnored private let outbox: OutboxStore
     @ObservationIgnored private let network: any NetworkPath
     @ObservationIgnored private let ticker: Ticker
@@ -99,6 +99,18 @@ public final class Session {
         /// The server refused it, such as for being too large; its message says why.
         case refused(RequestError)
     }
+
+    /// The recordings you sent, by attachment, as the server last said: for their cards.
+    public internal(set) var recordings: [AttachmentID: Recording] = [:]
+    /// Ari's big uploads: a message naming one waits for it, even across a restart, and is handed
+    /// to them too, so it goes once the upload finishes even with Ari in the background.
+    @ObservationIgnored public weak var bigUploads: BigUploads?
+    /// Big uploads as the conversation shows them before the server has them.
+    @ObservationIgnored private var bigAttachments: [AttachmentID: Attachment] = [:]
+    /// Files Kumo showed, once fetched: a card scrolling back into view draws at once.
+    @ObservationIgnored var shownFiles: [FileID: ShownFile] = [:]
+    /// What the server takes, once asked.
+    @ObservationIgnored var uploadList: UploadList?
     @ObservationIgnored private var isOnline = true
     @ObservationIgnored private var wantsSnapshot = false
     @ObservationIgnored private var lastHeard: Duration = .zero
@@ -157,6 +169,9 @@ public final class Session {
         if lanes.isEmpty {
             let waiting = (try? outbox.load()) ?? []
             let named = Set(waiting.flatMap { $0.attachments ?? [] })
+            for upload in bigUploads?.store.all() ?? [] where named.contains(upload.id) {
+                bigUploadChanged(upload)
+            }
             for attachment in outbox.attachments() where uploads[attachment.id] == nil {
                 // A draft doesn't survive a restart, so what no waiting message names goes.
                 guard named.contains(attachment.id) else {
@@ -169,7 +184,7 @@ public final class Session {
             for message in waiting where !queue.contains(message) {
                 // Photos already uploaded show once the server accepts the message.
                 let waiting = (message.attachments ?? []).compactMap { id in
-                    uploadQueue.first { $0.id == id }?.attachment
+                    uploadQueue.first { $0.id == id }?.attachment ?? bigAttachments[id]
                 }
                 conversation.send(message.id, text: message.text, attachments: waiting)
                 queue.append(message)
@@ -234,6 +249,9 @@ public final class Session {
         else { return nil }
         let message = SendMessage(id: id, text: text, attachments: attachments, done: done)
         conversation.send(id, text: text, attachments: attachments.compactMap(attachment))
+        for big in attachments where bigAttachments[big] != nil {
+            bigUploads?.send(message, after: big)
+        }
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
@@ -243,7 +261,22 @@ public final class Session {
     /// An attachment as the conversation shows it, once uploaded or while it waits to be.
     private func attachment(_ id: AttachmentID) -> Attachment? {
         if case .uploaded(let uploaded) = uploads[id] { return uploaded }
-        return uploadQueue.first { $0.id == id }?.attachment
+        return uploadQueue.first { $0.id == id }?.attachment ?? bigAttachments[id]
+    }
+
+    /// A big upload moved on: a message naming it goes once it's an attachment, and can't once the
+    /// server refused it. Its progress is ``BigUploads``'s to show.
+    public func bigUploadChanged(_ upload: BigUpload) {
+        bigAttachments[upload.id] = upload.attachment
+        let now: Upload =
+            switch upload.state {
+            case .sending: .uploading
+            case .finished(let attachment): .uploaded(attachment)
+            case .refused(let error): .refused(.refused(status: 400, error: error, retryAfter: nil))
+            }
+        guard uploads[upload.id] != now else { return }
+        uploads[upload.id] = now
+        wake(.upload)
     }
 
     /// You attached a photo or file: it starts uploading at once, while you write, saved on the
@@ -260,6 +293,9 @@ public final class Session {
     /// You removed an attachment before sending. It may already be on the server, unused; the
     /// server forgets unused uploads after a day.
     public func detach(_ attachment: AttachmentID) {
+        if bigAttachments.removeValue(forKey: attachment) != nil, let bigUploads {
+            Task { await bigUploads.cancel(attachment) }
+        }
         uploadQueue.removeAll { $0.id == attachment }
         uploads[attachment] = nil
         outbox.removeAttachment(attachment)
@@ -618,10 +654,14 @@ public final class Session {
             onboarding = snapshot.onboarding
             problems = snapshot.problems ?? []
             wantsSnapshot = false
+            // Recordings' changes are compacted, so a snapshot means asking again.
+            refreshRecordings()
         case .problemsChanged(let changed):
             problems = changed.problems
         case .deskChanged(let changed):
             desk = changed.desk
+        case .recordingChanged(let changed):
+            recordings[changed.recording.attachment] = changed.recording
         case .onboardingChanged(let changed):
             onboarding = changed.onboarding
         case .voiceStatus(let status):

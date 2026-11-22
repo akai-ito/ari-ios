@@ -9,6 +9,8 @@ public enum ReplyShape: Sendable, Equatable {
     case choices(Choices)
     case images(Images)
     case motion(MotionLine)
+    case file(FileCard)
+    case proposals(Proposals)
 
     /// Reads a fenced block's language and text; `nil` if it isn't a shape this Ari knows, or its
     /// JSON doesn't read.
@@ -24,6 +26,8 @@ public enum ReplyShape: Sendable, Equatable {
             case "choices": self = .choices(try decoder.decode(Choices.self, from: data))
             case "images": self = .images(try decoder.decode(Images.self, from: data))
             case "motion": self = .motion(try decoder.decode(MotionLine.self, from: data))
+            case "file": self = .file(try decoder.decode(FileCard.self, from: data))
+            case "proposals": self = .proposals(try decoder.decode(Proposals.self, from: data))
             default: return nil
             }
         } catch {
@@ -56,6 +60,31 @@ public enum ReplyShape: Sendable, Equatable {
     /// Pictures Ari found on the web, kept on the server as attachments. Never generated.
     public struct Images: Sendable, Equatable, Decodable {
         public let images: [Photo]
+    }
+
+    /// A file Ari made or changed, such as a PDF, at one version: a card that opens its pages.
+    public struct FileCard: Sendable, Equatable, Decodable {
+        public let file: FileID
+        public let version: Int
+    }
+
+    /// Changes Ari proposes and hasn't made, each its own row with Skip and its own verb. Nothing
+    /// happens until you tap one; a tap sends your message with an ``YourTap/decision(_:)``.
+    public struct Proposals: Sendable, Equatable, Decodable {
+        public let title: String?
+        public let items: [Item]
+
+        public struct Item: Sendable, Equatable, Decodable, Identifiable {
+            public let id: String
+            /// `calendar`, `draft`, `memory`, `desk`, `motion`, `wakeup` or `other`, for its symbol.
+            public let kind: String?
+            public let title: String
+            public let detail: String?
+            /// Its button, such as "Add" or "Draft it".
+            public let verb: String
+            /// What it says once accepted, such as "Added to your calendar".
+            public let done: String
+        }
     }
 }
 

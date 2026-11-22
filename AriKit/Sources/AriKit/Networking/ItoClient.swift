@@ -479,9 +479,9 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return stream
     }
 
-    // MARK: - Plumbing
+    // MARK: - Plumbing, which the routes in other files share
 
-    private func call<Answer: Decodable>(
+    func call<Answer: Decodable>(
         _ request: HTTPRequest, authorized: Bool = true, contentType: String = "application/json"
     ) async throws(RequestError) -> Answer {
         var request = authorized ? authorize(request) : request
@@ -502,7 +502,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// A request whose answer is bytes, not JSON.
-    private func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
+    func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
         var request = authorize(request)
         if request.body != nil { request.headers["Content-Type"] = "application/json" }
         let response: HTTPResponse
@@ -517,7 +517,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// A command whose answer has no body, such as a 204.
-    private func callWithoutAnswer(_ request: HTTPRequest) async throws(RequestError) {
+    func callWithoutAnswer(_ request: HTTPRequest) async throws(RequestError) {
         var request = authorize(request)
         if request.body != nil { request.headers["Content-Type"] = "application/json" }
         let response: HTTPResponse
@@ -530,21 +530,21 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         guard (200..<300).contains(response.status) else { throw Self.refusal(response) }
     }
 
-    private func authorize(_ request: HTTPRequest) -> HTTPRequest {
+    func authorize(_ request: HTTPRequest) -> HTTPRequest {
         var request = request
         if let token { request.headers["Authorization"] = "Bearer \(token.secret)" }
         return request
     }
 
     /// Every answer carries `Ito-Protocol`. Until 1.0 the minor version must match exactly.
-    private static func checkVersion(_ headers: [String: String]) throws(RequestError) {
+    static func checkVersion(_ headers: [String: String]) throws(RequestError) {
         guard let header = headers["ito-protocol"], let version = ProtocolVersion(header),
             version != .supported
         else { return }
         throw .protocolMismatch(server: version)
     }
 
-    private static func refusal(_ response: HTTPResponse) -> RequestError {
+    static func refusal(_ response: HTTPResponse) -> RequestError {
         let error = try? JSONDecoder().decode(ErrorResult.self, from: response.body).error
         let retryAfter = response.headers["retry-after"].flatMap(Double.init).map {
             Duration.milliseconds(Int(($0 * 1000).rounded()))
@@ -552,7 +552,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return .refused(status: response.status, error: error, retryAfter: retryAfter)
     }
 
-    private static func json(_ value: some Encodable) throws(RequestError) -> Data {
+    static func json(_ value: some Encodable) throws(RequestError) -> Data {
         do {
             return try JSONEncoder().encode(value)
         } catch {
@@ -561,7 +561,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// A path with a query, its values percent-encoded (a `+` too, which servers read as a space).
-    private static func path(_ path: String, _ query: [String: String]) -> String {
+    static func path(_ path: String, _ query: [String: String]) -> String {
         var components = URLComponents()
         components.path = path
         components.queryItems = query.sorted { $0.key < $1.key }.map {
@@ -571,7 +571,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return path + (encoded.map { "?" + $0 } ?? "")
     }
 
-    private static func segment(_ id: String) -> String {
+    static func segment(_ id: String) -> String {
         id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? id
     }
 }
