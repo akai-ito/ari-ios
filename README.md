@@ -43,6 +43,10 @@ memory pages, in the iOS Simulator.</sub></p>
 - **Chat.** One conversation, streamed at a reading pace. Between your message and Kumo's answer,
   its trail shows what it did in plain words; tap a step for the specifics. Stop works at once.
   When Kumo needs your go-ahead or an answer, it asks on the trail and waits.
+- **Side threads.** A subject of its own goes in a thread beside the main chat, with its own
+  conversation on the server, so talking in one never steers another aside. Kumo starts one for a
+  one-off, a new subject or long work; replying to any message starts one under it. A resting thread
+  is one quiet line in the chat, and Threads by day lists them, open ones first.
 - **Replies shaped by what they are.** Where Markdown can't, Kumo writes an `ari:` block the app
   draws: a place on Apple's map, short answers to tap, pictures it found, or a line that opens a
   thing in motion.

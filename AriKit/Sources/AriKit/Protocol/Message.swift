@@ -33,6 +33,10 @@ public struct Message: Hashable, Sendable, Codable {
     /// Kumo's posts only: it couldn't wait, so its notification was time-sensitive and broke
     /// through your Focus.
     public var urgent: Bool?
+    /// The side thread it's in; absent in the main chat.
+    public var thread: ThreadID?
+    /// Your messages only: inside a thread, the message you replied to.
+    public var quotes: Quote?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -53,7 +57,7 @@ public struct Message: Hashable, Sendable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, role, kind, turn, text, at, position, outcome, error, answers, attachments,
-            spoken, done, urgent
+            spoken, done, urgent, thread, quotes
         case endedAt = "ended_at"
     }
 }
@@ -88,9 +92,11 @@ public struct LiveTurn: Hashable, Sendable, Codable {
     public var startedAt: Timestamp?
     /// The live status, if there is one yet.
     public var status: Status?
+    /// The side thread it answers in; absent for the main chat.
+    public var thread: ThreadID?
 
     enum CodingKeys: String, CodingKey {
-        case id, inputs, read, status
+        case id, inputs, read, status, thread
         case retryOf = "retry_of"
         case startedAt = "started_at"
     }

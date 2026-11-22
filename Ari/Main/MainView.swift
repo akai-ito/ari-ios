@@ -33,26 +33,13 @@ struct MainView: View {
                 DeskScreen(session: session, model: model)
             }
             Tab("Chat", systemImage: "bubble.left", value: .chat) {
-                ConversationView(
-                    session: session, connectAgain: model.connectAgain,
-                    opening: Binding(get: { model.opening }, set: { model.opening = $0 }),
-                    openingPosition: Binding(
-                        get: { model.openingPosition }, set: { model.openingPosition = $0 }),
-                    offersNotifications: model.offersNotifications,
-                    answerOffer: { yes in
-                        if yes {
-                            Task { await model.turnOnNotifications() }
-                        } else {
-                            model.declineNotifications()
-                        }
+                chat
+                    // The composer sits at the bottom of the conversation, just above the tab bar.
+                    .overlay(alignment: .topTrailing) {
+                        SettingsButton { showsSettings = true }
+                            .padding(.trailing, 16)
+                            .padding(.top, 2)
                     }
-                )
-                // The composer sits at the bottom of the conversation, just above the tab bar.
-                .overlay(alignment: .topTrailing) {
-                    SettingsButton { showsSettings = true }
-                        .padding(.trailing, 16)
-                        .padding(.top, 2)
-                }
             }
             Tab("In motion", systemImage: "circle.dotted.circle", value: .motion) {
                 InMotionView { showsSettings = true }
@@ -170,8 +157,10 @@ struct MainView: View {
             // The voice may have changed while the stream was down.
             Task { await voices?.refresh() }
         }
-        .onChange(of: model.opening, initial: true) { _, message in
-            if message != nil { place = .chat }
+        // A tapped notification opens the chat, at its message or in its thread.
+        .onChange(of: model.opening != nil || model.openingThread != nil, initial: true) {
+            _, opens in
+            if opens { place = .chat }
         }
         #if DEBUG
             .task {
@@ -182,6 +171,28 @@ struct MainView: View {
                 showsSettings = DebugScript.opensSettings
             }
         #endif
+    }
+}
+
+extension MainView {
+    /// The chat, opening at a notification's message, its thread, or a place a thing in motion
+    /// points back to.
+    fileprivate var chat: some View {
+        ConversationView(
+            session: session, connectAgain: model.connectAgain,
+            opening: Binding(get: { model.opening }, set: { model.opening = $0 }),
+            openingPosition: Binding(
+                get: { model.openingPosition }, set: { model.openingPosition = $0 }),
+            offersNotifications: model.offersNotifications,
+            answerOffer: { yes in
+                if yes {
+                    Task { await model.turnOnNotifications() }
+                } else {
+                    model.declineNotifications()
+                }
+            },
+            openingThread: Binding(get: { model.openingThread }, set: { model.openingThread = $0 })
+        )
     }
 }
 

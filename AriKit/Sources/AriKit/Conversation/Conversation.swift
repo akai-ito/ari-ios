@@ -1,9 +1,13 @@
 import Foundation
 
-/// The conversation as Ari shows it. All of it comes from the server: its events, applied in order,
-/// and its answers to what Ari asks. Ari changes it ahead of the server only for what you do (your
-/// message the moment you send it, Stop's freeze, and Try again), and the server then confirms each.
+/// The conversation as Ari shows it: the main chat, or one side thread. All of it comes from the
+/// server: its events, applied in order, and its answers to what Ari asks. Ari changes it ahead of the
+/// server only for what you do (your message the moment you send it, Stop's freeze, and Try again),
+/// and the server then confirms each. Every conversation sees every event and keeps only what's in
+/// its own place.
 public struct Conversation: Sendable, Equatable {
+    /// Where it is: the main chat (`nil`), or a side thread.
+    public private(set) var place: ThreadID?
     /// The last event applied: send it as `Last-Event-ID` to resume. `nil` before the first event,
     /// after a snapshot of an empty conversation, and when the view needs a snapshot.
     public private(set) var cursor: EventID?
@@ -28,8 +32,12 @@ public struct Conversation: Sendable, Equatable {
     public private(set) var calls: [Call] = [] {
         didSet { changes.count &+= 1 }
     }
-    /// Where Ari marked the subject changing, from the oldest message on, in conversation order.
-    public private(set) var topics: [Topic] = [] {
+    /// The side threads Ari knows of, by id: their lines in the main chat, and a thread's own header.
+    public private(set) var threads: [ThreadID: SideThread] = [:] {
+        didSet { changes.count &+= 1 }
+    }
+    /// A thread you started by replying in the main chat: the message it hangs from.
+    public private(set) var anchor: Message? {
         didSet { changes.count &+= 1 }
     }
     /// Asks you've answered or cancelled here, until the server says they've ended.
@@ -79,7 +87,9 @@ public struct Conversation: Sendable, Equatable {
     /// their way.
     private var serverCount = 0
 
-    public init() {}
+    public init(place: ThreadID? = nil) {
+        self.place = place
+    }
 }
 
 extension Conversation {
@@ -113,6 +123,8 @@ extension Conversation {
         public internal(set) var spoken: Spoken?
         /// Kumo's posts: it couldn't wait, so its notification broke through your Focus.
         public internal(set) var urgent = false
+        /// Your messages, inside a thread: the message you replied to.
+        public internal(set) var quotes: Quote?
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -128,6 +140,18 @@ extension Conversation {
             case next
         }
 
+        /// A line of it to show beside it, as a quote or a thread's news: its first words, or what
+        /// it carries.
+        public var line: String {
+            let first =
+                text.split(separator: "\n").lazy
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first { !$0.isEmpty && !$0.hasPrefix("```") }
+            if let first { return first.count > 200 ? String(first.prefix(199)) + "…" : first }
+            if attachments.contains(where: { $0.kind == .image }) { return "A photo" }
+            return attachments.isEmpty ? "A message" : "A file"
+        }
+
         /// Whether the conversation shows it: your messages, the agent's replies and Kumo's posts.
         /// A note becomes the live status's detail instead, and a role or kind this version of Ari
         /// doesn't know stays hidden.
@@ -135,7 +159,7 @@ extension Conversation {
             role == .user || (role == .agent && [.reply, .post].contains(kind))
         }
 
-        init(_ message: Message) {
+        public init(_ message: Message) {
             id = message.id
             role = message.role
             kind = message.kind
@@ -152,10 +176,12 @@ extension Conversation {
             attachments = message.attachments ?? []
             spoken = message.spoken
             urgent = message.urgent == true
+            quotes = message.quotes
         }
 
         init(
-            sending id: MessageID, text: String, answers: AskID?, attachments: [Attachment]
+            sending id: MessageID, text: String, answers: AskID?, attachments: [Attachment],
+            quotes: Quote? = nil
         ) {
             self.id = id
             role = .user
@@ -164,6 +190,7 @@ extension Conversation {
             delivery = .sending
             self.answers = answers
             self.attachments = attachments
+            self.quotes = quotes
         }
     }
 
@@ -205,7 +232,14 @@ extension Conversation {
     /// a message that never began) changes nothing and sets ``needsSnapshot``.
     public mutating func apply(_ event: Event) {
         if case .snapshot(let snapshot) = event.payload {
-            replace(with: snapshot, cursor: event.id)
+            guard place != nil else {
+                replace(with: snapshot, cursor: event.id)
+                return
+            }
+            // A snapshot is the main chat's: a thread learns its threads, and opens again from the
+            // server, since it may have missed what happened meanwhile.
+            for thread in snapshot.threads { threads[thread.id] = thread }
+            needsSnapshot = true
             return
         }
         guard !needsSnapshot else { return }
@@ -215,10 +249,10 @@ extension Conversation {
         case .snapshot:
             return
         case .messageAccepted(let accepted):
-            accept(accepted.message)
+            arrive(accepted.message)
         case .messagePosted(let posted):
             // Kumo's work in the background posts it whole, outside any turn.
-            accept(posted.message)
+            arrive(posted.message)
         case .messageAmended(let amended):
             // Your carried-on words joined it: the message as it is now replaces the one you had.
             if positions[amended.message.id] != nil { accept(amended.message) }
@@ -227,29 +261,34 @@ extension Conversation {
         case .messageRead(let read):
             if read.turn == turn?.id { mark(read.message, .read) }
         case .turnStarted(let started):
-            start(started)
+            if started.thread == place { start(started) }
         case .turnStatus(let update):
             // A status replaces the last one completely, and only the running turn has one.
             if update.turn == turn?.id { turn?.status = update.status }
         case .stepStarted(let event), .stepUpdated(let event), .stepEnded(let event):
-            record(event.step)
+            // Only this place's turns: a step of a turn elsewhere, running since before the snapshot,
+            // stays out.
+            if isHere(event.step) { record(event.step) }
         case .askStarted(let event), .askEnded(let event):
-            record(event.ask)
+            if event.ask.thread == place { record(event.ask) }
         case .messageStarted(let started):
-            begin(started.message)
+            if started.message.thread == place { begin(started.message) }
         case .messageDelta(let delta):
-            applied = append(delta)
+            if delta.thread == place { applied = append(delta) }
         case .messageEnded(let ended):
-            applied = end(ended)
+            if ended.thread == place { applied = end(ended) }
         case .turnEnded(let ended):
             finish(ended)
         case .callStarted(let event), .callEnded(let event):
-            record(event.call)
+            // Calls are in the main chat.
+            if place == nil { record(event.call) }
         case .callAudioDeleted(let event):
-            record(event.call)
+            if place == nil { record(event.call) }
             forgetAudio(of: event.call.id)
-        case .topicStarted(let started):
-            record(started.topic)
+        case .threadStarted(let event), .threadChanged(let event):
+            threads[event.thread.id] = event.thread
+        case .messageMoved(let moved):
+            move(moved.message)
         // In motion follows these, not the conversation.
         case .motionStarted, .motionChanged, .motionFinished, .motionState, .motionRemoved:
             break
@@ -281,8 +320,8 @@ extension Conversation {
         reindex(from: 0)
         replaceSteps(with: snapshot.steps)
         replaceAsks(with: snapshot.asks)
-        replaceCalls(with: snapshot.calls)
-        replaceTopics(with: snapshot.topics)
+        replaceCalls(with: place == nil ? snapshot.calls : [])
+        threads = Dictionary(snapshot.threads.map { ($0.id, $0) }) { _, latest in latest }
 
         hasEarlierMessages = snapshot.hasMore
         turn = snapshot.turn.map {
@@ -322,6 +361,48 @@ extension Conversation {
         guard positions[message.id] == nil else { return }
         insert(Entry(message), at: serverCount)
         serverCount += 1
+    }
+
+    /// A message you sent or Kumo posted: here when it's in this place. One of yours that waited
+    /// here but went elsewhere, such as a reply the server put in a thread, leaves.
+    private mutating func arrive(_ message: Message) {
+        if message.thread == place {
+            accept(message)
+        } else {
+            remove(message.id)
+        }
+    }
+
+    /// A message moved between places: it joins this one in its place by position, or leaves it.
+    private mutating func move(_ message: Message) {
+        guard message.thread == place else {
+            remove(message.id)
+            return
+        }
+        guard positions[message.id] == nil, let position = message.position else {
+            accept(message)
+            return
+        }
+        let index =
+            entries[..<serverCount].firstIndex { ($0.position ?? .max) > position } ?? serverCount
+        insert(Entry(message), at: index)
+        serverCount += 1
+    }
+
+    private mutating func remove(_ id: MessageID) {
+        guard let index = positions[id] else { return }
+        entries.remove(at: index)
+        positions[id] = nil
+        if index < serverCount { serverCount -= 1 }
+        reindex(from: index)
+    }
+
+    /// Whether a step belongs to a turn in this place: the running one, or one whose messages or
+    /// steps are already here.
+    private func isHere(_ step: Step) -> Bool {
+        step.turn == turn?.id || stepIndices[step.id] != nil
+            || entries.contains { $0.turn == step.turn }
+            || steps.contains { $0.turn == step.turn }
     }
 
     private mutating func append(_ delta: MessageDelta) -> Bool {
@@ -426,12 +507,6 @@ extension Conversation {
         calls.insert(call, at: index)
     }
 
-    /// Ari marked where the subject changed. Seen again, it's the same mark.
-    private mutating func record(_ topic: Topic) {
-        guard !topics.contains(where: { $0.id == topic.id }) else { return }
-        replaceTopics(with: topics + [topic])
-    }
-
     /// The call's audio was deleted: its spoken messages keep their words, without the recording.
     private mutating func forgetAudio(of call: CallID) {
         for index in entries.indices where entries[index].spoken?.call == call {
@@ -465,12 +540,16 @@ extension Conversation {
     /// accepts it. `id` is its permanent id and its retry key; sending the same id again does nothing.
     ///
     /// While an ask waits, your message answers it, so the ask settles at once.
-    public mutating func send(_ id: MessageID, text: String, attachments: [Attachment] = []) {
+    public mutating func send(
+        _ id: MessageID, text: String, attachments: [Attachment] = [], quotes: Quote? = nil
+    ) {
         guard positions[id] == nil else { return }
         let waiting = waitingAsk
         if let waiting { settling[waiting.id] = .answering(id) }
         entries.append(
-            Entry(sending: id, text: text, answers: waiting?.id, attachments: attachments))
+            Entry(
+                sending: id, text: text, answers: waiting?.id, attachments: attachments,
+                quotes: quotes))
         positions[id] = entries.count - 1
     }
 
@@ -538,9 +617,56 @@ extension Conversation {
         replaceAsks(with: page.asks.filter { askIndices[$0.id] == nil } + asks)
         let known = Set(calls.map(\.id))
         replaceCalls(with: page.calls.filter { !known.contains($0.id) } + calls)
-        let marked = Set(topics.map(\.id))
-        replaceTopics(with: page.topics.filter { !marked.contains($0.id) } + topics)
+        for thread in page.threads where threads[thread.id] == nil { threads[thread.id] = thread }
         hasEarlierMessages = page.hasMore
+    }
+
+    /// A thread opened: its latest messages, steps, asks and running turn replace what Ari had, as a
+    /// snapshot does for the main chat. Your messages still on their way stay below them.
+    public mutating func replace(with page: ThreadPage) {
+        place = page.thread.id
+        let included = Set(page.messages.map(\.id))
+        let waiting = entries[serverCount...].filter { !included.contains($0.id) }
+        entries = page.messages.map(Entry.init) + waiting
+        serverCount = page.messages.count
+        positions = [:]
+        reindex(from: 0)
+        replaceSteps(with: page.steps)
+        replaceAsks(with: page.asks)
+        replaceCalls(with: [])
+        threads[page.thread.id] = page.thread
+        anchor = page.anchor
+        hasEarlierMessages = page.hasMore
+        turn = page.turn.map {
+            Turn(id: $0.id, inputs: $0.inputs, retryOf: $0.retryOf, status: $0.status)
+        }
+        for id in page.turn?.read ?? [] { mark(id, .read) }
+        for id in page.next { mark(id, .next) }
+        lastEndedTurn = nil
+        if pendingStop != turn?.id { pendingStop = nil }
+        needsSnapshot = false
+    }
+
+    /// A thread you started from here, before the server named it, is now `thread`: its messages
+    /// stay, and its events apply from now on.
+    public mutating func adopt(_ thread: ThreadID) {
+        place = thread
+    }
+
+    /// A thread as the server says it is now, such as the answer to renaming it or seeing it.
+    public mutating func update(_ thread: SideThread) {
+        threads[thread.id] = thread
+    }
+
+    /// Threads Ari listed, such as for Threads by day, so the main chat and a thread's header know
+    /// them too.
+    public mutating func learn(_ listed: [SideThread]) {
+        for thread in listed { threads[thread.id] = thread }
+    }
+
+    /// The main chat's message a reply thread hangs from, shown at its top until the thread opens.
+    public mutating func show(anchor message: Message?) {
+        anchor = message
     }
 
     /// Forgets the messages before `id`, as a cache that keeps only recent history does. They can be
@@ -555,8 +681,6 @@ extension Conversation {
             replaceSteps(with: steps.filter { $0.position > first })
             replaceAsks(with: asks.filter { $0.position > first })
             replaceCalls(with: calls.filter { $0.position > first || $0.isOn })
-            // A topic sits on its message, so it goes only with the messages before.
-            replaceTopics(with: topics.filter { $0.position >= first })
         }
         hasEarlierMessages = true
     }
@@ -601,6 +725,23 @@ extension Conversation {
     public subscript(call id: CallID) -> Call? {
         calls.last { $0.id == id }
     }
+
+    /// This thread, as the server last said: its name, whether it's open, who marked it done.
+    public var thread: SideThread? {
+        place.flatMap { threads[$0] }
+    }
+
+    /// The open threads, latest first, for the header's line and Threads.
+    public var openThreads: [SideThread] {
+        threads.values.filter(\.isOpen).sorted {
+            ($0.lastAt.date, $0.id.rawValue) > ($1.lastAt.date, $1.id.rawValue)
+        }
+    }
+
+    /// The thread that hangs from `message` in the main chat, if any.
+    public func thread(hangingFrom message: MessageID) -> SideThread? {
+        threads.values.first { $0.anchor == message }
+    }
 }
 
 // MARK: - Bookkeeping
@@ -635,10 +776,6 @@ extension Conversation {
 
     private mutating func replaceCalls(with new: [Call]) {
         calls = new.sorted { $0.position < $1.position }
-    }
-
-    private mutating func replaceTopics(with new: [Topic]) {
-        topics = new.sorted { $0.position < $1.position }
     }
 
     private mutating func reindexAsks(from start: Int) {

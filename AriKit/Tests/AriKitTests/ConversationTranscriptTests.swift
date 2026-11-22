@@ -501,7 +501,18 @@ extension ConversationTranscriptTests {
                     seen = [:]
                     for message in json["messages"]?.array ?? [] { record(message) }
                 case "message.accepted", "message.amended", "message.started", "message.posted":
-                    if let message = json["message"] { record(message) }
+                    // The main chat's: a thread's messages are in the thread.
+                    if let message = json["message"], message["thread"]?.string == nil {
+                        record(message)
+                    }
+                case "message.moved":
+                    if let message = json["message"], let id = message["id"]?.string {
+                        if message["thread"]?.string == nil {
+                            record(message)
+                        } else {
+                            seen[id] = nil
+                        }
+                    }
                 case "message.delta":
                     if let id = json["message"]?.string, let text = json["text"]?.string {
                         seen[id]?.text += Array(text.utf16)

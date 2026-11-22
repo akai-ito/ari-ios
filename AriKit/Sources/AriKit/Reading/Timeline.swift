@@ -19,15 +19,16 @@ public struct Timeline: Equatable, Sendable {
         case trail(Trail)
         /// A call, where it started: the block that opens the stretch it covered.
         case call(Call)
-        /// Where the subject changed: Ari's label, just above the message that changed it.
-        case topic(Topic)
+        /// A side thread's line in the main chat: under the message it hangs from, where Kumo moved
+        /// its first message out, or at the end once Kumo came back to it with something new.
+        case thread(SideThread)
 
         public var id: String {
             switch self {
             case .message(let entry): entry.id.rawValue
             case .trail(let trail): trail.id
             case .call(let call): "call \(call.id)"
-            case .topic(let topic): "topic \(topic.id)"
+            case .thread(let thread): "thread \(thread.id)"
             }
         }
     }
@@ -72,9 +73,9 @@ public struct Timeline: Equatable, Sendable {
             case .call(let call):
                 close()
                 items.append(.call(call))
-            case .topic(let topic):
+            case .thread(let thread):
                 close()
-                items.append(.topic(topic))
+                items.append(.thread(thread))
             }
         }
         close()
@@ -124,7 +125,7 @@ public struct Timeline: Equatable, Sendable {
         case step(Step)
         case ask(Ask)
         case call(Call)
-        case topic(Topic)
+        case thread(SideThread)
 
         var position: Int {
             switch self {
@@ -132,25 +133,37 @@ public struct Timeline: Equatable, Sendable {
             case .step(let step): step.position
             case .ask(let ask): ask.position
             case .call(let call): call.position
-            case .topic(let topic): topic.position
+            case .thread(let thread): thread.position
             }
         }
 
-        /// A topic shares its message's position, and goes before it.
+        /// A thread's line shares the position of the message it hangs from, and goes after it.
         var rank: Int {
-            if case .topic = self { 0 } else { 1 }
+            if case .thread = self { 2 } else { 1 }
         }
     }
 
-    /// Entries, steps, asks, calls and topics in one order. Your messages the server hasn't placed
-    /// yet come last.
+    /// Entries, steps, asks, calls and, in the main chat, the threads' lines, in one order. Your
+    /// messages the server hasn't placed yet come last.
     private static func merged(_ conversation: Conversation) -> [Piece] {
         let placed =
             conversation.entries.filter { $0.position != nil }.map(Piece.entry)
             + conversation.steps.map(Piece.step) + conversation.asks.map(Piece.ask)
-            + conversation.calls.map(Piece.call) + conversation.topics.map(Piece.topic)
+            + conversation.calls.map(Piece.call) + lines(conversation).map(Piece.thread)
         let waiting = conversation.entries.filter { $0.position == nil }.map(Piece.entry)
         return placed.sorted { ($0.position, $0.rank) < ($1.position, $1.rank) } + waiting
+    }
+}
+
+extension Timeline {
+    /// The threads whose lines sit among the messages Ari has: none in a thread itself, and none
+    /// before the oldest message while older ones are still to come, or they'd pile up at the top.
+    static func lines(_ conversation: Conversation) -> [SideThread] {
+        guard conversation.place == nil else { return [] }
+        let first = conversation.entries.first?.position ?? .max
+        return conversation.threads.values.filter {
+            !conversation.hasEarlierMessages || $0.position >= first
+        }
     }
 }
 

@@ -206,7 +206,7 @@ extension Timeline.Item {
         case .message: "message"
         case .trail: "trail"
         case .call: "call"
-        case .topic: "topic"
+        case .thread: "thread"
         }
     }
 }

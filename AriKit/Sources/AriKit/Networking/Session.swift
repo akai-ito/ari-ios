@@ -22,8 +22,15 @@ import Observation
 @MainActor
 @Observable
 public final class Session {
-    /// The conversation as Ari shows it.
+    /// The main chat as Ari shows it.
     public private(set) var conversation: Conversation
+    /// The side threads you've opened, each a conversation of its own, fed by the same stream.
+    public private(set) var threadConversations: [ThreadID: Conversation] = [:]
+    /// Threads you started here before the server named them, and the thread each became.
+    public private(set) var adopted: [ThreadID: ThreadID] = [:]
+    /// Threads you're starting here, before the server has them: the main chat's message each
+    /// replies to, or none for a new thread.
+    public private(set) var drafts: [ThreadID: MessageID?] = [:]
     /// The Desk, once the stream has said what's on it.
     public private(set) var desk: Desk?
     /// How getting started stands, once the stream or ``refreshOnboarding()`` has said.
@@ -60,6 +67,8 @@ public final class Session {
     private struct StopRequest {
         /// `nil` until the turn it stops is announced.
         var turn: TurnID?
+        /// Where that turn runs: the main chat, or a thread.
+        var place: ThreadID?
     }
 
     public enum Problem: Equatable, Sendable {
@@ -114,6 +123,8 @@ public final class Session {
     @ObservationIgnored private var fetches: [AttachmentID: Task<Data?, Never>] = [:]
     /// Messages whose attachments went again because the server no longer had them, once each.
     @ObservationIgnored private var uploadedAgain: Set<MessageID> = []
+    /// Threads being opened, and the events that arrived meanwhile, applied once they're open.
+    @ObservationIgnored private var opening: [ThreadID: [Event]] = [:]
 
     /// - Parameters:
     ///   - conversation: Where to start: the cached conversation, or an empty one.
@@ -171,7 +182,10 @@ public final class Session {
                 let waiting = (message.attachments ?? []).compactMap { id in
                     uploadQueue.first { $0.id == id }?.attachment
                 }
-                conversation.send(message.id, text: message.text, attachments: waiting)
+                // A message for a thread shows there once the thread is open and the server has it.
+                if message.thread == nil, message.replyTo == nil, message.newThread != true {
+                    conversation.send(message.id, text: message.text, attachments: waiting)
+                }
                 queue.append(message)
             }
             let network = network
@@ -224,20 +238,148 @@ public final class Session {
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
     ///   - done: The line of Done it replies to, telling Kumo it got that one wrong.
+    ///   - place: The thread it goes into, or `nil` for the main chat. A thread you're starting
+    ///     here (``startThread(replyingTo:)``) is named by the server once it has the message.
+    ///   - replyingTo: Inside a thread, the message you're replying to, which it quotes.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        attachments: [AttachmentID] = [], done: DoneID? = nil
+        attachments: [AttachmentID] = [], done: DoneID? = nil, in place: ThreadID? = nil,
+        replyingTo: MessageID? = nil
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, attachments: attachments, done: done)
-        conversation.send(id, text: text, attachments: attachments.compactMap(attachment))
+        let thread = resolved(place)
+        let draft = thread.flatMap { drafts[$0] }
+        let message = SendMessage(
+            id: id, text: text, attachments: attachments, done: done,
+            thread: draft == nil ? thread : nil, replyTo: replyingTo ?? draft ?? nil,
+            newThread: draft.map { $0 == nil } ?? false)
+        let shown = attachments.compactMap(attachment)
+        if let thread {
+            let quotes = replyingTo.flatMap { quote(of: $0, in: thread) }
+            threadConversations[thread, default: Conversation(place: thread)].send(
+                id, text: text, attachments: shown, quotes: quotes)
+        } else {
+            conversation.send(id, text: text, attachments: shown)
+        }
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
+    }
+
+    /// What your reply quotes: a line of the message, as the server writes it.
+    private func quote(of message: MessageID, in thread: ThreadID) -> Quote? {
+        guard let entry = threadConversations[thread]?[message] else { return nil }
+        return Quote(message: message, text: entry.line)
+    }
+
+    // MARK: - Threads
+
+    /// The main chat (`nil`), or a thread's conversation: empty until it's opened.
+    public func conversation(in place: ThreadID?) -> Conversation {
+        guard let thread = resolved(place) else { return conversation }
+        return threadConversations[thread] ?? Conversation(place: thread)
+    }
+
+    /// The thread a place is now: a thread you started here becomes the one the server named.
+    public func resolved(_ place: ThreadID?) -> ThreadID? {
+        place.map { adopted[$0] ?? $0 }
+    }
+
+    /// Replying to `message` in the main chat opens the thread under it, or starts one; with no
+    /// message, a new thread of your own. Returns where to show it: the thread, or a draft the
+    /// server names once your first message is there.
+    public func startThread(replyingTo message: MessageID?) -> ThreadID {
+        if let message, let existing = conversation.thread(hangingFrom: message) {
+            return existing.id
+        }
+        let draft = ThreadID("draft-\(UUID().uuidString.lowercased())")
+        drafts[draft] = .some(message)
+        threadConversations[draft] = Conversation(place: draft)
+        return draft
+    }
+
+    /// Opens a thread: its latest messages, steps and running turn. What the stream brings
+    /// meanwhile applies once it's open.
+    public func openThread(_ place: ThreadID) async {
+        guard let thread = resolved(place), drafts[thread] == nil, opening[thread] == nil else {
+            return
+        }
+        opening[thread] = []
+        defer { opening[thread] = nil }
+        do {
+            let page = try await client.thread(thread)
+            var opened = threadConversations[thread] ?? Conversation(place: thread)
+            opened.replace(with: page)
+            for event in opening[thread] ?? [] { opened.apply(event) }
+            threadConversations[thread] = opened
+            conversation.update(page.thread)
+        } catch {
+            // It stays as it was; opening it again tries again.
+        }
+    }
+
+    /// Every thread, for Threads by day: open ones, then done ones newest first, or those holding
+    /// all of `query`'s words.
+    public func threads(matching query: String = "", before: ThreadID? = nil)
+        async throws(RequestError) -> ThreadList
+    {
+        let listed = try await client.threads(matching: query, before: before)
+        conversation.learn(listed.open + listed.threads)
+        return listed
+    }
+
+    /// Renames a thread, or marks it done or open.
+    public func change(_ place: ThreadID, _ change: ThreadChange) async throws(RequestError) {
+        guard let thread = resolved(place), drafts[thread] == nil else { return }
+        learn(try await client.change(thread, change))
+    }
+
+    /// You've seen what's new in a thread, on every app.
+    public func see(_ place: ThreadID) async {
+        guard let thread = resolved(place), drafts[thread] == nil,
+            conversation(in: thread).thread?.news != nil
+                || conversation.threads[thread]?.news != nil,
+            let seen = try? await client.see(thread)
+        else { return }
+        learn(seen)
+    }
+
+    /// Moves a message into a thread, or back to the main chat with `nil`.
+    public func move(_ message: MessageID, to place: ThreadID?) async throws(RequestError) {
+        let thread = resolved(place)
+        guard thread.map({ drafts[$0] == nil }) ?? true else { return }
+        _ = try await client.move(message, to: thread)
+    }
+
+    private func learn(_ thread: SideThread) {
+        conversation.update(thread)
+        threadConversations[thread.id]?.update(thread)
+    }
+
+    /// Applies `change` to the main chat and every open thread.
+    private func updateEach(_ change: (inout Conversation) -> Void) {
+        change(&conversation)
+        for key in threadConversations.keys { change(&threadConversations[key]!) }
+    }
+
+    /// The draft that holds your message `id`, if one does.
+    private func draft(holding id: MessageID) -> ThreadID? {
+        drafts.keys.first { threadConversations[$0]?[id] != nil }
+    }
+
+    /// The server put your first message of a draft in `thread`: the draft becomes it.
+    private func adopt(_ draft: ThreadID, as thread: ThreadID) {
+        guard var conversation = threadConversations.removeValue(forKey: draft) else { return }
+        conversation.adopt(thread)
+        if let existing = threadConversations[thread] { conversation = existing }
+        threadConversations[thread] = conversation
+        drafts[draft] = nil
+        adopted[draft] = thread
+        Task { await self.openThread(thread) }
     }
 
     /// An attachment as the conversation shows it, once uploaded or while it waits to be.
@@ -285,17 +427,22 @@ public final class Session {
     /// it.
     @discardableResult
     public func sendFromNotification(
-        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased())
+        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
+        in thread: ThreadID? = nil
     ) async -> Bool {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             text.count <= Self.maximumLength
         else { return false }
-        let message = SendMessage(id: id, text: text)
-        conversation.send(id, text: text)
+        let message = SendMessage(id: id, text: text, thread: thread)
+        if let thread {
+            threadConversations[thread]?.send(id, text: text)
+        } else {
+            conversation.send(id, text: text)
+        }
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         do {
-            conversation.confirm(try await client.send(message))
+            confirm(try await client.send(message))
             finish(message)
             return true
         } catch {
@@ -355,8 +502,16 @@ public final class Session {
 
     /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
     public func cancel(_ ask: AskID) {
-        guard conversation[ask: ask]?.outcome == nil, !cancels.contains(ask) else { return }
-        conversation.cancel(ask)
+        guard !cancels.contains(ask) else { return }
+        let place = ([conversation] + Array(threadConversations.values)).first {
+            $0[ask: ask]?.outcome == nil
+        }
+        guard let place else { return }
+        if let thread = place.place {
+            threadConversations[thread]?.cancel(ask)
+        } else {
+            conversation.cancel(ask)
+        }
         cancels.append(ask)
         wake(.cancel)
     }
@@ -364,13 +519,19 @@ public final class Session {
     /// You tapped Stop. The request goes on its own lane, even before the stream is back, and the
     /// reply keeps what Kumo had written. Tapped before the turn is announced, it goes as soon as it
     /// is.
-    public func stop() {
-        if let turn = conversation.turn?.id {
+    public func stop(in place: ThreadID? = nil) {
+        let thread = resolved(place)
+        let stopping = conversation(in: thread)
+        if let turn = stopping.turn?.id {
             guard stopRequest?.turn != turn else { return }
-            conversation.stop(turn: turn)
-            stopRequest = StopRequest(turn: turn)
-        } else if conversation.entries.last?.role == .user {
-            stopRequest = StopRequest(turn: nil)
+            if let thread {
+                threadConversations[thread]?.stop(turn: turn)
+            } else {
+                conversation.stop(turn: turn)
+            }
+            stopRequest = StopRequest(turn: turn, place: thread)
+        } else if stopping.entries.last?.role == .user {
+            stopRequest = StopRequest(turn: nil, place: thread)
         } else {
             return
         }
@@ -380,21 +541,27 @@ public final class Session {
     /// You tapped Try again on the failed `turn`. Tapping twice is safe: the server starts one
     /// attempt.
     public func tryAgain(_ turn: TurnID) {
-        conversation.retry(turn: turn)
+        updateEach { $0.retry(turn: turn) }
         retries.append(turn)
         wake(.retry)
     }
 
     /// You scrolled near the top: fetch the page of messages before the oldest Ari has.
-    public func loadEarlier(limit: Int = 50) async {
-        guard conversation.hasEarlierMessages, !isLoadingEarlier,
-            let oldest = conversation.entries.first, oldest.delivery != .sending
+    public func loadEarlier(limit: Int = 50, in place: ThreadID? = nil) async {
+        let thread = resolved(place)
+        let earlier = conversation(in: thread)
+        guard earlier.hasEarlierMessages, !isLoadingEarlier,
+            let oldest = earlier.entries.first, oldest.delivery != .sending
         else { return }
         isLoadingEarlier = true
         defer { isLoadingEarlier = false }
         do {
             let page = try await client.messages(before: oldest.id, limit: limit)
-            conversation.insertEarlier(page, before: oldest.id)
+            if let thread {
+                threadConversations[thread]?.insertEarlier(page, before: oldest.id)
+            } else {
+                conversation.insertEarlier(page, before: oldest.id)
+            }
         } catch {
             // The server no longer has that message: Ari's view is stale, so replace it.
             if error.status == 404 {
@@ -610,7 +777,19 @@ public final class Session {
     }
 
     private func receive(_ event: Event) {
+        if case .messageAccepted(let accepted) = event.payload,
+            let thread = accepted.message.thread,
+            let draft = draft(holding: accepted.message.id)
+        {
+            adopt(draft, as: thread)
+        }
         conversation.apply(event)
+        for key in threadConversations.keys {
+            threadConversations[key]!.apply(event)
+            // A thread that missed something, or saw a snapshot, opens again from the server.
+            if threadConversations[key]!.needsSnapshot { Task { await self.openThread(key) } }
+        }
+        for key in opening.keys { opening[key]?.append(event) }
         motions?.apply(event)
         switch event.payload {
         case .snapshot(let snapshot):
@@ -627,9 +806,13 @@ public final class Session {
         case .voiceStatus(let status):
             voiceStatus = status
         case .turnStarted(let started):
-            if let request = stopRequest, request.turn == nil {
-                conversation.stop(turn: started.turn)
-                stopRequest = StopRequest(turn: started.turn)
+            if let request = stopRequest, request.turn == nil, request.place == started.thread {
+                if let thread = started.thread {
+                    threadConversations[thread]?.stop(turn: started.turn)
+                } else {
+                    conversation.stop(turn: started.turn)
+                }
+                stopRequest = StopRequest(turn: started.turn, place: started.thread)
                 wake(.stop)
             }
         default:
@@ -672,7 +855,7 @@ public final class Session {
                 continue
             }
             do {
-                conversation.confirm(try await client.send(message))
+                confirm(try await client.send(message))
                 finish(message)
                 failures = 0
             } catch {
@@ -706,6 +889,15 @@ public final class Session {
         }
         wake(.upload)
         return true
+    }
+
+    /// The server has your message: it shows as sent where it is. A draft's first message names the
+    /// thread the draft becomes.
+    private func confirm(_ result: MessageResult) {
+        if let thread = result.message.thread, let draft = draft(holding: result.message.id) {
+            adopt(draft, as: thread)
+        }
+        updateEach { $0.confirm(result) }
     }
 
     /// The message went, or can't: it, and the bytes of its attachments, leave the outbox.
@@ -765,7 +957,8 @@ public final class Session {
         await runLane(.stop) {
             stopRequest?.turn
         } send: { turn throws(RequestError) in
-            conversation.confirm(try await client.stop(turn))
+            let result = try await client.stop(turn)
+            updateEach { $0.confirm(result) }
         } done: { turn in
             if stopRequest?.turn == turn { stopRequest = nil }
         }
@@ -775,7 +968,8 @@ public final class Session {
         await runLane(.retry) {
             retries.first
         } send: { turn throws(RequestError) in
-            conversation.confirm(try await client.retry(turn))
+            let result = try await client.retry(turn)
+            updateEach { $0.confirm(result) }
         } done: { turn in
             if retries.first == turn { retries.removeFirst() }
         }
@@ -785,7 +979,12 @@ public final class Session {
         await runLane(.cancel) {
             cancels.first
         } send: { ask throws(RequestError) in
-            conversation.confirm(try await client.cancelAsk(ask))
+            let result = try await client.cancelAsk(ask)
+            if let thread = result.ask.thread {
+                threadConversations[thread]?.confirm(result)
+            } else {
+                conversation.confirm(result)
+            }
         } done: { ask in
             if cancels.first == ask { cancels.removeFirst() }
         }

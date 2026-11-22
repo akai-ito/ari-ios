@@ -9,6 +9,8 @@ import Testing
 struct Replay {
     let transcript: Transcript
     private(set) var conversation = Conversation()
+    /// The side threads the app opened, each its own conversation, fed by the same events.
+    private(set) var threads: [ThreadID: Conversation] = [:]
     /// The Desk, as the snapshot, `desk.changed` and the answers leave it.
     private(set) var desk: Desk?
     /// Getting started, as the snapshot and `onboarding.changed` leave it.
@@ -80,6 +82,7 @@ struct Replay {
     /// Desk and getting started beside it.
     private mutating func apply(_ event: Event) {
         conversation.apply(event)
+        for key in threads.keys { threads[key]?.apply(event) }
         switch event.payload {
         case .snapshot(let snapshot):
             desk = snapshot.desk
@@ -102,9 +105,16 @@ struct Replay {
         switch request.route {
         case .send:
             let message = try #require(request.body).decode(SendMessage.self)
-            conversation.send(
-                message.id, text: message.text,
-                attachments: (message.attachments ?? []).compactMap { uploaded[$0] })
+            let attached = (message.attachments ?? []).compactMap { uploaded[$0] }
+            if let thread = message.thread, threads[thread] != nil {
+                let quotes = message.replyTo.flatMap { replied in
+                    threads[thread]?[replied].map { Quote(message: replied, text: $0.line) }
+                }
+                threads[thread]?.send(
+                    message.id, text: message.text, attachments: attached, quotes: quotes)
+            } else if message.thread == nil, message.replyTo == nil, message.newThread != true {
+                conversation.send(message.id, text: message.text, attachments: attached)
+            }
         case .stop(let turn):
             conversation.stop(turn: turn)
         case .retry(let turn):
@@ -128,7 +138,20 @@ struct Replay {
         else { return }
         switch request.route {
         case .send:
-            conversation.confirm(try body.decode(MessageResult.self))
+            let result = try body.decode(MessageResult.self)
+            conversation.confirm(result)
+            for key in threads.keys { threads[key]?.confirm(result) }
+        case .thread(let id):
+            var opened = threads[id] ?? Conversation(place: id)
+            opened.replace(with: try body.decode(ThreadPage.self))
+            threads[id] = opened
+        case .threads:
+            let listed = try body.decode(ThreadList.self)
+            conversation.learn(listed.open + listed.threads)
+        case .changeThread, .seeThread:
+            let thread = try body.decode(ThreadResult.self).thread
+            conversation.update(thread)
+            threads[thread.id]?.update(thread)
         case .stop:
             conversation.confirm(try body.decode(StopResult.self))
         case .retry:
@@ -185,6 +208,14 @@ struct Replay {
 
     private func check(after step: Transcript.Step, before: Conversation) {
         let place = "\(transcript.name).jsonl line \(step.line)"
+        for (id, thread) in threads {
+            let ids = thread.entries.map(\.id)
+            #expect(Set(ids).count == ids.count, "\(place): a message is in thread \(id) twice")
+            #expect(!thread.needsSnapshot, "\(place): thread \(id) found the stream inconsistent")
+            #expect(
+                Set(ids).isDisjoint(with: conversation.entries.map(\.id)),
+                "\(place): a message is in thread \(id) and the main chat")
+        }
         let ids = conversation.entries.map(\.id)
         #expect(Set(ids).count == ids.count, "\(place): a message is in the conversation twice")
         #expect(!conversation.needsSnapshot, "\(place): the store found the stream inconsistent")
@@ -205,7 +236,7 @@ struct Replay {
             return
         case .messageEnded(let ended):
             expectTextOnlyGrows(from: before, at: place, ending: ended)
-        case .turnStarted(let started):
+        case .turnStarted(let started) where started.thread == nil:
             for input in started.inputs {
                 #expect(
                     conversation[input]?.mark != .next, "\(place): \(input) still waits as Next")
@@ -213,7 +244,7 @@ struct Replay {
             #expect(conversation.lastEndedTurn == nil, "\(place): the last turn's end lingers")
             expectTextOnlyGrows(from: before, at: place, ending: nil)
         case .turnEnded(let ended):
-            #expect(conversation.turn == nil, "\(place): the turn is still live")
+            #expect(conversation.turn?.id != ended.turn, "\(place): the turn is still live")
             #expect(
                 conversation.pendingStop != ended.turn, "\(place): Stop outlived its turn")
             expectTextOnlyGrows(from: before, at: place, ending: nil)
