@@ -23,6 +23,8 @@ final class AppModel {
     var opening: MessageID?
     /// Where in the chat to go, from a thing in motion's "What changed".
     var openingPosition: Int?
+    /// A side thread to open, from a tapped notification about it.
+    var openingThread: ThreadID?
     /// Whether you're reading the chat here: Ari in front, on the Chat tab. Its notifications then
     /// show no banner.
     private(set) var isLooking = false
@@ -214,9 +216,9 @@ final class AppModel {
     }
 
     /// An answer given from a notification: it goes at once, even with Ari in the background.
-    func answer(fromNotification text: String) async {
+    func answer(fromNotification text: String, in thread: ThreadID? = nil) async {
         guard let session else { return }
-        await session.sendFromNotification(text)
+        await session.sendFromNotification(text, in: thread)
     }
 
     private func registerDevice() {

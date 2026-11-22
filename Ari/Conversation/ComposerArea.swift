@@ -21,23 +21,33 @@ struct ComposerArea: View, Equatable {
     /// Starts a call, where Ari can take one.
     var talk: (() -> Void)?
     var talkReady = true
+    /// What the empty field says, such as "Reply in thread"; the chat's own words otherwise.
+    var prompt: String?
+    /// Where what you're writing is kept: each thread keeps its own.
+    var draftKey = "draft"
+    /// Inside a thread, a line of the message you're replying to, and how to stop replying to it.
+    var quoting: String?
+    var stopQuoting: (() -> Void)?
 
     /// What you're writing. Saved a moment after you stop typing, and when Ari leaves the screen,
     /// so it survives Ari closing; saved on every keystroke, the field kept waiting on it.
-    @State private var draft = UserDefaults.standard.string(forKey: "draft") ?? ""
+    @State private var draft = ""
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Composer(
             draft: $draft, role: role,
             prompt: asking.map(Self.takesTypedAnswer) == true
-                ? "Answer \(LeadName.current)" : "Message \(LeadName.current)",
+                ? "Answer \(LeadName.current)" : (prompt ?? "Message \(LeadName.current)"),
             send: submit, stop: stop, talk: talk, talkReady: talkReady
         ) {
             AttachButton(
                 room: AttachmentMaker.mostPerMessage - attached.count, add: attach,
                 problem: { attachProblem = $0 })
         } above: {
+            if let quoting {
+                QuoteChip(text: quoting, remove: stopQuoting)
+            }
             if !attached.isEmpty {
                 AttachedStrip(attached: attached, uploads: session.uploads, remove: detach)
             }
@@ -52,6 +62,10 @@ struct ComposerArea: View, Equatable {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: attached)
+        .animation(.easeInOut(duration: 0.2), value: quoting)
+        .onAppear {
+            if draft.isEmpty { draft = UserDefaults.standard.string(forKey: draftKey) ?? "" }
+        }
         .task(id: draft) {
             try? await Task.sleep(for: .milliseconds(600))
             if !Task.isCancelled { saveDraft() }
@@ -82,13 +96,14 @@ struct ComposerArea: View, Equatable {
     }
 
     private func saveDraft() {
-        UserDefaults.standard.set(draft, forKey: "draft")
+        UserDefaults.standard.set(draft, forKey: draftKey)
     }
 
     /// Only what the composer shows: the closures are the conversation's own, the same each time.
     static func == (a: ComposerArea, b: ComposerArea) -> Bool {
         a.attached == b.attached && a.attachProblem == b.attachProblem && a.working == b.working
             && a.stopping == b.stopping && a.asking == b.asking && a.talkReady == b.talkReady
+            && a.prompt == b.prompt && a.quoting == b.quoting && a.draftKey == b.draftKey
     }
 
     /// Whether an ask takes a typed answer. Any message still answers it, but the composer only

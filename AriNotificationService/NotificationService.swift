@@ -26,10 +26,14 @@ final class NotificationService: UNNotificationServiceExtension {
         content.body =
             notification.ask.map { AskActions.body(for: notification.text, ask: $0) }
             ?? notification.text
-        content.threadIdentifier = "conversation"
+        // A side thread's notifications group together, under its name.
+        content.threadIdentifier =
+            notification.thread.map { "thread \($0.rawValue)" } ?? "conversation"
+        if let title = notification.threadTitle { content.subtitle = title }
         var info = content.userInfo
         info["kind"] = notification.kind.rawValue
         info["message"] = notification.message?.rawValue
+        info["thread"] = notification.thread?.rawValue
         info["ask"] = notification.ask?.id.rawValue
         info["options"] = notification.ask?.options
         content.userInfo = info

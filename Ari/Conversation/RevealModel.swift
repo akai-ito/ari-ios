@@ -86,13 +86,16 @@ struct Paced<Content: View>: View {
 struct RevealDriver: View {
     let model: RevealModel
     let session: Session
+    /// The main chat, or the thread on screen.
+    var place: ThreadID?
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !model.isRevealing)) {
             context in
             Color.clear.onChange(of: context.date) { previous, now in
                 model.advance(
-                    by: min(now.timeIntervalSince(previous), 0.1), in: session.conversation)
+                    by: min(now.timeIntervalSince(previous), 0.1),
+                    in: session.conversation(in: place))
             }
         }
     }

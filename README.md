@@ -55,9 +55,19 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   words that change tense as it finishes, with its short notes as quiet grey lines. `Timeline`
   merges messages and steps, groups similar steps, and folds each run once the turn is over; tap a
   step for its specifics.
-- **Where you are.** The title under Kumo is the topic Kumo marked for what's on screen, or its day,
-  changing as you scroll; tap it for every topic and day, to jump to. Your long messages fold after
-  eight lines.
+- **Where you are.** The title under Kumo is the day of what's on screen, changing as you scroll,
+  with how many side threads are open under it; tap it for Threads by day. Your long messages fold
+  after eight lines.
+- **Side threads.** The main chat is your life with Kumo; a subject of its own goes in a thread
+  beside it, with its own conversation on the server, so talking in one never steers another aside.
+  Kumo starts one for a one-off, a new subject or long work, moving your message in; replying to any
+  message (swipe it, or press and hold) starts one under it, and Threads has New thread. A resting
+  thread is one quiet line in the chat (`└ Kiln menu · 6 replies ›`, ringed while open); when Kumo
+  comes back with news, the line moves to the end with a dot and the news, and its notification
+  opens the thread. In a thread, a reply quotes the message it answers, the ⋯ menu marks it done or
+  open, renames it and moves a message, and Kumo's quiet line says when it's done. Threads by day
+  lists open threads first, then each day's, searchable, each with its result and picture. Each
+  `Conversation` holds one place, the main chat or a thread, from the same stream.
 - **Asks that wait for you.** When Kumo needs something (which one you meant, your go-ahead), it
   asks on the trail and waits: options to tap, room to type, and Stop to let it go. Any message you
   send answers it, from a notification too. An approval shows what it would do, and any pictures
@@ -139,10 +149,11 @@ demo engine on your Mac (`node bin/ito.ts serve --engine demo` in an
 the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen,
 `ARI_SAY` sends a message once connected, `ARI_STOP_AFTER` taps Stop that many seconds later,
 `ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
-`ARI_OPEN_TRAIL` opens every step on the trail, `ARI_TOPICS` opens the topics sheet, `ARI_PLACE`
-opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk; `ARI_MOTION` then opens a thing in
-motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going
-further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
+`ARI_OPEN_TRAIL` opens every step on the trail, `ARI_THREADS` opens Threads by day,
+`ARI_OPEN_THREAD` opens a thread (its id), `ARI_PLACE` opens a tab (`chat`, `motion` or `you`;
+Ito opens on the Desk; `ARI_MOTION` then opens a thing in motion, with `ARI_MOTION_TAB`,
+`ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going further in), `ARI_SHELF`
+opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
 `ARI_ONBOARDING` opens getting started at a step (`knowYou` or `checkIn`) while it's on,
 `ARI_DESK` opens part of the Desk (`upto`, `tracks`, `day`, `problems` or `wrong`),
 `ARI_SETTINGS` opens Settings and
