@@ -50,9 +50,12 @@ memory pages, in the iOS Simulator.</sub></p>
 - **Replies shaped by what they are.** Where Markdown can't, Kumo writes an `ari:` block the app
   draws: a place on Apple's map, short answers to tap, pictures it found, or a line that opens a
   thing in motion.
-- **In motion.** What you're actually doing (a trip, a training block, an appointment, a repair)
-  kept current as you talk, pinned above the composer and in its own tab. A trip has its days, a map,
-  its places and its travel.
+- **In motion.** What you're actually doing, kept current as you talk, pinned above the composer and
+  in its own tab, in six sections that never move: Career, Body, Trips, Projects, Learning and
+  Other. The loudest thing in a section is big and the quiet ones fold away. A role shows its
+  pipeline, a training block this week as a coach would (planned against done, trends only from
+  real numbers), and a trip its days, a map, its places and its travel. Ended things go to History
+  by how they ended, each with its short story.
 - **Memory.** The You tab is Kumo's memory, the Library, read as a reflection: Now in a few lines,
   the chapters of your life Kumo noticed (each a short story with its photos), what Kumo learnt
   about you lately in its own words, then pages on shelves and a journal, in the phone's search,

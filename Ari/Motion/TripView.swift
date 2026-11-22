@@ -100,6 +100,29 @@ struct TripView: View {
         }
     }
 
+    /// Every booking in the trip as it stands, booked or still to book.
+    private var bookings: [Trip.Booking] {
+        let legs = trip.travel.compactMap {
+            TripReading.booking($0.booking, of: $0.id, in: trip, state: detail.state)
+        }
+        let stops = trip.days.flatMap(\.stops).compactMap {
+            TripReading.booking($0.booking, of: $0.id, in: trip, state: detail.state)
+        }
+        return (legs + stops + trip.stays.compactMap(\.booking)).filter {
+            $0.status == .booked || $0.status == .toBook
+        }
+    }
+
+    private var hasBookings: Bool { !bookings.isEmpty }
+
+    /// "4 booked · 3 to book".
+    private var bookingsLine: String {
+        let booked = bookings.filter { $0.status == .booked }.count
+        let toBook = bookings.count - booked
+        return [booked > 0 ? "\(booked) booked" : nil, toBook > 0 ? "\(toBook) to book" : nil]
+            .compactMap(\.self).joined(separator: " · ")
+    }
+
     // MARK: - The cover
 
     /// The compact header's bar, which leaves room for the close button at its leading end.
@@ -193,10 +216,20 @@ struct TripView: View {
     private var content: some View {
         switch tab {
         case .days:
-            DaysSection(
-                motion: detail.motion.id, trip: trip, state: detail.state, space: placeSpace
-            ) {
-                openedPlace = $0.id
+            VStack(alignment: .leading, spacing: 0) {
+                KumoLine(detail.motion.summary).padding(.bottom, 24)
+                if hasBookings {
+                    MotionLabel("The bookings", trailing: bookingsLine)
+                    MotionCard(padding: 14) { TripSkeleton(trip: trip, state: detail.state) }
+                        .padding(.top, 10)
+                        .padding(.bottom, 28)
+                }
+                DaysSection(
+                    motion: detail.motion.id, trip: trip, state: detail.state, space: placeSpace
+                ) {
+                    openedPlace = $0.id
+                }
+                KumoNotes(notes: detail.extras.notes).padding(.top, 30)
             }
             .padding(.horizontal, 20)
         case .map:
@@ -737,17 +770,7 @@ private struct PlacePhoto: View {
     }
 
     static func symbol(for category: PlaceCategory) -> String {
-        switch category {
-        case .restaurant: "fork.knife"
-        case .cafe: "cup.and.saucer.fill"
-        case .bar: "wineglass.fill"
-        case .museum: "building.columns.fill"
-        case .sight: "binoculars.fill"
-        case .park: "leaf.fill"
-        case .shop: "bag.fill"
-        case .activity: "figure.walk"
-        default: "mappin"
-        }
+        MotionSymbol.name(for: category)
     }
 }
 

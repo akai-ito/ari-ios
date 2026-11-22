@@ -56,12 +56,29 @@ extension View {
 enum MotionSymbol {
     static func name(for kind: MotionKind) -> String {
         switch kind {
+        case .career: "briefcase.fill"
+        case .body, .training: "figure.run"
         case .trip: "airplane"
-        case .training: "figure.run"
+        case .project: "square.stack.3d.up.fill"
+        case .learning: "book.fill"
         case .pursuit: "target"
         case .occasion: "calendar"
         case .caseFile: "folder"
         default: "circle.dotted.circle"
+        }
+    }
+
+    static func name(for category: PlaceCategory) -> String {
+        switch category {
+        case .restaurant: "fork.knife"
+        case .cafe: "cup.and.saucer.fill"
+        case .bar: "wineglass.fill"
+        case .museum: "building.columns.fill"
+        case .sight: "binoculars.fill"
+        case .park: "leaf.fill"
+        case .shop: "bag.fill"
+        case .activity: "figure.walk"
+        default: "mappin"
         }
     }
 
@@ -186,6 +203,24 @@ struct MotionLineText {
             self.detail = line.status
             left = nil
             today = line.soon
+            progress = nil
+        case .body(let block)?:
+            // "Week 1 of 8 · Easy run today", as Kumo's line until there's a week.
+            name = motion.title
+            self.detail = BodyReading.weekLine(of: block) ?? motion.summary
+            left = nil
+            today = BodyReading.today(in: block, state: state).map { "\($0.title) today" }
+            progress = nil
+        case .other(let other)?:
+            // Kumo's line, with the to-dos left as you tick them.
+            name = motion.title
+            self.detail = motion.summary
+            left =
+                other.todo.isEmpty
+                ? nil
+                : other.todo.filter { !(state[OtherMatter.todoList]?[$0.id]?.done ?? $0.done) }
+                    .count
+            today = nil
             progress = nil
         default:
             name = motion.title
