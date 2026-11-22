@@ -51,6 +51,13 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   place on Apple's map (a still picture in the chat, a live map with Directions when you open it),
   short answers to tap, pictures it found (credited on tap), and a line that opens a thing in
   motion.
+- **Recordings, files and changes to approve.** A recorded conversation, from Voice Memos' share
+  sheet or the +, goes up in chunks that iOS carries in the background (`BigUploads`), checked
+  against the server's limits first and resumed from what the server has after any drop. Its card
+  follows the upload and the server's transcription; the transcript opens with a player, the line
+  being said lit, and a misheard name fixed everywhere it was heard. Kumo's proposed changes are
+  rows to approve one at a time, and a file it made opens at its version, with Use in draft. A tap
+  goes as your message, its block saying exactly what you chose.
 - **Kumo's trail.** Between your message and Kumo's answer, what it did along the way, in plain
   words that change tense as it finishes, with its short notes as quiet grey lines. `Timeline`
   merges messages and steps, groups similar steps, and folds each run once the turn is over; tap a

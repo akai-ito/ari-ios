@@ -65,7 +65,11 @@ struct ReplyView: View {
             var attributes = AttributeContainer()
             attributes.font = font(for: run.style, base: base, strong: tone.strong)
             if run.style.contains(.strikethrough) { attributes.strikethroughStyle = .single }
-            if let link = run.link {
+            if let link = run.link, link.scheme == RecordingLink.scheme {
+                // A moment in a recording: a quiet time that opens the transcript there.
+                attributes.link = link
+                attributes.font = .footnote.monospacedDigit()
+            } else if let link = run.link {
                 attributes.link = link
                 // Another page of memory is a quiet dotted line; the web, a full one.
                 attributes.underlineStyle =
@@ -74,7 +78,10 @@ struct ReplyView: View {
             let fullyShown =
                 position == .infinity || Double(run.start + run.text.utf16.count) + edge <= position
             if fullyShown {
-                attributes.foregroundColor = run.style.contains(.stamp) ? .ariTertiary : tone.color
+                attributes.foregroundColor =
+                    run.style.contains(.stamp)
+                    ? .ariTertiary
+                    : run.link?.scheme == RecordingLink.scheme ? .ariSecondary : tone.color
                 result += AttributedString(run.text, attributes: attributes)
                 continue
             }

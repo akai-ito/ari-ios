@@ -64,6 +64,7 @@ struct MainView: View {
             }
         }
         .environment(memory)
+        .environment(model.uploads)
         .environment(\.hidesYou, youTab.isHidden)
         .environment(motions)
         .environment(\.attachmentBytes) { await session.bytes(of: $0) }

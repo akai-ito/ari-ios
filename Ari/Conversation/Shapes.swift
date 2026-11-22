@@ -7,6 +7,8 @@ import SwiftUI
 struct ReplyActions {
     /// Sends a choice as your message; `nil` once the conversation has moved on.
     var choose: ((String) -> Void)?
+    /// The message the shapes are in, for what you choose on its proposed changes.
+    var message: MessageID?
 }
 
 extension EnvironmentValues {
@@ -17,12 +19,16 @@ extension EnvironmentValues {
 struct ShapeView: View {
     let shape: ReplyShape
 
+    @Environment(\.replyActions.message) private var message
+
     var body: some View {
         switch shape {
         case .place(let place): PlaceView(place: place)
         case .choices(let choices): ChoicesView(choices: choices)
         case .images(let images): ImagesView(images: images)
         case .motion(let line): CompactMotionLine(line: line)
+        case .file(let card): FileCardView(card: card)
+        case .proposals(let proposals): ProposalsView(proposals: proposals, message: message)
         }
     }
 }
