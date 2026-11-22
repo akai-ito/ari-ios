@@ -10,11 +10,12 @@ extension ConversationView {
     func rows(_ conversation: Conversation) -> [Row] {
         let key = RowsCache.Key(
             revision: conversation.revision, held: reveal.held,
-            offering: offering && offersNotifications)
+            offering: offering && offersNotifications,
+            waiting: place == nil ? session.waitingThreads : [])
         if cache.key == key { return cache.rows }
         let rows = RowsCache.make(
             conversation, reveal: reveal.reveal, offering: key.offering,
-            anchor: anchor(of: conversation))
+            anchor: anchor(of: conversation), waiting: key.waiting)
         cache.keep(rows, for: key)
         return rows
     }
@@ -27,6 +28,10 @@ extension ConversationView {
         case .thread(let thread, let underAnchor):
             ThreadLine(thread: thread, isUnderAnchor: underAnchor) {
                 openedThread = OpenedThread(id: thread.id)
+            }
+        case .startedHere(let thread):
+            StartedThreadLine(session: session, thread: thread) {
+                openedThread = OpenedThread(id: thread)
             }
         case .anchor(let entry):
             ThreadAnchor(entry: entry)

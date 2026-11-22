@@ -44,6 +44,8 @@ struct ThreadLine: View {
     let thread: SideThread
     /// Whether it sits under the message it hangs from, which names it well enough.
     let isUnderAnchor: Bool
+    /// What it says in place of its replies, such as how its recording is getting on.
+    var detail: String?
     let open: () -> Void
 
     var body: some View {
@@ -69,7 +71,7 @@ struct ThreadLine: View {
     }
 
     private var replies: String {
-        thread.replies == 1 ? "1 reply" : "\(thread.replies) replies"
+        detail ?? (thread.replies == 1 ? "1 reply" : "\(thread.replies) replies")
     }
 
     private var quiet: some View {
@@ -81,6 +83,7 @@ struct ThreadLine: View {
                 Text("·").foregroundStyle(.ariTertiary)
             }
             Text(replies).foregroundStyle(isUnderAnchor ? Color.ariSecondary : .ariTertiary)
+                .monospacedDigit()
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.ariTertiary)
@@ -115,6 +118,27 @@ struct ThreadLine: View {
         let state = thread.isOpen ? "open thread" : "thread, done"
         let news = thread.news.map { ", new: \($0.text)" } ?? ""
         return "\(thread.shownTitle), \(state), \(replies)\(news)"
+    }
+}
+
+/// In the main chat, a thread you started here that the server hasn't named yet, such as the one a
+/// recording starts while it goes up: `└ New thread · Uploading your recording · 42% ›`.
+struct StartedThreadLine: View {
+    let session: Session
+    let thread: ThreadID
+    let open: () -> Void
+    @Environment(BigUploads.self) private var uploads: BigUploads?
+
+    var body: some View {
+        let conversation = session.conversation(in: thread)
+        let progress = RecordingProgress(
+            in: conversation, uploads: uploads?.uploads ?? [:],
+            sent: { uploads?.sent($0.id) ?? $0.received }, recordings: session.recordings)
+        ThreadLine(
+            thread: SideThread(
+                id: thread, by: .you, startedAt: Timestamp(.now), position: 0,
+                anchor: session.drafts[thread] ?? nil, replies: conversation.entries.count),
+            isUnderAnchor: false, detail: progress?.line, open: open)
     }
 }
 
@@ -203,9 +227,12 @@ struct QuoteChip: View {
     }
 }
 
-/// A thread's header: back to the chat, its name, whether it's open or done, and its menu.
+/// A thread's header: back to the chat, its name, whether it's open or done, and its menu. While
+/// your recording in it goes up and is transcribed, it says how that's getting on instead.
 struct ThreadHeader: View {
     let thread: SideThread?
+    let session: Session
+    let place: ThreadID
     let back: () -> Void
     let markDone: (Bool) -> Void
     let rename: () -> Void
@@ -244,18 +271,7 @@ struct ThreadHeader: View {
                     .font(.ariName)
                     .foregroundStyle(.ariText)
                     .lineLimit(1)
-                if let thread {
-                    HStack(spacing: 5) {
-                        Image(systemName: thread.isOpen ? "circle.dotted" : "checkmark")
-                            .font(.caption2.weight(.heavy))
-                            .foregroundStyle(thread.isOpen ? Color.ariBone : .ariTertiary)
-                        Text(
-                            "\(thread.isOpen ? "Open" : "Done") · \(thread.replies == 1 ? "1 reply" : "\(thread.replies) replies")"
-                        )
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.ariTertiary)
-                }
+                ThreadStatusLine(thread: thread, session: session, place: place)
             }
             .padding(.horizontal, 56)
             .accessibilityElement(children: .combine)
@@ -275,6 +291,41 @@ struct ThreadHeader: View {
             .padding(.bottom, -28)
             .ignoresSafeArea(edges: .top)
         }
+    }
+}
+
+/// Under a thread's name: how your recording is getting on while it goes up and is transcribed, then
+/// whether the thread is open or done, and how many replies it has. Its own view, so an upload's
+/// progress redraws only this line.
+private struct ThreadStatusLine: View {
+    let thread: SideThread?
+    let session: Session
+    let place: ThreadID
+    @Environment(BigUploads.self) private var uploads: BigUploads?
+
+    var body: some View {
+        Group {
+            if let progress = RecordingProgress(
+                in: session.conversation(in: place), uploads: uploads?.uploads ?? [:],
+                sent: { uploads?.sent($0.id) ?? $0.received }, recordings: session.recordings)
+            {
+                Text(progress.line)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+            } else if let thread {
+                HStack(spacing: 5) {
+                    Image(systemName: thread.isOpen ? "circle.dotted" : "checkmark")
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(thread.isOpen ? Color.ariBone : .ariTertiary)
+                    Text(
+                        "\(thread.isOpen ? "Open" : "Done") · \(thread.replies == 1 ? "1 reply" : "\(thread.replies) replies")"
+                    )
+                }
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(.ariTertiary)
     }
 }
 
