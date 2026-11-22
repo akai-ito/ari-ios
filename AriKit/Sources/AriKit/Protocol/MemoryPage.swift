@@ -12,8 +12,8 @@ public struct PageAddress: OpaqueIdentifier {
 public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
     public let address: PageAddress
     public let title: String
-    /// Its shelf (`people`, `goals`, `projects`, `places`, `topics`, `journal`), or `portrait`,
-    /// `now` or `helping-you` for the three pages always in mind.
+    /// Its shelf (`people`, `goals`, `projects`, `places`, `topics`, `chapters`, `journal`), or
+    /// `portrait`, `now` or `helping-you` for the three pages always in mind.
     public let shelf: String
     /// Other names Ari knows it by.
     public let aliases: [String]
@@ -27,13 +27,15 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
     public let markdown: String
     /// The photos the page keeps with its story, each where the Markdown shows it.
     public let photos: [MemoryPhoto]
+    /// On a chapter's page: when it began and ended, when Kumo noticed it, and what it drew on.
+    public let chapter: ChapterFacts?
 
     public var id: PageAddress { address }
 
     public init(
         address: PageAddress, title: String, shelf: String, aliases: [String] = [],
         links: [MemoryLink] = [], gist: String? = nil, changedAt: Timestamp, markdown: String,
-        photos: [MemoryPhoto] = []
+        photos: [MemoryPhoto] = [], chapter: ChapterFacts? = nil
     ) {
         self.address = address
         self.title = title
@@ -44,6 +46,7 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
         self.changedAt = changedAt
         self.markdown = markdown
         self.photos = photos
+        self.chapter = chapter
     }
 
     public init(from decoder: any Decoder) throws {
@@ -58,10 +61,11 @@ public struct MemoryPage: Sendable, Equatable, Identifiable, Codable {
         markdown = try container.decode(String.self, forKey: .markdown)
         // Absent when the page shows none.
         photos = try container.decodeIfPresent([MemoryPhoto].self, forKey: .photos) ?? []
+        chapter = try container.decodeIfPresent(ChapterFacts.self, forKey: .chapter)
     }
 
     enum CodingKeys: String, CodingKey {
-        case address, title, shelf, aliases, links, gist, markdown, photos
+        case address, title, shelf, aliases, links, gist, markdown, photos, chapter
         case changedAt = "changed_at"
     }
 }

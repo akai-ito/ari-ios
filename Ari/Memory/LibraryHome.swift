@@ -1,9 +1,10 @@
 import AriKit
 import SwiftUI
 
-/// The Library's front page, as Ari's notebook: what's going on now, in a few lines you can read at
-/// a glance, the other pages always in mind (what used to open from the character in the chat),
-/// what Ari learnt lately, then the shelves, each with its glyph.
+/// The Library's front page, as Ari's notebook, read as a reflection: what's going on now, in a few
+/// lines you can read at a glance, the other pages always in mind (what used to open from the
+/// character in the chat), the chapters of your life, what Kumo learnt about you lately, then the
+/// shelves, each with its glyph.
 struct LibraryHome: View {
     let memory: Memory
 
@@ -24,7 +25,8 @@ struct LibraryHome: View {
                     .foregroundStyle(.ariTertiary)
                 case .loaded:
                     inMind
-                    lately
+                    ChaptersRow(memory: memory)
+                    LearntLately(lines: memory.learnt)
                     if !memory.shelves.isEmpty { shelves }
                 }
             }
@@ -56,51 +58,6 @@ struct LibraryHome: View {
                 }
             }
         }
-    }
-
-    /// What Ari learnt lately, in its own notes: the newest note for each page, a few pages. Only
-    /// changes with a note: a page's name alone says nothing about what changed.
-    @ViewBuilder
-    private var lately: some View {
-        let changes = Self.latestNotes(memory.recent)
-        if !changes.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Lately, \(LeadName.current) learnt").font(.ariHeading).foregroundStyle(
-                    .ariText)
-                VStack(spacing: 0) {
-                    ForEach(changes) { change in
-                        NavigationLink(value: change.address) {
-                            Text(
-                                "\(Text(change.title).fontWeight(.semibold).foregroundStyle(.ariText))  \(change.note ?? "")"
-                            )
-                            .font(.subheadline)
-                            .foregroundStyle(.ariSecondary)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if change.id != changes.last?.id {
-                            Divider().overlay(Color.ariLine)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .background(.ariSurface, in: .rect(cornerRadius: 16, style: .continuous))
-            }
-        }
-    }
-
-    static func latestNotes(_ changes: [RecentChange]) -> [RecentChange] {
-        var seen: Set<PageAddress> = []
-        return changes.filter { change in
-            guard change.note != nil, !seen.contains(change.address) else { return false }
-            seen.insert(change.address)
-            return true
-        }
-        .prefix(4)
-        .map { $0 }
     }
 
     private var shelves: some View {
@@ -135,17 +92,25 @@ struct LibraryHome: View {
     }
 }
 
-/// Now, in its first lines: what's going on these days, at a glance. Opens the whole page.
+/// Now, in its first lines: what's going on these days, at a glance, and how fresh it is. Kumo keeps
+/// its opening to a few short sentences, never squeezed; the card shows a few lines of it, and
+/// opens the whole page.
 private struct NowCard: View {
     let page: MemoryPage
 
     var body: some View {
         NavigationLink(value: page.address) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("NOW")
-                    .font(.caption.weight(.semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(.ariTertiary)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("NOW")
+                        .font(.caption.weight(.semibold))
+                        .tracking(1.4)
+                        .foregroundStyle(.ariTertiary)
+                    Spacer()
+                    Text(ChapterReading.freshness(page.changedAt))
+                        .font(.caption)
+                        .foregroundStyle(.ariTertiary)
+                }
                 Text(Self.excerpt(page))
                     .font(.ariBody)
                     .foregroundStyle(.ariText)

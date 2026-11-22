@@ -9,8 +9,8 @@ import { florenceId, florencePictures, florenceTrip, type FlorencePictures } fro
 import { sub20Id, sub20Training } from "./sub20.ts";
 import { createTranscript, type Transcript } from "./transcript.ts";
 
-const protocol = "0.18";
-const serverVersion = "0.18.0";
+const protocol = "0.19";
+const serverVersion = "0.19.0";
 const yesterdayAt = "2026-10-11T21:14:00.000Z";
 const todayAt = "2026-10-12T08:41:00.000Z";
 const authorization = "Bearer ito_example_not_a_real_token_00000000000000000000";
@@ -325,6 +325,19 @@ const pageBody = (
   markdown: page.markdown,
 });
 
+// One room of a gallery guide: its things to spot, each with where to look.
+const guideRoom = (
+  id: string,
+  title: string,
+  detail: string,
+  items: readonly (readonly [string, string, string])[],
+) => ({
+  id,
+  title,
+  detail,
+  items: items.map(([item, name, where]) => ({ id: item, title: name, detail: where })),
+});
+
 const memoryCall = (transcript: Transcript, path: string, answer: unknown): void => {
   transcript.request("GET", path);
   transcript.wait(50);
@@ -358,6 +371,7 @@ const florenceCard = {
   summary: "6–9 Nov · 4 to book",
   status: "active" as const,
   pinned: true,
+  salience: "loud" as const,
 };
 
 const motionStep = (
@@ -389,6 +403,7 @@ const startFlorence = (transcript: Transcript, pictures: FlorencePictures): Retu
     kind: florenceCard.kind,
     title: florenceCard.title,
     summary: florenceCard.summary,
+    salience: florenceCard.salience,
     content: florenceTrip(pictures),
     note: "Started the trip",
   });
@@ -406,11 +421,12 @@ const startFlorence = (transcript: Transcript, pictures: FlorencePictures): Retu
 
 const sub20Card = {
   id: sub20Id,
-  kind: "training",
+  kind: "body",
   title: "Sub-20 5K",
   summary: "Week 6 of 10 · intervals today",
   status: "active" as const,
   pinned: true,
+  salience: "loud" as const,
 };
 
 type TrainingWeek = { readonly id: string; readonly note?: string };
@@ -3233,8 +3249,8 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 64,
       title: "A training block",
       summary:
-        "You ask Ari to keep your sub-20 5K plan. Ari starts the whole block as a thing in motion, every week " +
-        "from the first to the last. That evening you tick today's intervals; a few seconds later Ari quietly " +
+        "You ask Ari to keep your sub-20 5K plan. Ari starts the whole block as a thing in motion in Body, loud, " +
+        "every week from the first to the last. That evening you tick today's intervals; a few seconds later Ari quietly " +
         "rewrites the week's note, with no chat message and no turn. On Saturday you tell Ari a parkrun time, " +
         "and Ari adds it to the results.",
       guarantees: ["G32"],
@@ -3252,6 +3268,7 @@ const scenarios: readonly (() => Transcript)[] = [
       kind: sub20Card.kind,
       title: sub20Card.title,
       summary: sub20Card.summary,
+      salience: sub20Card.salience,
       content: sub20Training,
       note: "Started the block",
     });
@@ -4337,6 +4354,192 @@ const scenarios: readonly (() => Transcript)[] = [
 
   () => {
     const transcript = createTranscript({
+      name: "87-chapters-and-what-kumo-learnt",
+      scenario: 87,
+      title: "Chapters and what Kumo learnt",
+      summary:
+        "You're home from Florence. Kumo keeps the trip as a chapter of your life, a short story that began and " +
+        "ended, linked to the journal days it draws on, and learns something about you on the way. Tidying a page " +
+        "teaches it nothing, so it adds no line. The Library shows the chapter in its own row, what Kumo learnt " +
+        "lately, newest first, and the chapter's page with when Kumo noticed it and what it drew on.",
+      guarantees: ["G58"],
+    });
+    const seededAt = "2026-11-10T18:00:00.000Z";
+    const mira = {
+      address: "memory:people/mira",
+      title: "Mira",
+      gist: "Your oldest friend, from school",
+      aliases: ["Mimi"],
+      links: [],
+      markdown: "Your oldest friend; you met at school in Pune (as of 20 Oct).\n",
+      note: "Oldest friend, from school",
+      circle: "friends",
+    };
+    const days = [
+      {
+        address: "memory:journal/2026-11-05",
+        title: "5 November 2026",
+        gist: "Florence: the Uffizi at opening",
+        aliases: [],
+        links: [],
+        markdown: "### 21:40\n\nThe Uffizi at opening with Mira, then a long lunch.\n",
+        note: "The Uffizi",
+      },
+      {
+        address: "memory:journal/2026-11-06",
+        title: "6 November 2026",
+        gist: "Florence: rain, and a bookshop café",
+        aliases: [],
+        links: [],
+        markdown: "### 22:05\n\nRain all day, so a bookshop café near Santo Spirito instead.\n",
+        note: "The rainy day",
+      },
+    ];
+    const half = {
+      address: "memory:goals/half-marathon",
+      title: "Half marathon",
+      gist: "A half in March",
+      aliases: [],
+      links: [],
+      markdown: "A half marathon in March (as of 2 Nov).\n",
+      note: "The March half",
+      learnt: "Half marathons suit you more than 5Ks.",
+    };
+    const trips = {
+      address: "memory:topics/trips",
+      title: "Trips",
+      gist: "How you like to travel",
+      aliases: [],
+      links: [],
+      markdown: "You like a plan for the first days of a trip (as of 2 Nov).\n",
+      note: "How you travel",
+    };
+    const chapter = {
+      address: "memory:chapters/florence-with-mira",
+      title: "Florence with Mira",
+      gist: "Six days in Florence for Mira's birthday",
+      aliases: [],
+      links: [mira.address, ...days.map(({ address }) => address)],
+      markdown:
+        "You'd been promising Mira Florence since spring, and went for her birthday week. The first days were " +
+        "all plans; then the rain cancelled everything, and a bookshop café near Santo Spirito turned out the " +
+        "best day.\n\n## What changed\n\n- You want an empty day in every trip now.\n",
+    };
+    const learnt = "You want an empty day in every trip now: the unplanned one tends to be the best.";
+    transcript.begin(seededAt);
+    transcript.world("memory_holds", { pages: [mira, ...days, half, trips] });
+    transcript.wait(60 * 60 * 1000);
+    transcript.connect();
+    transcript.wait(2000);
+    sendAndStart(
+      transcript,
+      "Home from Florence! The rainy day in that bookshop café was the best one. Every trip gets an empty day now.",
+    );
+    transcript.wait(700);
+    const written = transcript.change();
+    agentCalls(transcript, "write_page", {
+      address: chapter.address,
+      title: chapter.title,
+      gist: chapter.gist,
+      note: "Noticed Florence with Mira",
+      began: "2026-11-04",
+      ended: "2026-11-09",
+      links: chapter.links,
+      body: chapter.markdown,
+    });
+    memoryStep(
+      transcript,
+      "updated",
+      [{ address: chapter.address, title: chapter.title }],
+      { title: "Updating Florence with Mira", endedTitle: "Updated Florence with Mira" },
+      written,
+    );
+    transcript.wait(400);
+    const taught = transcript.change();
+    agentCalls(transcript, "edit_page", {
+      address: trips.address,
+      version: "seeded",
+      old_text: "You like a plan for the first days of a trip (as of 2 Nov).",
+      new_text: "You like a plan for the first days of a trip, and an empty day in every one (as of 10 Nov).",
+      note: "An empty day in every trip",
+      learnt,
+    });
+    memoryStep(
+      transcript,
+      "updated",
+      [{ address: trips.address, title: trips.title }],
+      { title: "Updating Trips", endedTitle: "Updated Trips" },
+      taught,
+    );
+    transcript.wait(400);
+    const tidied = transcript.change();
+    agentCalls(transcript, "edit_page", {
+      address: mira.address,
+      version: "seeded",
+      old_text: "(as of 20 Oct)",
+      new_text: "(as of 20 October)",
+      note: "Tidied the date",
+    });
+    memoryStep(
+      transcript,
+      "updated",
+      [{ address: mira.address, title: mira.title }],
+      { title: "Updating Mira", endedTitle: "Updated Mira" },
+      tidied,
+    );
+    transcript.wait(300);
+    writeWhole(transcript, "Welcome home. I've kept Florence as a chapter, rainy day and all.");
+    transcript.endTurn("completed");
+    transcript.wait(5000);
+    const turnAt = Date.parse(seededAt) + 60 * 60 * 1000 + 2000;
+    const writtenAt = new Date(turnAt + 700).toISOString();
+    const taughtAt = new Date(turnAt + 1100).toISOString();
+    memoryCall(transcript, "/v0/memory/chapters", {
+      chapters: [
+        {
+          address: chapter.address,
+          title: chapter.title,
+          gist: chapter.gist,
+          began: "2026-11-04",
+          ended: "2026-11-09",
+          changed_at: writtenAt,
+        },
+      ],
+    });
+    transcript.wait(1000);
+    memoryCall(transcript, "/v0/memory/learnt", {
+      lines: [
+        { text: learnt, at: taughtAt, address: trips.address, change: taught },
+        { text: half.learnt, at: seededAt, address: half.address, change: transcript.change() },
+      ],
+    });
+    transcript.wait(2000);
+    memoryCall(transcript, `/v0/memory/page?address=${chapter.address}`, {
+      ...pageBody(chapter, writtenAt, [mira, ...days]),
+      chapter: {
+        began: "2026-11-04",
+        ended: "2026-11-09",
+        noticed: "2026-11-10",
+        drawn_from: { journal_days: 2, photos: 0 },
+      },
+    });
+    transcript.wait(2000);
+    memoryCall(transcript, "/v0/memory/shelves", {
+      shelves: [
+        { shelf: "people", count: 1 },
+        { shelf: "groups", count: 0 },
+        { shelf: "goals", count: 1 },
+        { shelf: "projects", count: 0 },
+        { shelf: "places", count: 0 },
+        { shelf: "topics", count: 1 },
+        { shelf: "journal", count: 2 },
+      ],
+    });
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
       name: "85-a-long-quiet-stretch",
       scenario: 85,
       title: "A long quiet stretch",
@@ -4427,8 +4630,8 @@ const scenarios: readonly (() => Transcript)[] = [
 
   () => {
     const transcript = createTranscript({
-      name: "90-reply-in-a-thread",
-      scenario: 90,
+      name: "88-reply-in-a-thread",
+      scenario: 88,
       title: "Reply in a thread",
       summary:
         "Yesterday you replied to one of Kumo's messages, which started a thread under it, and Kumo named it. " +
@@ -4494,8 +4697,8 @@ const scenarios: readonly (() => Transcript)[] = [
 
   () => {
     const transcript = createTranscript({
-      name: "91-kumo-comes-back-to-a-thread",
-      scenario: 91,
+      name: "89-kumo-comes-back-to-a-thread",
+      scenario: 89,
       title: "Kumo comes back to a thread",
       summary:
         "You start a thread of your own from Threads, and Kumo names it after answering. Later its background work " +
@@ -4546,6 +4749,268 @@ const scenarios: readonly (() => Transcript)[] = [
     });
     transcript.wait(60_000);
     transcript.listThreads("theo");
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "90-a-reply-that-shows",
+      scenario: 90,
+      title: "A reply that shows",
+      summary:
+        "You ask what to order at a restaurant. Kumo answers with shape: a phone-sized table of the menu with its " +
+        "verdict on each dish as a chip, its picks in order with a picture, a price and a line each, the total for " +
+        "two, and a question with choices. A friend's name links to her page in memory.",
+      guarantees: ["G31"],
+    });
+    transcript.begin("2026-11-21T12:40:00.000Z");
+    transcript.connect();
+    transcript.wait(2000);
+    sendAndStart(transcript, "What should we get at Hearth? Two of us, not too heavy.");
+    transcript.wait(600);
+    const dishes = [
+      ["noodles", "Clay pot glass noodles"],
+      ["laab", "Langoustine laab"],
+      ["skewers", "Lamb skewers"],
+      ["greens", "Wild ginger greens"],
+      ["rice", "Sticky rice"],
+    ] as const;
+    const pictures = dishes.map(([name, dish]) => {
+      const url = `https://photos.example.org/hearth-${name}.jpg`;
+      transcript.world("web_has", { url, file: "riverside.jpg" });
+      const attachment = transcript.keptImage("riverside.jpg", `hearth-${name}.jpg`);
+      agentCalls(transcript, "keep_image", { url }, { attachment });
+      transcript.wait(300);
+      return {
+        attachment,
+        alt: dish,
+        source_url: `https://commons.example.org/wiki/File:${name}.jpg`,
+        credit: "Photo by J. Example, CC BY 4.0",
+      };
+    });
+    const [noodles, laab, skewers, greens, rice] = pictures;
+    writeWhole(
+      transcript,
+      [
+        "Good menu. It's northern Thai, cooked over wood, all small plates to share: four or five between two, " +
+          "plus rice.",
+        "",
+        "```ari:table",
+        JSON.stringify({
+          columns: ["Dish", "My take"],
+          rows: [
+            {
+              name: "Clay pot glass noodles",
+              detail: "Pork belly, brown crab, white pepper",
+              verdict: { label: "Must try", tone: "strong" },
+            },
+            {
+              name: "Langoustine laab",
+              detail: "Minced, toasted rice, herbs, lime",
+              verdict: { label: "Must try", tone: "strong" },
+            },
+            {
+              name: "Lamb & cumin skewers",
+              detail: "Aged lamb, charred over wood",
+              verdict: { label: "Recommended", tone: "good" },
+            },
+            {
+              name: "Jungle curry",
+              detail: "Pork, fiery, no coconut",
+              verdict: { label: "If you like heat", tone: "quiet" },
+            },
+            {
+              name: "Isaan sausage",
+              detail: "Fermented pork, ginger, peanut",
+              verdict: { label: "Skip today", tone: "quiet" },
+            },
+            { name: "Sticky rice", detail: "Steamed in a basket", verdict: { label: "Best value", tone: "neutral" } },
+          ],
+        }),
+        "```",
+        "",
+        "```ari:picks",
+        JSON.stringify({
+          title: "What I'd order",
+          picks: [
+            {
+              name: "Clay pot glass noodles",
+              detail: "£9.50",
+              why: "What people come for: smoky, peppery, crab all through it.",
+              image: noodles,
+            },
+            {
+              name: "Langoustine laab",
+              detail: "£11",
+              why: "Bright and sharp, so it cuts the richness of the noodles.",
+              image: laab,
+            },
+            {
+              name: "Lamb skewers",
+              detail: "£8",
+              why: "Two skewers, easy to split, properly charred.",
+              image: skewers,
+            },
+            {
+              name: "Wild ginger greens",
+              detail: "£6.50",
+              why: "Something green, since you said not too heavy.",
+              image: greens,
+            },
+            {
+              name: "Sticky rice × 2",
+              detail: "£7",
+              why: "For the laab's juices. You'll want the second.",
+              image: rice,
+            },
+          ],
+        }),
+        "```",
+        "",
+        "```ari:number",
+        JSON.stringify({
+          label: "Estimated for two",
+          value: "£47",
+          context: "Five plates and rice. £53 with the 12.5% service.",
+        }),
+        "```",
+        "",
+        "Want a drink matched to it, or is that the lot?",
+        "",
+        "```ari:choices",
+        JSON.stringify({ options: ["Add drinks", "Lighter swap", "That's the lot"] }),
+        "```",
+      ].join("\n"),
+    );
+    transcript.endTurn("completed");
+    transcript.wait(1500);
+    transcript.fetchAttachment(noodles?.attachment ?? "");
+    transcript.wait(30_000);
+    sendAndStart(transcript, "That's the lot");
+    transcript.wait(700);
+    writeWhole(transcript, "Enjoy. Say hi to [Maya](memory:people/maya-lind).");
+    transcript.endTurn("completed");
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "91-a-page-kumo-made",
+      scenario: 91,
+      title: "A page Kumo made",
+      summary:
+        "You ask what not to miss at a museum. Kumo makes a page, a guide in walking order with things to spot, and " +
+        "answers in a few sentences with a card that opens it. You open it. The next morning Kumo keeps it current: " +
+        "a room reopened, so it's back in, with a note that says so. At the museum you tick things off as you spot " +
+        "them, and the Made shelf lists the page.",
+      guarantees: ["G31", "G59"],
+    });
+    transcript.begin("2026-11-21T18:10:00.000Z");
+    transcript.connect();
+    transcript.wait(2000);
+    sendAndStart(transcript, "We're at the V&A tomorrow for two hours. What shouldn't I miss?");
+    transcript.wait(800);
+    transcript.step("web_search", searching("V&A highlights two hours"));
+    transcript.wait(1500);
+    transcript.endStep();
+    const keep = (name: string, alt: string) => {
+      const url = `https://photos.example.org/${name}.jpg`;
+      transcript.world("web_has", { url, file: "riverside.jpg" });
+      const attachment = transcript.keptImage("riverside.jpg", `${name}.jpg`);
+      agentCalls(transcript, "keep_image", { url }, { attachment });
+      transcript.wait(300);
+      return {
+        attachment,
+        alt,
+        source_url: `https://commons.example.org/wiki/File:${name}.jpg`,
+        credit: "Photo by A. Example, CC BY-SA 4.0",
+      };
+    };
+    const cover = keep("va-dome", "The V&A's dome over Cromwell Road");
+    const casts = keep("cast-courts", "The Cast Courts, with Trajan's Column in two halves");
+    const castCourts = {
+      ...guideRoom("cast-courts", "Cast Courts", "Room 46a–b · 25 min", [
+        ["trajans-column", "Trajan's Column", "Cut in two to fit under the roof. Find the join."],
+        ["fig-leaf", "David's fig leaf", "Not on him: it hangs in a case behind, made for royal visits."],
+      ]),
+      image: casts,
+      text: "Plaster copies of Europe's great monuments, made so people who couldn't travel could still stand in front of them.",
+    };
+    const southAsia = guideRoom("south-asia", "South Asia", "Room 41 · 20 min", [
+      ["tipus-tiger", "Tipu's Tiger", "A wooden tiger with an organ inside. It growls."],
+    ]);
+    const fashion = guideRoom("fashion", "Fashion", "Room 40 · 20 min", [
+      ["mantua", "The silk mantua", "A court dress so wide you went through doors sideways."],
+    ]);
+    const halfway = {
+      id: "halfway",
+      title: "Halfway",
+      numbered: false,
+      text: [
+        "```ari:place",
+        JSON.stringify({
+          name: "The Morris Room",
+          address: "V&A, Cromwell Road, London",
+          note: "the first museum café",
+        }),
+        "```",
+      ].join("\n"),
+    };
+    const intro = "Two hours, three rooms, in walking order from the Cromwell Road door. Coffee halfway.";
+    const first = { intro, check: "Spotted", sections: [castCourts, southAsia, fashion, halfway] };
+    const page = {
+      id: "va-guide",
+      title: "Your guide to the V&A",
+      summary: "3 rooms · 4 things to spot",
+      cover,
+      for_day: "2026-11-22",
+    };
+    agentCalls(transcript, "make_made_page", { ...page, content: first }, { made: "va-guide", version: 1 });
+    const made = transcript.made("created", { ...page, version: 1 }, "Made it");
+    transcript.wait(500);
+    writeWhole(
+      transcript,
+      [
+        "Two hours is three rooms if you skip the paid show. I've made you a guide, in walking order from the " +
+          "Cromwell Road door, with things to spot in each.",
+        "",
+        "```ari:made",
+        JSON.stringify({ made: "va-guide" }),
+        "```",
+      ].join("\n"),
+    );
+    transcript.endTurn("completed");
+    transcript.wait(4000);
+    memoryCall(transcript, "/v0/made/va-guide", { made: made.made, content: first, state: {}, changes: [made.change] });
+    transcript.wait(14 * 60 * 60 * 1000);
+    const cartoons = {
+      ...guideRoom("raphael-cartoons", "Raphael Cartoons", "Room 48a · 15 min", [
+        ["miraculous-draught", "The Miraculous Draught of Fishes", "Look for the cranes on the shore."],
+      ]),
+      badge: "Back in",
+    };
+    const second = { intro, check: "Spotted", sections: [castCourts, southAsia, cartoons, fashion, halfway] };
+    const note = "The Raphael Cartoons reopened this morning, so they're back in.";
+    agentCalls(
+      transcript,
+      "change_made_page",
+      { id: "va-guide", version: 1, summary: "4 rooms · 5 things to spot", content: second, note },
+      { made: "va-guide", version: 2 },
+    );
+    const changed = transcript.made("changed", { ...page, summary: "4 rooms · 5 things to spot", version: 2 }, note);
+    transcript.wait(6 * 60 * 60 * 1000 + 22 * 60 * 1000);
+    transcript.patchMade("va-guide", { ticks: { "trajans-column": "2026-11-22T14:32:00.000Z" } });
+    transcript.wait(6 * 60 * 1000);
+    const state = transcript.patchMade("va-guide", { ticks: { "fig-leaf": "2026-11-22T14:38:00.000Z" } });
+    transcript.wait(1000);
+    memoryCall(transcript, "/v0/made/va-guide", {
+      made: changed.made,
+      content: second,
+      state,
+      changes: [changed.change, made.change],
+    });
+    transcript.wait(60 * 60 * 1000);
+    memoryCall(transcript, "/v0/made", { made: [changed.made] });
     return transcript;
   },
 ];

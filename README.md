@@ -53,8 +53,10 @@ memory pages, in the iOS Simulator.</sub></p>
 - **In motion.** What you're actually doing (a trip, a training block, an appointment, a repair)
   kept current as you talk, pinned above the composer and in its own tab. A trip has its days, a map,
   its places and its travel.
-- **Memory.** The You tab is Kumo's memory, the Library: pages on shelves and a journal, in the
-  phone's search, with what changed and when.
+- **Memory.** The You tab is Kumo's memory, the Library, read as a reflection: Now in a few lines,
+  the chapters of your life Kumo noticed (each a short story with its photos), what Kumo learnt
+  about you lately in its own words, then pages on shelves and a journal, in the phone's search,
+  with what changed and when.
 - **Talk.** A call with Kumo through CallKit: your voice goes to your server, and Kumo's comes back
   with captions as each line is heard.
 - **Capabilities and setup.** Mail, calendar and the rest connect through the provider's own page

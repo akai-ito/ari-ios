@@ -695,7 +695,10 @@ export interface paths {
     };
     /**
      * Fetch an attachment's bytes
-     * @description The bytes, with the media type they were uploaded with. They never change, so keep them once fetched.
+     * @description The bytes, exactly as they were uploaded or made, with their media type and their name in
+     *     `Content-Disposition`. They never change, so keep them once fetched. Ask for part of a big
+     *     file with one `Range: bytes=…` range, such as to play a recording as it downloads or to
+     *     resume a download; the answer is a `206` with `Content-Range`.
      */
     get: operations["getAttachment"];
     /**
@@ -709,6 +712,258 @@ export interface paths {
     put: operations["uploadAttachment"];
     post?: never;
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/uploads": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * See the limits, and the big uploads still going
+     * @description What the server takes, to show before anything is uploaded: the media types and the largest
+     *     size of each kind, the largest chunk, and what happens to a recording. Then the big uploads
+     *     that haven't finished, so an app that was closed mid-upload can carry on from `received`.
+     */
+    get: operations["listUploads"];
+    put?: never;
+    /**
+     * Start a big upload
+     * @description For a file too big for `PUT /v0/attachments/{attachment}` (over 20 MB), such as a recorded
+     *     conversation. Say what's coming: the id the app made, which becomes the attachment's id, the
+     *     file's name, media type and size in bytes. Then send it in chunks with
+     *     `PUT /v0/uploads/{upload}`, in order, and finish with `POST /v0/uploads/{upload}/finish`.
+     *     The finished upload is an attachment like any other: name it in a message.
+     *
+     *     Starting the same upload again changes nothing and answers where it stands, so it's also how
+     *     an app resumes. Only the media types `GET /v0/uploads` lists are taken, each kind up to its
+     *     size. An upload no chunk reaches for two days is deleted.
+     */
+    post: operations["createUpload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/uploads/{upload}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** See where a big upload stands */
+    get: operations["getUpload"];
+    /**
+     * Send a chunk of a big upload
+     * @description The body is the next bytes of the file, at most `chunk_bytes` (about 8 MB is a good size),
+     *     and `offset` says where they start. The server answers once they're on its disk, with how
+     *     much it now has: show that as the upload's progress, and send the next chunk from there.
+     *
+     *     Sending a chunk again is safe: bytes the server already has are skipped. A chunk that starts
+     *     past what the server has is refused with `offset_mismatch` and the upload as it stands, so
+     *     the app carries on from its `received`.
+     */
+    put: operations["sendUploadChunk"];
+    post?: never;
+    /**
+     * Give up a big upload
+     * @description Deletes what the server has of an unfinished upload. Cancelling one that isn't there changes nothing.
+     */
+    delete: operations["cancelUpload"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/uploads/{upload}/finish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Finish a big upload
+     * @description Once the server has every byte, this makes the upload an attachment, after checking that its
+     *     first bytes fit its media type (a recording must be audio, a PDF a PDF). Give the file's
+     *     SHA-256 to have the server check it arrived whole; when it doesn't match, the server starts
+     *     the upload over from offset 0 and says so with `checksum_mismatch`. Finishing again answers
+     *     the same attachment.
+     */
+    post: operations["finishUpload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/recordings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the recordings you sent
+     * @description Newest first, with where each one's transcript stands. Deleted recordings aren't listed.
+     */
+    get: operations["listRecordings"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/recordings/{attachment}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * See where a recording's transcript stands
+     * @description Every audio attachment you send in a message becomes a recording. `recording.changed` says
+     *     when it moves on; this is for a recording on screen after a snapshot.
+     */
+    get: operations["getRecording"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a recording's audio and transcript
+     * @description Deletes the audio, its transcript and any copy in Kumo's workspace, and stops a transcription
+     *     under way. The message stays, with the attachment's name, but its audio can't be fetched
+     *     again. What Kumo already wrote from it, such as a summary in the chat, stays; ask Kumo to
+     *     change what it remembers. Deleting again answers the deleted recording.
+     */
+    delete: operations["deleteRecording"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/recordings/{attachment}/retry": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Transcribe a failed recording again
+     * @description Puts a `failed` recording back in the queue, such as after installing ffmpeg on the server.
+     *     A recording that isn't failed is answered as it is.
+     */
+    post: operations["retryRecording"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/recordings/{attachment}/transcript": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read a recording's transcript
+     * @description What was said, piece by piece, with times from the start of the recording and, where the
+     *     server could tell voices apart, who said it, with your corrections applied. It's what the
+     *     model heard, not a summary: Kumo reads the same words and keeps its own reading separate.
+     *     Ask for `format=text` for plain text to share, one line per turn with its time.
+     */
+    get: operations["getTranscript"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/recordings/{attachment}/corrections": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Correct what the transcript misheard, and name its voices
+     * @description Replace words the server misheard, such as a name or a term, everywhere they appear, and
+     *     give voices names, such as "Interviewer" for `S1`. The words as heard are kept underneath:
+     *     correcting the same words again replaces the earlier correction, and correcting them to
+     *     themselves undoes it. Kumo makes the same corrections when you tell it in the chat.
+     */
+    post: operations["correctTranscript"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/files": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the files Kumo showed you
+     * @description Newest change first, each with all its versions, for a shelf of what Kumo made.
+     */
+    get: operations["listFiles"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/files/{file}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * See a file Kumo showed you, with its versions
+     * @description What an `ari:file` card needs: the file's versions, oldest first, each with its attachment
+     *     (name, media type and size) and what changed. Fetch a version's bytes with
+     *     `GET /v0/attachments/{attachment}`; they are exactly what Kumo made, and never change.
+     */
+    get: operations["getFile"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a file Kumo showed you, every version
+     * @description Deletes every version's bytes from the server, and the copies kept for mail drafts; the
+     *     file Kumo works on in its workspace stays. Cards for it then say it's gone. Deleting one
+     *     that isn't there changes nothing.
+     */
+    delete: operations["deleteFile"];
     options?: never;
     head?: never;
     patch?: never;
@@ -932,7 +1187,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** The shelves, with how much is on each */
+    /**
+     * The shelves, with how much is on each
+     * @description Chapters aren't among them: the Library shows them as a row of their own, from
+     *     `listChapters`.
+     */
     get: operations["listShelves"];
     put?: never;
     post?: never;
@@ -975,6 +1234,52 @@ export interface paths {
      *     changed. A page changed twice has two rows. `getChange` opens any of them.
      */
     get: operations["listRecentChanges"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/memory/chapters": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The chapters of your life Ari noticed
+     * @description Arcs Ari noticed and named, such as "Florence with Mira" or "Back to training", each a page
+     *     on the `chapters` shelf: a short story with photos, then what changed. Those still going
+     *     come first, the one changed most lately leading; then the rest, the latest to end first.
+     *     `getPage` opens one.
+     */
+    get: operations["listChapters"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/memory/learnt": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What Ari learnt about you lately
+     * @description The five newest lines Ari learnt about you, newest first, each in its own words to you,
+     *     such as "Half marathons suit you more than 5Ks." A line comes only with a change to memory
+     *     that taught Ari something about you, never with one that tidies, reconciles or fixes
+     *     records. One Ari took back, or whose page it forgot, is gone. To correct one, you tell Ari.
+     */
+    get: operations["listLearnt"];
     put?: never;
     post?: never;
     delete?: never;
@@ -1097,7 +1402,9 @@ export interface paths {
     };
     /**
      * Everything in motion, then what's done
-     * @description Active things first, then done ones, each group newest first.
+     * @description Active things first, then done ones, each group newest first. Done ones carry their
+     *     `outcome`; those that never show (`duplicate`, `test`, `elsewhere`) are listed too, so
+     *     nothing is lost, for apps to leave out.
      */
     get: operations["listMotion"];
     put?: never;
@@ -1157,6 +1464,70 @@ export interface paths {
      *     changes nothing.
      */
     patch: operations["patchMotionState"];
+    trace?: never;
+  };
+  "/v0/made": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The Made shelf
+     * @description Every page Ari made, most recently changed first.
+     */
+    get: operations["listMade"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/made/{made}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One page, with its content, your ticks and what changed
+     * @description The content is as `MadeContent` in [the made schema](made.schema.json) describes.
+     */
+    get: operations["getMade"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/made/{made}/state": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Tick items on a page, or take a tick back
+     * @description A JSON Merge Patch (RFC 7386) on the state, such as
+     *     `{"ticks": {"trajans-column": "2026-11-22T14:32:00.000Z"}}` with when you ticked it, sent as
+     *     `application/merge-patch+json` or `application/json`; `null` takes a tick back. Only a page
+     *     with a `check` word ticks, and only its items. Every app hears `made.state`, and Ari reads
+     *     the ticks with the page. Sending the same patch twice changes nothing.
+     */
+    patch: operations["patchMadeState"];
     trace?: never;
   };
   "/v0/models": {
@@ -1457,10 +1828,10 @@ export interface components {
       images: boolean;
     };
     /**
-     * @description A shelf in memory; `people` holds one page per person, `groups` one per group of people, and `journal` one per day.
+     * @description A shelf in memory; `people` holds one page per person, `groups` one per group of people, `chapters` one per chapter of your life, and `journal` one per day.
      * @enum {unknown}
      */
-    Shelf: "people" | "groups" | "goals" | "projects" | "places" | "topics" | "journal";
+    Shelf: "people" | "groups" | "goals" | "projects" | "places" | "topics" | "chapters" | "journal";
     /**
      * @description What the page is now, in one line, written by Ari and kept current with every change: a
      *     journal day's headline, who someone is to you, where a project stands. Absent until Ari
@@ -1506,6 +1877,7 @@ export interface components {
         | "projects"
         | "places"
         | "topics"
+        | "chapters"
         | "journal";
       /** @description Other names Ari knows it by. */
       aliases: string[];
@@ -1520,6 +1892,7 @@ export interface components {
        *     show its words instead.
        */
       photos?: components["schemas"]["MemoryPhoto"][];
+      chapter?: components["schemas"]["ChapterFacts"];
     };
     /** @description A photo a page keeps with its story. */
     MemoryPhoto: {
@@ -1553,6 +1926,55 @@ export interface components {
     };
     RecentChanges: {
       changes: components["schemas"]["RecentChange"][];
+    };
+    /**
+     * Format: date
+     * @description A day, as YYYY-MM-DD, where you are.
+     */
+    Day: string;
+    /** @description A chapter in the Library's row. */
+    Chapter: {
+      address: components["schemas"]["MemoryAddress"];
+      /** @description Its name, such as "Florence with Mira". */
+      title: string;
+      gist?: components["schemas"]["Gist"];
+      began: components["schemas"]["Day"];
+      /** @description The day it ended. Absent while it's still going. */
+      ended?: components["schemas"]["Day"];
+      /** @description The first photo its story shows. Absent when it shows none. */
+      cover?: components["schemas"]["MemoryPhoto"];
+      changed_at: components["schemas"]["Timestamp"];
+    };
+    ChapterList: {
+      chapters: components["schemas"]["Chapter"][];
+    };
+    /**
+     * @description A chapter's page only: when it began and ended, when Ari noticed it, and what it drew on,
+     *     counted by the server rather than said by Ari. The story and *What changed* are its Markdown.
+     */
+    ChapterFacts: {
+      began: components["schemas"]["Day"];
+      /** @description The day it ended. Absent while it's still going. */
+      ended?: components["schemas"]["Day"];
+      /** @description The day Ari first wrote it. Absent for a chapter that came from outside. */
+      noticed?: components["schemas"]["Day"];
+      drawn_from: {
+        /** @description The journal days it links to. */
+        journal_days: number;
+        /** @description The photos in memory that it and those days show. */
+        photos: number;
+      };
+    };
+    LearntLine: {
+      /** @description What Ari learnt, in a line to you. */
+      text: string;
+      at: components["schemas"]["Timestamp"];
+      /** @description The page whose change taught it. */
+      address: components["schemas"]["MemoryAddress"];
+      change: components["schemas"]["ChangeId"];
+    };
+    LearntLines: {
+      lines: components["schemas"]["LearntLine"][];
     };
     ShelfList: {
       shelves: {
@@ -1786,12 +2208,17 @@ export interface components {
       | components["schemas"]["MotionFinished"]
       | components["schemas"]["MotionStateChanged"]
       | components["schemas"]["MotionRemoved"]
+      | components["schemas"]["MadeCreated"]
+      | components["schemas"]["MadeChanged"]
+      | components["schemas"]["MadeStateChanged"]
+      | components["schemas"]["MadeRemoved"]
       | components["schemas"]["DeskChanged"]
       | components["schemas"]["OnboardingChanged"]
       | components["schemas"]["ProblemsChanged"]
       | components["schemas"]["ThreadStarted"]
       | components["schemas"]["ThreadChanged"]
-      | components["schemas"]["MessageMoved"];
+      | components["schemas"]["MessageMoved"]
+      | components["schemas"]["RecordingChanged"];
     /**
      * snapshot
      * @description The first event when the server can't resume from your cursor: there was none, the server doesn't know it (it was restored from a backup, compacted it away, or is a different server), or you are too far behind. Replace your view of the conversation and of the Desk with it. Its id is the id of the latest event, so resuming after it continues from here; it has no id while the conversation is empty.
@@ -2487,6 +2914,22 @@ export interface components {
       /** @description The thread to move it into. Left out, it moves to the main chat. */
       thread?: components["schemas"]["ThreadId"];
     };
+    MadeList: {
+      made: components["schemas"]["Made"][];
+    };
+    MadeDetail: {
+      made: components["schemas"]["Made"];
+      /** @description The page under its title, as `MadeContent` in [the made schema](made.schema.json) describes. */
+      content: {
+        [key: string]: unknown;
+      };
+      state: components["schemas"]["MadeState"];
+      /** @description The 20 newest changes, newest first. */
+      changes: components["schemas"]["MadeChange"][];
+    };
+    MadeStateResult: {
+      state: components["schemas"]["MadeState"];
+    };
     MotionList: {
       motions: components["schemas"]["Motion"][];
     };
@@ -2526,6 +2969,168 @@ export interface components {
     };
     AttachmentResult: {
       attachment: components["schemas"]["Attachment"];
+    };
+    /**
+     * @description `audio` for a recording, `image` for a photo, `file` for a document.
+     * @enum {unknown}
+     */
+    UploadKind: "audio" | "image" | "file";
+    UploadKindLimit: {
+      kind: components["schemas"]["UploadKind"];
+      /** @description The largest file of this kind, in bytes. */
+      max_bytes: number;
+      /** @description The media types of this kind that big uploads take. */
+      media_types: string[];
+    };
+    UploadLimits: {
+      /** @description The largest file `PUT /v0/attachments/{attachment}` takes in one go; anything bigger goes in chunks. */
+      simple_bytes: number;
+      /** @description The most one chunk may hold. */
+      chunk_bytes: number;
+      kinds: components["schemas"]["UploadKindLimit"][];
+    };
+    CreateUpload: {
+      id: components["schemas"]["UploadId"];
+      /** @description The file's name, shown with the message and used in the agent's workspace. */
+      name: string;
+      /** @description Its media type, such as `audio/mp4` for a Voice Memos recording. */
+      media_type: string;
+      /** @description Its whole size, in bytes. */
+      size: number;
+    };
+    Upload: {
+      id: components["schemas"]["UploadId"];
+      name: string;
+      media_type: string;
+      kind: components["schemas"]["UploadKind"];
+      /** @description Its whole size, in bytes, as the app said. */
+      size: number;
+      /** @description How many bytes from the start the server has on disk. The next chunk starts here. */
+      received: number;
+      /**
+       * @description `receiving` until it's finished; `finished` once it's an attachment.
+       * @enum {unknown}
+       */
+      state: "receiving" | "finished";
+      /** @description `receiving` only: when the server deletes it if no more arrives. */
+      expires_at?: components["schemas"]["Timestamp"];
+      /** @description `finished` only: the attachment it became. */
+      attachment?: components["schemas"]["Attachment"];
+    };
+    Transcription: {
+      /**
+       * @description Whether the server can transcribe a recording now: `ready`; `loading` while its voice
+       *     starts; `unavailable` when it has none or it failed, as `reason` says. A recording sent
+       *     while it can't waits, queued, until it can.
+       * @enum {unknown}
+       */
+      state: "ready" | "loading" | "unavailable";
+      /** @description Why it isn't ready. */
+      reason?: string;
+      /** @description The languages it transcribes well, such as `en`; speech in others comes out wrong. */
+      languages: string[];
+      /** @description A line to show before a recording is sent, about the other people in it. */
+      consent: string;
+    };
+    UploadResult: {
+      upload: components["schemas"]["Upload"];
+    };
+    UploadErrorResult: {
+      error: components["schemas"]["Error"];
+      upload: components["schemas"]["Upload"];
+    };
+    UploadList: {
+      limits: components["schemas"]["UploadLimits"];
+      transcription: components["schemas"]["Transcription"];
+      /** @description The big uploads that haven't finished, oldest first. */
+      uploads: components["schemas"]["Upload"][];
+    };
+    RecordingList: {
+      recordings: components["schemas"]["Recording"][];
+    };
+    RecordingResult: {
+      recording: components["schemas"]["Recording"];
+    };
+    RecordingErrorResult: {
+      error: components["schemas"]["Error"];
+      recording: components["schemas"]["Recording"];
+    };
+    TranscriptSpeaker: {
+      /** @description `S1`, `S2`… in the order they first speak, or `you` for the voice that matches your voiceprint. */
+      id: string;
+      /** @description What to call them, such as "Speaker 1", "You", or the name you gave them. */
+      name: string;
+      /** @description How long they spoke, roughly. */
+      seconds: number;
+      /** @description Whether this voice matched yours. Without a voiceprint (it's learnt on calls), no voice is you. */
+      you: boolean;
+    };
+    TranscriptSegment: {
+      /** @description Seconds from the start of the recording. */
+      start: number;
+      end: number;
+      /** @description What was said, as the model heard it, with your corrections. */
+      text: string;
+      /** @description The `id` of who said it, when the server could tell. */
+      speaker?: string;
+    };
+    TranscriptCorrection: {
+      /** @description The words as the model heard them, matched whole and in any case. */
+      heard: string;
+      /** @description What was really said. */
+      meant: string;
+    };
+    SpeakerName: {
+      id: string;
+      name: string;
+    };
+    Transcript: {
+      attachment: components["schemas"]["AttachmentId"];
+      /** @description The recording's file name. */
+      name: string;
+      duration_seconds: number;
+      language: string;
+      /** @description The speech model that heard it, such as `nvidia/parakeet-tdt-0.6b-v2`. */
+      model: string;
+      /** @description The voices the server told apart, a best guess; empty when it couldn't tell. */
+      speakers: components["schemas"]["TranscriptSpeaker"][];
+      segments: components["schemas"]["TranscriptSegment"][];
+      /** @description The corrections applied, in order. */
+      corrections: components["schemas"]["TranscriptCorrection"][];
+      made_at: components["schemas"]["Timestamp"];
+    };
+    TranscriptResult: {
+      transcript: components["schemas"]["Transcript"];
+    };
+    CorrectTranscript: {
+      replace?: components["schemas"]["TranscriptCorrection"][];
+      speakers?: components["schemas"]["SpeakerName"][];
+    };
+    FileVersion: {
+      /** @description 1 for the first one Kumo showed, then one more each time it showed a change. */
+      version: number;
+      /** @description This version's bytes, name, media type and size. */
+      attachment: components["schemas"]["Attachment"];
+      /** @description What changed since the version before, in Kumo's words. */
+      note?: string;
+      made_at: components["schemas"]["Timestamp"];
+    };
+    ShownFile: {
+      id: components["schemas"]["FileId"];
+      /** @description The latest version's name. */
+      name: string;
+      /** @description Oldest first; the last is the latest. */
+      versions: components["schemas"]["FileVersion"][];
+    };
+    FileList: {
+      files: components["schemas"]["ShownFile"][];
+    };
+    FileResult: {
+      file: components["schemas"]["ShownFile"];
+    };
+    FinishUpload: {
+      /** @description The whole file's SHA-256, in lowercase hex, for the server to check. */
+      sha256?: string;
     };
     Pair: {
       /** @description The code from the QR code, with or without its dash, in any case. */
@@ -2700,7 +3305,7 @@ export interface components {
     /** @description Opaque: the `UploadId` the app made for what it uploaded, or an id the server made for a recording it keeps, such as a spoken message's. */
     AttachmentId: string;
     /**
-     * @description `image` for a JPEG, PNG, GIF or WebP photo, which the agent sees; `audio` for a recording, such as a spoken message's; `file` for anything else, which lands in the agent's workspace. Treat a kind you don't recognise as a file.
+     * @description `image` for a JPEG, PNG, GIF or WebP photo, which the agent sees; `audio` for a recording, such as a spoken message's or one you send, which the server transcribes for the agent; `file` for anything else, which lands in the agent's workspace. Treat a kind you don't recognise as a file.
      * @enum {unknown}
      */
     AttachmentKind: "image" | "audio" | "file";
@@ -2840,7 +3445,7 @@ export interface components {
       /** @description Its first picture, yours or one Kumo found, for a thumbnail: fetch it with `GET /v0/attachments/{attachment}`. */
       picture?: components["schemas"]["AttachmentId"];
       /**
-       * @description It holds a page Kumo made.
+       * @description It holds a page Kumo made: one of its replies or posts shows an `ari:made` card.
        * @constant
        */
       page?: true;
@@ -2964,7 +3569,7 @@ export interface components {
       /** @description Such as "WFH day". */
       note?: string;
     };
-    /** @description Something waiting on you on the Desk. It stays until it's done, whatever the date. Draw its buttons from `options`; `allows_text` offers a typed answer, which for a draft asks for a change, such as "a bit more casual". Its kind's payload sits under a field of the same name. Show a kind you don't recognise by its title and options. */
+    /** @description Something waiting on you on the Desk. It stays until it's done, or until it can no longer help: a card with `until`, or an invite once its event is over, leaves by itself then. Draw its buttons from `options`; `allows_text` offers a typed answer, which for a draft asks for a change, such as "a bit more casual". Its kind's payload sits under a field of the same name. Show a kind you don't recognise by its title and options. */
     Card: {
       id: components["schemas"]["CardId"];
       /**
@@ -2975,6 +3580,8 @@ export interface components {
       motion?: components["schemas"]["MotionId"];
       /** @description When it began waiting, for "since Wed". */
       at: components["schemas"]["Timestamp"];
+      /** @description When it stops mattering, such as the evening a question about where to meet is for: it leaves the Desk by itself then. Absent for a card that waits however long it takes. */
+      until?: components["schemas"]["Timestamp"];
       /** @description When Kumo last changed it while it waited, such as rewriting a draft or bringing it back after it couldn't act. Absent if it hasn't changed. Mark a card whose `changed_at`, or `at` for a new one, is later than your last look at the Desk. */
       changed_at?: components["schemas"]["Timestamp"];
       /** @description One line, such as "Draft to Tess". */
@@ -3115,22 +3722,62 @@ export interface components {
       /** @description The side thread it answers in; absent for the main chat. */
       thread?: components["schemas"]["ThreadId"];
     };
-    /** @description A thing in motion: something going on that Ari keeps for you, such as a trip being planned. Its content and state come from `GET /v0/motion/{id}`. */
+    /**
+     * @description `queued` while it waits its turn, or for the server's voice to be ready, as `reason` says; `transcribing` while the server listens to it; `ready` once its transcript is; `failed` when it couldn't be transcribed, as `error` says, until it's tried again; `deleted` once its audio and transcript are gone.
+     * @enum {unknown}
+     */
+    RecordingState: "queued" | "transcribing" | "ready" | "failed" | "deleted";
+    /** @description A recording you sent in a message, and where its transcript stands. The server transcribes every audio attachment you send, on its own GPU, with times and, as a best guess, who spoke; nothing leaves the server. Fetch the transcript with `GET /v0/recordings/{attachment}/transcript` once it's `ready`. */
+    Recording: {
+      attachment: components["schemas"]["AttachmentId"];
+      /** @description The message that carries it. */
+      message: components["schemas"]["MessageId"];
+      /** @description The recording's file name, as uploaded. */
+      name: string;
+      state: components["schemas"]["RecordingState"];
+      /** @description `queued` only: why it hasn't started, such as the voice still loading. Absent while it simply waits its turn. */
+      reason?: string;
+      /** @description `transcribing` only: how far through it the server is. */
+      progress?: {
+        /** @description How much of it has been heard. */
+        done_seconds: number;
+        /** @description How long it is, when the server could tell. */
+        total_seconds?: number;
+      };
+      /** @description `ready` only: how long it is. */
+      duration_seconds?: number;
+      /** @description `ready` only: how many voices the server told apart, which is a best guess. */
+      speakers?: number;
+      /** @description `failed` only: why. */
+      error?: components["schemas"]["Error"];
+      changed_at: components["schemas"]["Timestamp"];
+    };
+    /** @description Opaque: the id of a file Kumo showed you, which stays the same across its versions. */
+    FileId: string;
+    /** @description A thing in motion: something going on that Kumo keeps for you, such as a trip being planned or a role you're interviewing for. Its content and state come from `GET /v0/motion/{id}`. */
     Motion: {
       id: components["schemas"]["MotionId"];
       /**
-       * @description Which widget draws it. Show a plain card, with its title and summary, for a kind you don't recognise.
+       * @description Which widget draws it, and which section of In motion it sits in: `career`, `body`, `trip`, `project`, `learning` or `other`, always in that order. 0.18's `training` sits in Body, `pursuit` in Career, and `occasion` and `case` in Other until Kumo reshapes them. Show a kind you don't recognise as a plain card in Other.
        * @example trip
        */
       kind: string;
       /** @description Short, such as "Florence with Mira": Ari keeps it to 28 characters or fewer. */
       title: string;
-      /** @description Where it stands, in one line, for the pinned line and the In motion tab, such as "6–9 Nov · 3 to book". Ari keeps it current with every change. */
+      /** @description Kumo's line for you: where it stands, short, such as "Virtual 1 · Python PR review" or "6–9 Nov · 3 to book". Kumo keeps it current with every change, and keeps sources, guesses and ids out of it, in the content's notes. Once it's finished, it says how it ended, such as "No offer after the final round". */
       summary: string;
-      /** @enum {unknown} */
+      /**
+       * @description `done` once Kumo stops keeping it: tracking ended, which isn't the same as achieving it. `outcome` says how it ended.
+       * @enum {unknown}
+       */
       status: "active" | "done";
       /** @description Whether it's pinned above the composer. Ari pins a thing it starts, unpins it when it's done or when you ask, and pins it again when you ask. */
       pinned: boolean;
+      /**
+       * @description How much it matters to you now, by Kumo's judgement of the stakes, the timing and what you've said, never by its stage or date: `loud` is big and carries the picture in its section, `normal` is a row, and `quiet` folds into "+ N quieter". You correct it by telling Kumo. Show a value you don't recognise as `normal`.
+       * @enum {unknown}
+       */
+      salience: "loud" | "normal" | "quiet";
       /** @description The content's cover photo, for the card. Absent when it has none. */
       cover?: components["schemas"]["AttachmentId"];
       /** @description How many times it has changed, counting its start as 1. */
@@ -3139,6 +3786,13 @@ export interface components {
       changed_at: components["schemas"]["Timestamp"];
       /** @description When it was finished. Absent while it's active. */
       done_at?: components["schemas"]["Timestamp"];
+      /**
+       * @description How it ended, once it's done: `achieved`; `not_met`, a goal missed; `let_go`, stopped by choice; `merged` into another thing; or one never to show, kept only to recover: `duplicate`, a copy of another thing, `test`, and `elsewhere`, small admin that lives on the Desk and in Kumo's plans now. Absent for a thing finished before 0.19 until Kumo gives it one: show it as ended, never as achieved. Show a value you don't recognise as ended.
+       * @enum {unknown}
+       */
+      outcome?: "achieved" | "not_met" | "let_go" | "merged" | "duplicate" | "test" | "elsewhere";
+      /** @description For `merged` and `duplicate`: the thing it went into, to open. */
+      merged_into?: components["schemas"]["MotionId"];
       /** @description The position of your message Ari was answering when it started the thing. */
       position: components["schemas"]["Position"];
     };
@@ -3149,6 +3803,60 @@ export interface components {
       /** @description Ari's note, such as "Booked the Uffizi, 8:15 Saturday". */
       note: string;
       /** @description The position of your message Ari was answering when it made the change: link back to it. */
+      position: components["schemas"]["Position"];
+    };
+    /** @description A made page's id: readable, chosen by Ari, unique on the server, such as `va-guide`. */
+    MadeId: string;
+    /** @description A picture Ari found on the web, kept on the server as an attachment so the app never contacts its host. Never generated. */
+    Picture: {
+      /** @description Fetch it with `GET /v0/attachments/{attachment}`. */
+      attachment: components["schemas"]["AttachmentId"];
+      alt: string;
+      /**
+       * Format: uri
+       * @description The page the picture came from.
+       */
+      source_url: string;
+      /** @description Who made it, as its source asks. */
+      credit: string;
+    };
+    /** @description A page Ari made: a rich, lasting answer, such as a gallery guide, that a reply shows as an `ari:made` card, and that sits on the Made shelf. Ari keeps it current. Its content and your ticks come from `GET /v0/made/{id}`. */
+    Made: {
+      id: components["schemas"]["MadeId"];
+      /** @description Such as "Your guide to the V&A". */
+      title: string;
+      /** @description What's in it, in one line, such as "4 rooms · 9 things to spot". */
+      summary: string;
+      /** @description The picture at its top and on its card. Absent when it has none. */
+      cover?: components["schemas"]["Picture"];
+      /**
+       * Format: date
+       * @description The day it's for, such as the visit, as `YYYY-MM-DD`: "Made for Saturday". Ari keeps it current until then. Absent when it isn't for a day.
+       */
+      for_day?: string;
+      /** @description How many times it has changed, counting its making as 1. */
+      version: number;
+      made_at: components["schemas"]["Timestamp"];
+      /** @description When Ari last changed it: "Updated 2h ago", with the latest change's note. */
+      changed_at: components["schemas"]["Timestamp"];
+      /** @description The position of your message Ari was answering when it made the page: "From your chat" links back to it. */
+      position: components["schemas"]["Position"];
+    };
+    /** @description Lowercase words and dashes, unique on the page, such as `trajans-column`. */
+    MadeItemId: string;
+    /** @description Your ticks on a made page: when you ticked each item, by its id. `{}` until you tick something. */
+    MadeState: {
+      ticks?: {
+        [key: string]: components["schemas"]["Timestamp"];
+      };
+    };
+    /** @description One change to a made page. */
+    MadeChange: {
+      version: number;
+      at: components["schemas"]["Timestamp"];
+      /** @description What changed, said to you, such as "The Raphael Cartoons reopened this morning, so they're back in." */
+      note: string;
+      /** @description The position of your message Ari was answering when it made the change. */
       position: components["schemas"]["Position"];
     };
     /**
@@ -3291,6 +3999,53 @@ export interface components {
       motion: components["schemas"]["MotionId"];
     };
     /**
+     * made.created
+     * @description Ari made a page. It joins the Made shelf.
+     */
+    MadeCreated: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "made.created";
+      at: components["schemas"]["Timestamp"];
+      made: components["schemas"]["Made"];
+      change: components["schemas"]["MadeChange"];
+    };
+    /**
+     * made.changed
+     * @description Ari changed a page, such as when something on it changed in the world. Fetch its content again. It never notifies: when you need to know, Ari says so in a message.
+     */
+    MadeChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "made.changed";
+      at: components["schemas"]["Timestamp"];
+      made: components["schemas"]["Made"];
+      change: components["schemas"]["MadeChange"];
+    };
+    /**
+     * made.state
+     * @description Your ticks on a page changed, from a tap on any device, or because a change removed an item you'd ticked. It carries the whole state.
+     */
+    MadeStateChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "made.state";
+      at: components["schemas"]["Timestamp"];
+      made: components["schemas"]["MadeId"];
+      state: components["schemas"]["MadeState"];
+    };
+    /**
+     * made.removed
+     * @description You allowed Ari to forget a page, so it's gone from the shelf and its cards.
+     */
+    MadeRemoved: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "made.removed";
+      at: components["schemas"]["Timestamp"];
+      made: components["schemas"]["MadeId"];
+    };
+    /**
      * desk.changed
      * @description Something on the Desk changed. It carries the whole Desk, which is small: replace yours.
      */
@@ -3357,6 +4112,17 @@ export interface components {
       message: components["schemas"]["Message"];
       /** @description The thread it left; absent when it left the main chat. */
       from?: components["schemas"]["ThreadId"];
+    };
+    /**
+     * recording.changed
+     * @description A recording moved on: queued, transcribing (about every 5% of the way), ready, failed or deleted. It carries the whole recording. These events are compacted like the Desk's, so after a `snapshot`, fetch `GET /v0/recordings` for the recordings you show.
+     */
+    RecordingChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "recording.changed";
+      at: components["schemas"]["Timestamp"];
+      recording: components["schemas"]["Recording"];
     };
     /**
      * @description Why the server pushed: a `reply` finished, a turn `failed`, the agent made an `ask`, or Kumo sent a `post` outside a turn.
@@ -3452,6 +4218,87 @@ export interface components {
         "application/json": components["schemas"]["ErrorResult"];
       };
     };
+    /**
+     * @description The server doesn't take this media type in a big upload, or the file's first bytes don't fit
+     *     the type it was given (`unsupported_type`). The message names what it takes.
+     */
+    UnsupportedType: {
+      headers: {
+        "Ito-Protocol": components["headers"]["ItoProtocol"];
+        [name: string]: unknown;
+      };
+      content: {
+        /**
+         * @example {
+         *       "error": {
+         *         "code": "unsupported_type",
+         *         "message": "Ito takes recordings as M4A, MP3, WAV, AAC, Ogg/Opus, FLAC, WebM, AMR, Core Audio or AIFF.",
+         *         "detail": "video/quicktime isn't a media type big uploads take."
+         *       }
+         *     }
+         */
+        "application/json": components["schemas"]["ErrorResult"];
+      };
+    };
+    /** @description The recording has no transcript yet, or any more (`not_transcribed`); `recording` says where it stands. */
+    NotTranscribed: {
+      headers: {
+        "Ito-Protocol": components["headers"]["ItoProtocol"];
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["RecordingErrorResult"];
+      };
+    };
+    /** @description The server's disk hasn't room for the file (`server_disk_full`). */
+    ServerDiskFull: {
+      headers: {
+        "Ito-Protocol": components["headers"]["ItoProtocol"];
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ErrorResult"];
+      };
+    };
+    /**
+     * @description The chunk starts past what the server has (`offset_mismatch`). Send again from the upload's
+     *     `received`.
+     */
+    OffsetMismatch: {
+      headers: {
+        "Ito-Protocol": components["headers"]["ItoProtocol"];
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["UploadErrorResult"];
+      };
+    };
+    /**
+     * @description The server hasn't every byte yet (`upload_incomplete`). Send the rest from the upload's
+     *     `received`, then finish again.
+     */
+    UploadIncomplete: {
+      headers: {
+        "Ito-Protocol": components["headers"]["ItoProtocol"];
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["UploadErrorResult"];
+      };
+    };
+    /**
+     * @description The bytes that arrived don't have the SHA-256 the app gave (`checksum_mismatch`). The server
+     *     has started the upload over: send it again from offset 0.
+     */
+    ChecksumMismatch: {
+      headers: {
+        "Ito-Protocol": components["headers"]["ItoProtocol"];
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["UploadErrorResult"];
+      };
+    };
     /** @description Too many requests, or too many wrong tokens (`slow_down`). */
     SlowDown: {
       headers: {
@@ -3478,6 +4325,8 @@ export interface components {
   parameters: {
     /** @description The item's id, from its `CalendarItem` in Coming up. */
     CalendarItem: components["schemas"]["CalendarItemId"];
+    /** @description The page's id, from its `Made`. */
+    Made: components["schemas"]["MadeId"];
     /** @description The thing's id, from its `Motion`. */
     Motion: components["schemas"]["MotionId"];
     /** @description The thread's id, from its `Thread`. */
@@ -3488,6 +4337,10 @@ export interface components {
     Turn: components["schemas"]["TurnId"];
     /** @description The id the app made for what it's uploading. */
     Upload: components["schemas"]["UploadId"];
+    /** @description The file's id, from an `ari:file` block. */
+    File: components["schemas"]["FileId"];
+    /** @description The id the app made for the big upload, which becomes its attachment's id. */
+    BigUpload: components["schemas"]["UploadId"];
     /** @description The attachment's id, from its message. */
     Attachment: components["schemas"]["AttachmentId"];
     /** @description The ask's id, from `ask.started`. */
@@ -3530,6 +4383,12 @@ export type MemoryPages = components["schemas"]["MemoryPages"];
 export type PageList = components["schemas"]["PageList"];
 export type RecentChange = components["schemas"]["RecentChange"];
 export type RecentChanges = components["schemas"]["RecentChanges"];
+export type Day = components["schemas"]["Day"];
+export type Chapter = components["schemas"]["Chapter"];
+export type ChapterList = components["schemas"]["ChapterList"];
+export type ChapterFacts = components["schemas"]["ChapterFacts"];
+export type LearntLine = components["schemas"]["LearntLine"];
+export type LearntLines = components["schemas"]["LearntLines"];
 export type ShelfList = components["schemas"]["ShelfList"];
 export type MemoryChange = components["schemas"]["MemoryChange"];
 export type MemoryBackup = components["schemas"]["MemoryBackup"];
@@ -3589,12 +4448,39 @@ export type ThreadPage = components["schemas"]["ThreadPage"];
 export type ThreadResult = components["schemas"]["ThreadResult"];
 export type ThreadChange = components["schemas"]["ThreadChange"];
 export type MoveMessage = components["schemas"]["MoveMessage"];
+export type MadeList = components["schemas"]["MadeList"];
+export type MadeDetail = components["schemas"]["MadeDetail"];
+export type MadeStateResult = components["schemas"]["MadeStateResult"];
 export type MotionList = components["schemas"]["MotionList"];
 export type MotionDetail = components["schemas"]["MotionDetail"];
 export type MotionState = components["schemas"]["MotionState"];
 export type StopResult = components["schemas"]["StopResult"];
 export type RetryResult = components["schemas"]["RetryResult"];
 export type AttachmentResult = components["schemas"]["AttachmentResult"];
+export type UploadKind = components["schemas"]["UploadKind"];
+export type UploadKindLimit = components["schemas"]["UploadKindLimit"];
+export type UploadLimits = components["schemas"]["UploadLimits"];
+export type CreateUpload = components["schemas"]["CreateUpload"];
+export type Upload = components["schemas"]["Upload"];
+export type Transcription = components["schemas"]["Transcription"];
+export type UploadResult = components["schemas"]["UploadResult"];
+export type UploadErrorResult = components["schemas"]["UploadErrorResult"];
+export type UploadList = components["schemas"]["UploadList"];
+export type RecordingList = components["schemas"]["RecordingList"];
+export type RecordingResult = components["schemas"]["RecordingResult"];
+export type RecordingErrorResult = components["schemas"]["RecordingErrorResult"];
+export type TranscriptSpeaker = components["schemas"]["TranscriptSpeaker"];
+export type TranscriptSegment = components["schemas"]["TranscriptSegment"];
+export type TranscriptCorrection = components["schemas"]["TranscriptCorrection"];
+export type SpeakerName = components["schemas"]["SpeakerName"];
+export type Transcript = components["schemas"]["Transcript"];
+export type TranscriptResult = components["schemas"]["TranscriptResult"];
+export type CorrectTranscript = components["schemas"]["CorrectTranscript"];
+export type FileVersion = components["schemas"]["FileVersion"];
+export type ShownFile = components["schemas"]["ShownFile"];
+export type FileList = components["schemas"]["FileList"];
+export type FileResult = components["schemas"]["FileResult"];
+export type FinishUpload = components["schemas"]["FinishUpload"];
 export type Pair = components["schemas"]["Pair"];
 export type PairResult = components["schemas"]["PairResult"];
 export type AskResult = components["schemas"]["AskResult"];
@@ -3662,8 +4548,17 @@ export type StatusKind = components["schemas"]["StatusKind"];
 export type StatusLabel = components["schemas"]["StatusLabel"];
 export type StatusDetail = components["schemas"]["StatusDetail"];
 export type LiveTurn = components["schemas"]["LiveTurn"];
+export type RecordingState = components["schemas"]["RecordingState"];
+export type Recording = components["schemas"]["Recording"];
+export type FileId = components["schemas"]["FileId"];
 export type Motion = components["schemas"]["Motion"];
 export type MotionChange = components["schemas"]["MotionChange"];
+export type MadeId = components["schemas"]["MadeId"];
+export type Picture = components["schemas"]["Picture"];
+export type Made = components["schemas"]["Made"];
+export type MadeItemId = components["schemas"]["MadeItemId"];
+export type MadeState = components["schemas"]["MadeState"];
+export type MadeChange = components["schemas"]["MadeChange"];
 export type VoiceState = components["schemas"]["VoiceState"];
 export type VoiceReason = components["schemas"]["VoiceReason"];
 export type MessageAmended = components["schemas"]["MessageAmended"];
@@ -3677,12 +4572,17 @@ export type MotionChanged = components["schemas"]["MotionChanged"];
 export type MotionFinished = components["schemas"]["MotionFinished"];
 export type MotionStateChanged = components["schemas"]["MotionStateChanged"];
 export type MotionRemoved = components["schemas"]["MotionRemoved"];
+export type MadeCreated = components["schemas"]["MadeCreated"];
+export type MadeChanged = components["schemas"]["MadeChanged"];
+export type MadeStateChanged = components["schemas"]["MadeStateChanged"];
+export type MadeRemoved = components["schemas"]["MadeRemoved"];
 export type DeskChanged = components["schemas"]["DeskChanged"];
 export type OnboardingChanged = components["schemas"]["OnboardingChanged"];
 export type ProblemsChanged = components["schemas"]["ProblemsChanged"];
 export type ThreadStarted = components["schemas"]["ThreadStarted"];
 export type ThreadChanged = components["schemas"]["ThreadChanged"];
 export type MessageMoved = components["schemas"]["MessageMoved"];
+export type RecordingChanged = components["schemas"]["RecordingChanged"];
 export type NotificationKind = components["schemas"]["NotificationKind"];
 export type ResponseInvalidRequest = components["responses"]["InvalidRequest"];
 export type ResponseTokenRejected = components["responses"]["TokenRejected"];
@@ -3690,14 +4590,23 @@ export type ResponsePairingCodeRejected = components["responses"]["PairingCodeRe
 export type ResponseNotFound = components["responses"]["NotFound"];
 export type ResponseIdConflict = components["responses"]["IdConflict"];
 export type ResponseTooLarge = components["responses"]["TooLarge"];
+export type ResponseUnsupportedType = components["responses"]["UnsupportedType"];
+export type ResponseNotTranscribed = components["responses"]["NotTranscribed"];
+export type ResponseServerDiskFull = components["responses"]["ServerDiskFull"];
+export type ResponseOffsetMismatch = components["responses"]["OffsetMismatch"];
+export type ResponseUploadIncomplete = components["responses"]["UploadIncomplete"];
+export type ResponseChecksumMismatch = components["responses"]["ChecksumMismatch"];
 export type ResponseSlowDown = components["responses"]["SlowDown"];
 export type ResponseUnavailable = components["responses"]["Unavailable"];
 export type ParameterCalendarItem = components["parameters"]["CalendarItem"];
+export type ParameterMade = components["parameters"]["Made"];
 export type ParameterMotion = components["parameters"]["Motion"];
 export type ParameterThread = components["parameters"]["Thread"];
 export type ParameterMessage = components["parameters"]["Message"];
 export type ParameterTurn = components["parameters"]["Turn"];
 export type ParameterUpload = components["parameters"]["Upload"];
+export type ParameterFile = components["parameters"]["File"];
+export type ParameterBigUpload = components["parameters"]["BigUpload"];
 export type ParameterAttachment = components["parameters"]["Attachment"];
 export type ParameterAsk = components["parameters"]["Ask"];
 export type ParameterDevice = components["parameters"]["Device"];
@@ -4744,7 +5653,10 @@ export interface operations {
   getAttachment: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description One byte range, such as `bytes=0-1048575` or `bytes=1048576-`. */
+        Range?: string;
+      };
       path: {
         /** @description The attachment's id, from its message. */
         attachment: components["parameters"]["Attachment"];
@@ -4757,6 +5669,20 @@ export interface operations {
       200: {
         headers: {
           "Ito-Protocol": components["headers"]["ItoProtocol"];
+          /** @description Always `bytes`. */
+          "Accept-Ranges"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "*/*": unknown;
+        };
+      };
+      /** @description The part of the file the range asked for. */
+      206: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          /** @description Which bytes these are, such as `bytes 0-1048575/52428800`. */
+          "Content-Range"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4766,6 +5692,16 @@ export interface operations {
       400: components["responses"]["InvalidRequest"];
       401: components["responses"]["TokenRejected"];
       404: components["responses"]["NotFound"];
+      /** @description The range is past the end of the file; `Content-Range` gives its size as `bytes *\/size`. */
+      416: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          /** @description The file's size, such as `bytes *\/52428800`. */
+          "Content-Range"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
       429: components["responses"]["SlowDown"];
     };
   };
@@ -4812,6 +5748,482 @@ export interface operations {
       401: components["responses"]["TokenRejected"];
       409: components["responses"]["IdConflict"];
       413: components["responses"]["TooLarge"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  listUploads: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The limits and the unfinished uploads. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  createUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "id": "6f1c1f4e-9b7a-4c52-8f0e-2b6d1f0a9c31",
+         *       "name": "Interview with Northwind.m4a",
+         *       "media_type": "audio/mp4",
+         *       "size": 96468992
+         *     }
+         */
+        "application/json": components["schemas"]["CreateUpload"];
+      };
+    };
+    responses: {
+      /** @description Already started, or finished; this is where it stands. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadResult"];
+        };
+      };
+      /** @description Started; send the first chunk at offset 0. */
+      201: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      409: components["responses"]["IdConflict"];
+      413: components["responses"]["TooLarge"];
+      415: components["responses"]["UnsupportedType"];
+      429: components["responses"]["SlowDown"];
+      507: components["responses"]["ServerDiskFull"];
+    };
+  };
+  getUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The id the app made for the big upload, which becomes its attachment's id. */
+        upload: components["parameters"]["BigUpload"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description How much the server has, or the attachment it became. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadResult"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  sendUploadChunk: {
+    parameters: {
+      query: {
+        /** @description Where in the file this chunk starts, in bytes. */
+        offset: number;
+      };
+      header?: never;
+      path: {
+        /** @description The id the app made for the big upload, which becomes its attachment's id. */
+        upload: components["parameters"]["BigUpload"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/octet-stream": unknown;
+      };
+    };
+    responses: {
+      /** @description On disk. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["OffsetMismatch"];
+      413: components["responses"]["TooLarge"];
+      429: components["responses"]["SlowDown"];
+      507: components["responses"]["ServerDiskFull"];
+    };
+  };
+  cancelUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The id the app made for the big upload, which becomes its attachment's id. */
+        upload: components["parameters"]["BigUpload"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gone. */
+      204: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["TokenRejected"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  finishUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The id the app made for the big upload, which becomes its attachment's id. */
+        upload: components["parameters"]["BigUpload"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["FinishUpload"];
+      };
+    };
+    responses: {
+      /** @description Already finished; this is its attachment. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AttachmentResult"];
+        };
+      };
+      /** @description The attachment it became. */
+      201: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AttachmentResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["UploadIncomplete"];
+      415: components["responses"]["UnsupportedType"];
+      422: components["responses"]["ChecksumMismatch"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  listRecordings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The recordings. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordingList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  getRecording: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The attachment's id, from its message. */
+        attachment: components["parameters"]["Attachment"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The recording. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordingResult"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  deleteRecording: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The attachment's id, from its message. */
+        attachment: components["parameters"]["Attachment"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordingResult"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  retryRecording: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The attachment's id, from its message. */
+        attachment: components["parameters"]["Attachment"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description It wasn't failed; this is where it stands. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordingResult"];
+        };
+      };
+      /** @description Queued again. */
+      202: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecordingResult"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  getTranscript: {
+    parameters: {
+      query?: {
+        /** @description `json`, the default, or `text`. */
+        format?: "json" | "text";
+      };
+      header?: never;
+      path: {
+        /** @description The attachment's id, from its message. */
+        attachment: components["parameters"]["Attachment"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The transcript. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranscriptResult"];
+          "text/plain": string;
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["NotTranscribed"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  correctTranscript: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The attachment's id, from its message. */
+        attachment: components["parameters"]["Attachment"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "replace": [
+         *         {
+         *           "heard": "Myra",
+         *           "meant": "Mira"
+         *         }
+         *       ],
+         *       "speakers": [
+         *         {
+         *           "id": "S1",
+         *           "name": "Interviewer"
+         *         }
+         *       ]
+         *     }
+         */
+        "application/json": components["schemas"]["CorrectTranscript"];
+      };
+    };
+    responses: {
+      /** @description The transcript, corrected. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TranscriptResult"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["NotTranscribed"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  listFiles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The files. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FileList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  getFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The file's id, from an `ari:file` block. */
+        file: components["parameters"]["File"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FileResult"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+      429: components["responses"]["SlowDown"];
+    };
+  };
+  deleteFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The file's id, from an `ari:file` block. */
+        file: components["parameters"]["File"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gone. */
+      204: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["TokenRejected"];
       429: components["responses"]["SlowDown"];
     };
   };
@@ -5149,7 +6561,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Every shelf, in order, the journal last. */
+      /** @description Every shelf but chapters, in order, the journal last. */
       200: {
         headers: {
           "Ito-Protocol": components["headers"]["ItoProtocol"];
@@ -5204,6 +6616,50 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RecentChanges"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  listChapters: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every chapter. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChapterList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  listLearnt: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The lines. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LearntLines"];
         };
       };
       401: components["responses"]["TokenRejected"];
@@ -5455,6 +6911,91 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["MotionState"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  listMade: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pages. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MadeList"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  getMade: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The page's id, from its `Made`. */
+        made: components["parameters"]["Made"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The page. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MadeDetail"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+      404: components["responses"]["NotFound"];
+    };
+  };
+  patchMadeState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The page's id, from its `Made`. */
+        made: components["parameters"]["Made"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/merge-patch+json": {
+          [key: string]: unknown;
+        };
+        "application/json": {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description The whole state, after the patch. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MadeStateResult"];
         };
       };
       400: components["responses"]["InvalidRequest"];
