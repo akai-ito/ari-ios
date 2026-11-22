@@ -29,16 +29,23 @@ public struct Event: Sendable, Equatable, Decodable {
         case callEnded(CallEvent)
         case callAudioDeleted(CallEvent)
         case voiceStatus(VoiceStatus)
-        case topicStarted(TopicStarted)
+        case threadStarted(ThreadEvent)
+        case threadChanged(ThreadEvent)
+        case messageMoved(MessageMoved)
         case messageAmended(MessageAmended)
         case motionStarted(MotionEvent)
         case motionChanged(MotionEvent)
         case motionFinished(MotionEvent)
         case motionState(MotionStateChanged)
         case motionRemoved(MotionRemoved)
+        case madeCreated(MadeEvent)
+        case madeChanged(MadeEvent)
+        case madeState(MadeStateChanged)
+        case madeRemoved(MadeRemoved)
         case deskChanged(DeskChanged)
         case onboardingChanged(OnboardingChanged)
         case problemsChanged(ProblemsChanged)
+        case recordingChanged(RecordingChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -48,9 +55,11 @@ public struct Event: Sendable, Equatable, Decodable {
         "snapshot", "message.accepted", "message.queued", "message.read", "turn.started",
         "turn.status", "step.started", "step.updated", "step.ended", "ask.started", "ask.ended",
         "message.started", "message.delta", "message.ended", "message.posted", "turn.ended",
-        "call.started", "call.ended", "call.audio_deleted", "voice.status", "topic.started",
+        "call.started", "call.ended", "call.audio_deleted", "voice.status", "thread.started",
+        "thread.changed", "message.moved",
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
-        "motion.removed", "desk.changed", "onboarding.changed", "problems.changed",
+        "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
+        "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -83,16 +92,23 @@ public struct Event: Sendable, Equatable, Decodable {
             case "call.ended": .callEnded(try CallEvent(from: decoder))
             case "call.audio_deleted": .callAudioDeleted(try CallEvent(from: decoder))
             case "voice.status": .voiceStatus(try VoiceStatus(from: decoder))
-            case "topic.started": .topicStarted(try TopicStarted(from: decoder))
+            case "thread.started": .threadStarted(try ThreadEvent(from: decoder))
+            case "thread.changed": .threadChanged(try ThreadEvent(from: decoder))
+            case "message.moved": .messageMoved(try MessageMoved(from: decoder))
             case "message.amended": .messageAmended(try MessageAmended(from: decoder))
             case "motion.started": .motionStarted(try MotionEvent(from: decoder))
             case "motion.changed": .motionChanged(try MotionEvent(from: decoder))
             case "motion.finished": .motionFinished(try MotionEvent(from: decoder))
             case "motion.state": .motionState(try MotionStateChanged(from: decoder))
             case "motion.removed": .motionRemoved(try MotionRemoved(from: decoder))
+            case "made.created": .madeCreated(try MadeEvent(from: decoder))
+            case "made.changed": .madeChanged(try MadeEvent(from: decoder))
+            case "made.state": .madeState(try MadeStateChanged(from: decoder))
+            case "made.removed": .madeRemoved(try MadeRemoved(from: decoder))
             case "desk.changed": .deskChanged(try DeskChanged(from: decoder))
             case "onboarding.changed": .onboardingChanged(try OnboardingChanged(from: decoder))
             case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))
+            case "recording.changed": .recordingChanged(try RecordingChanged(from: decoder))
             default: .unknown
             }
     }
@@ -113,8 +129,8 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let asks: [Ask]
     /// The calls that started within those messages, and one still on.
     public let calls: [Call]
-    /// The topics Ari marked on those messages, in position order.
-    public let topics: [Topic]
+    /// Every open thread, and every thread whose line sits among those messages, in position order.
+    public let threads: [SideThread]
     /// Whether older messages exist.
     public let hasMore: Bool
     /// The running turn, or `nil` when the agent is idle.
@@ -129,7 +145,7 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let problems: [ServerProblem]?
 
     enum CodingKeys: String, CodingKey {
-        case at, reason, messages, steps, asks, calls, topics, turn, next, desk, onboarding
+        case at, reason, messages, steps, asks, calls, threads, turn, next, desk, onboarding
         case problems
         case hasMore = "has_more"
     }
@@ -185,9 +201,11 @@ public struct TurnStarted: Sendable, Equatable, Decodable {
     public let inputs: [MessageID]
     /// Present when this is a new attempt at a failed turn.
     public let retryOf: TurnID?
+    /// The side thread it answers in; absent for the main chat.
+    public let thread: ThreadID?
 
     enum CodingKeys: String, CodingKey {
-        case at, turn, inputs
+        case at, turn, inputs, thread
         case retryOf = "retry_of"
     }
 }
@@ -231,6 +249,8 @@ public struct MessageDelta: Sendable, Equatable, Decodable {
     /// Where the piece starts, in UTF-16 code units.
     public let offset: Int
     public let text: String
+    /// The side thread its message is in; absent in the main chat.
+    public let thread: ThreadID?
 }
 
 /// A message is finished. Its final text is its first `length` UTF-16 code units: everything
@@ -243,6 +263,8 @@ public struct MessageEnded: Sendable, Equatable, Decodable {
     /// The final length of the text, in UTF-16 code units.
     public let length: Int
     public let error: ServerError?
+    /// The side thread its message is in; absent in the main chat.
+    public let thread: ThreadID?
 }
 
 /// The turn is over and its status is cleared. Nothing more about this turn follows.

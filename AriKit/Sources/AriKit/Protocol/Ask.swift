@@ -25,6 +25,8 @@ public struct Ask: Hashable, Sendable, Decodable, Identifiable {
     public var outcome: AskOutcome?
     /// The message that answered it.
     public var answer: MessageID?
+    /// The side thread it waits in; absent for the main chat.
+    public var thread: ThreadID?
 
     /// A suggested answer. Tapping it sends its label as your message.
     public struct Option: Hashable, Sendable, Decodable {
@@ -50,7 +52,8 @@ public struct Ask: Hashable, Sendable, Decodable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, turn, kind, question, options, preview, attachments, at, position, outcome, answer
+        case id, turn, kind, question, options, preview, attachments, at, position, outcome, answer,
+            thread
         case allowsText = "allows_text"
         case endedAt = "ended_at"
     }

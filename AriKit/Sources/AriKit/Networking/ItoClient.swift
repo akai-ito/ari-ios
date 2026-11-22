@@ -324,6 +324,16 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         try await call(HTTPRequest(.get, "/v0/memory/recent"))
     }
 
+    /// `GET /v0/memory/chapters`: the chapters of your life Kumo noticed, those still going first.
+    public func chapters() async throws(RequestError) -> ChapterList {
+        try await call(HTTPRequest(.get, "/v0/memory/chapters"))
+    }
+
+    /// `GET /v0/memory/learnt`: what Kumo learnt about you lately, newest first.
+    public func learnt() async throws(RequestError) -> LearntLines {
+        try await call(HTTPRequest(.get, "/v0/memory/learnt"))
+    }
+
     /// `GET /v0/memory/pages?shelf=…`: the pages on a shelf.
     public func pages(on shelf: String) async throws(RequestError) -> PageList {
         try await call(HTTPRequest(.get, Self.path("/v0/memory/pages", ["shelf": shelf])))
@@ -402,6 +412,30 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return answer.state
     }
 
+    // MARK: - Made
+
+    /// `GET /v0/made`: the Made shelf, most recently changed first.
+    public func madePages() async throws(RequestError) -> MadeList {
+        try await call(HTTPRequest(.get, "/v0/made"))
+    }
+
+    /// `GET /v0/made/{id}`: one page, with its content, your ticks and what changed.
+    public func madePage(_ id: MadeID) async throws(RequestError) -> MadeDetail {
+        try await call(HTTPRequest(.get, "/v0/made/\(Self.segment(id.rawValue))"))
+    }
+
+    /// `PATCH /v0/made/{id}/state`: ticks an item off at a time, or takes the tick back with
+    /// `nil`. Every device hears it as `made.state`. The answer is all of the page's ticks.
+    public func tick(_ made: MadeID, item: String, at time: Timestamp?)
+        async throws(RequestError) -> MadeState
+    {
+        let answer: MadeStateBody = try await call(
+            HTTPRequest(
+                .patch, "/v0/made/\(Self.segment(made.rawValue))/state",
+                body: try Self.json(MadeTickPatch(item: item, at: time))))
+        return answer.state
+    }
+
     // MARK: - Talk
 
     /// `PUT /v0/calls/{call}`: start a call under the id Ari chose, so starting it again is safe.
@@ -453,6 +487,54 @@ public struct ItoClient: Sendable, CustomStringConvertible {
                 Self.path("/v0/messages", ["before": oldest.rawValue, "limit": String(limit)])))
     }
 
+    // MARK: - Threads
+
+    /// `GET /v0/threads`: every open thread, then done ones newest first; with words, only the
+    /// threads that hold them all.
+    public func threads(matching query: String = "", before: ThreadID? = nil, limit: Int = 50)
+        async throws(RequestError) -> ThreadList
+    {
+        var parameters: [String: String] = [:]
+        if limit != 50 { parameters["limit"] = String(limit) }
+        if !query.isEmpty { parameters["query"] = query }
+        if let before { parameters["before"] = before.rawValue }
+        let path = parameters.isEmpty ? "/v0/threads" : Self.path("/v0/threads", parameters)
+        return try await call(HTTPRequest(.get, path))
+    }
+
+    /// `GET /v0/threads/{thread}`: the thread with its latest messages.
+    public func thread(_ id: ThreadID) async throws(RequestError) -> ThreadPage {
+        try await call(HTTPRequest(.get, "/v0/threads/\(Self.segment(id.rawValue))"))
+    }
+
+    /// `PATCH /v0/threads/{thread}`: renames it, or marks it done or open.
+    public func change(_ thread: ThreadID, _ change: ThreadChange) async throws(RequestError)
+        -> SideThread
+    {
+        let answer: ThreadResult = try await call(
+            HTTPRequest(
+                .patch, "/v0/threads/\(Self.segment(thread.rawValue))", body: try Self.json(change))
+        )
+        return answer.thread
+    }
+
+    /// `POST /v0/threads/{thread}/seen`: its news is seen, on every app.
+    public func see(_ thread: ThreadID) async throws(RequestError) -> SideThread {
+        let answer: ThreadResult = try await call(
+            HTTPRequest(.post, "/v0/threads/\(Self.segment(thread.rawValue))/seen"))
+        return answer.thread
+    }
+
+    /// `POST /v0/messages/{message}/move`: into a thread, or back to the main chat.
+    public func move(_ message: MessageID, to thread: ThreadID?) async throws(RequestError)
+        -> MessageResult
+    {
+        try await call(
+            HTTPRequest(
+                .post, "/v0/messages/\(Self.segment(message.rawValue))/move",
+                body: try Self.json(MoveMessage(thread: thread))))
+    }
+
     /// `GET /v0/events`, resuming after `cursor` or, without one, from a snapshot.
     public func events(after cursor: EventID?) async throws(RequestError) -> HTTPStream {
         var request = authorize(
@@ -479,9 +561,9 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return stream
     }
 
-    // MARK: - Plumbing
+    // MARK: - Plumbing, which the routes in other files share
 
-    private func call<Answer: Decodable>(
+    func call<Answer: Decodable>(
         _ request: HTTPRequest, authorized: Bool = true, contentType: String = "application/json"
     ) async throws(RequestError) -> Answer {
         var request = authorized ? authorize(request) : request
@@ -502,7 +584,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// A request whose answer is bytes, not JSON.
-    private func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
+    func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
         var request = authorize(request)
         if request.body != nil { request.headers["Content-Type"] = "application/json" }
         let response: HTTPResponse
@@ -517,7 +599,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// A command whose answer has no body, such as a 204.
-    private func callWithoutAnswer(_ request: HTTPRequest) async throws(RequestError) {
+    func callWithoutAnswer(_ request: HTTPRequest) async throws(RequestError) {
         var request = authorize(request)
         if request.body != nil { request.headers["Content-Type"] = "application/json" }
         let response: HTTPResponse
@@ -530,21 +612,21 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         guard (200..<300).contains(response.status) else { throw Self.refusal(response) }
     }
 
-    private func authorize(_ request: HTTPRequest) -> HTTPRequest {
+    func authorize(_ request: HTTPRequest) -> HTTPRequest {
         var request = request
         if let token { request.headers["Authorization"] = "Bearer \(token.secret)" }
         return request
     }
 
     /// Every answer carries `Ito-Protocol`. Until 1.0 the minor version must match exactly.
-    private static func checkVersion(_ headers: [String: String]) throws(RequestError) {
+    static func checkVersion(_ headers: [String: String]) throws(RequestError) {
         guard let header = headers["ito-protocol"], let version = ProtocolVersion(header),
             version != .supported
         else { return }
         throw .protocolMismatch(server: version)
     }
 
-    private static func refusal(_ response: HTTPResponse) -> RequestError {
+    static func refusal(_ response: HTTPResponse) -> RequestError {
         let error = try? JSONDecoder().decode(ErrorResult.self, from: response.body).error
         let retryAfter = response.headers["retry-after"].flatMap(Double.init).map {
             Duration.milliseconds(Int(($0 * 1000).rounded()))
@@ -552,7 +634,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return .refused(status: response.status, error: error, retryAfter: retryAfter)
     }
 
-    private static func json(_ value: some Encodable) throws(RequestError) -> Data {
+    static func json(_ value: some Encodable) throws(RequestError) -> Data {
         do {
             return try JSONEncoder().encode(value)
         } catch {
@@ -561,7 +643,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     }
 
     /// A path with a query, its values percent-encoded (a `+` too, which servers read as a space).
-    private static func path(_ path: String, _ query: [String: String]) -> String {
+    static func path(_ path: String, _ query: [String: String]) -> String {
         var components = URLComponents()
         components.path = path
         components.queryItems = query.sorted { $0.key < $1.key }.map {
@@ -571,7 +653,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return path + (encoded.map { "?" + $0 } ?? "")
     }
 
-    private static func segment(_ id: String) -> String {
+    static func segment(_ id: String) -> String {
         id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? id
     }
 }
@@ -621,6 +703,30 @@ public enum RequestError: Error, Equatable, Sendable {
     /// The server's reason, in its own words, if it gave one.
     public var serverError: ServerError? {
         if case .refused(_, let error, _) = self { error } else { nil }
+    }
+}
+
+/// One tick on a made page, or `null` to take it back.
+private struct MadeTickPatch: Encodable {
+    let item: String
+    let at: Timestamp?
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        var ticks = c.nestedContainer(keyedBy: Key.self, forKey: Key("ticks"))
+        if let at {
+            try ticks.encode(at, forKey: Key(item))
+        } else {
+            try ticks.encodeNil(forKey: Key(item))
+        }
+    }
+
+    private struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(_ string: String) { stringValue = string }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
     }
 }
 

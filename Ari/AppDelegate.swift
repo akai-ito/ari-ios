@@ -24,6 +24,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return true
     }
 
+    /// A big upload iOS carried in the background has news: finish it, and send its message.
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        model.handleUploadEvents(identifier, done: completionHandler)
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -65,10 +74,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             action: response.actionIdentifier, typed: typed,
             options: info["options"] as? [String] ?? [])
         let message = (info["message"] as? String).map(MessageID.init(rawValue:))
+        let thread = (info["thread"] as? String).map(ThreadID.init(rawValue:))
         let done = Handler(completionHandler)
         Task { @MainActor in
             if let answer {
-                await model.answer(fromNotification: answer)
+                // An ask in a thread waits there, so the answer goes there too.
+                await model.answer(fromNotification: answer, in: thread)
+            } else if let thread {
+                model.openingThread = thread
             } else {
                 model.opening = message
             }

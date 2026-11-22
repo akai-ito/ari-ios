@@ -9,6 +9,8 @@ import UserNotifications
 @Observable
 final class AppModel {
     private(set) var session: Session?
+    /// Big files on their way, such as a recorded conversation, carried by iOS in the background.
+    private(set) var uploads: BigUploads?
     /// The address to suggest on the connect screen, such as after the token stopped working.
     private(set) var lastAddress: String = ""
     /// Who answered at the address: the server's name, version and protocol, for Settings.
@@ -23,6 +25,8 @@ final class AppModel {
     var opening: MessageID?
     /// Where in the chat to go, from a thing in motion's "What changed".
     var openingPosition: Int?
+    /// A side thread to open, from a tapped notification about it.
+    var openingThread: ThreadID?
     /// Whether you're reading the chat here: Ari in front, on the Chat tab. Its notifications then
     /// show no banner.
     private(set) var isLooking = false
@@ -60,6 +64,7 @@ final class AppModel {
         if let server = saved.server { LeadName.remember(server.lead.name) }
         if let token = try? self.tokens.token(for: saved.address) {
             session = Self.session(at: saved.address, token: token)
+            makeUploads(at: saved.address, token: token)
         }
     }
 
@@ -78,6 +83,7 @@ final class AppModel {
         }
         session?.close()
         session = Self.session(at: connection.address, token: connection.token)
+        makeUploads(at: connection.address, token: connection.token)
         session?.start()
         registerDevice()
         whereabouts.reset()
@@ -107,6 +113,63 @@ final class AppModel {
         for message in (try? shares.load()) ?? [] {
             session.send(message.text, id: message.id, attachments: message.attachments ?? [])
             try? shares.remove(message.id)
+        }
+    }
+
+    // MARK: - Big uploads
+
+    /// iOS carries Ari's own big uploads in this background session, one for the app's whole life:
+    /// two sessions with the same name in one process don't work.
+    @ObservationIgnored private lazy var carrier = BackgroundChunkCarrier(
+        identifier: group.identifier + ".uploads.app", sharedContainer: group.identifier)
+    /// Sessions iOS woke Ari for that the share extension started, until their events are handled.
+    @ObservationIgnored private var wokenCarriers: [String: BackgroundChunkCarrier] = [:]
+
+    private func makeUploads(at address: ServerAddress, token: Token) {
+        let store =
+            BigUploadStore.shared(group)
+            ?? BigUploadStore(
+                directory: FileManager.default.temporaryDirectory.appending(path: "Uploads"))
+        let client = ItoClient(address: address, token: token, transport: URLSessionTransport())
+        let made = BigUploads(store: store, client: client, carrier: carrier)
+        carrier.uploads = made
+        made.changed = { [weak self] upload in self?.session?.bigUploadChanged(upload) }
+        session?.bigUploads = made
+        uploads = made
+    }
+
+    /// Ari is in front: big uploads that stopped carry on, and recordings shared from Voice Memos
+    /// or Files show in the chat with their messages, which go once they're up.
+    func resumeUploads() {
+        guard let uploads, let session else { return }
+        Task { await uploads.resume() }
+        for upload in uploads.uploads.values
+        where upload.carriedBy == "share" && !upload.messageSent {
+            guard let message = upload.message else { continue }
+            session.bigUploadChanged(upload)
+            session.send(message.text, id: message.id, attachments: message.attachments ?? [])
+        }
+    }
+
+    func pauseUploads() {
+        uploads?.pause()
+    }
+
+    /// iOS woke Ari because a background upload has news: Ari's own, or one the share extension
+    /// started. `done` goes back to iOS once it's all handled.
+    func handleUploadEvents(_ identifier: String, done: @escaping () -> Void) {
+        guard uploads != nil else { return done() }
+        if identifier == carrier.identifier {
+            carrier.whenEventsAreHandled(done)
+            return
+        }
+        let woken = BackgroundChunkCarrier(
+            identifier: identifier, sharedContainer: group.identifier)
+        woken.uploads = uploads
+        wokenCarriers[identifier] = woken
+        woken.whenEventsAreHandled { [weak self] in
+            self?.wokenCarriers[identifier] = nil
+            done()
         }
     }
 
@@ -214,9 +277,9 @@ final class AppModel {
     }
 
     /// An answer given from a notification: it goes at once, even with Ari in the background.
-    func answer(fromNotification text: String) async {
+    func answer(fromNotification text: String, in thread: ThreadID? = nil) async {
         guard let session else { return }
-        await session.sendFromNotification(text)
+        await session.sendFromNotification(text, in: thread)
     }
 
     private func registerDevice() {

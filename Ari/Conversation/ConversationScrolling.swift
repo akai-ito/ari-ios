@@ -119,12 +119,12 @@ extension ConversationView {
     private func fetchEarlier(showing first: String?) {
         // Only once you've scrolled up: at the end, a short screen would otherwise page back
         // through the whole history by itself.
-        guard !following, session.conversation.hasEarlierMessages, !session.isLoadingEarlier
+        guard !following, conversation.hasEarlierMessages, !session.isLoadingEarlier
         else { return }
         Task {
-            await session.loadEarlier()
+            await session.loadEarlier(in: place)
             guard let first else { return }
-            let now = self.rows(session.conversation)
+            let now = self.rows(conversation)
             guard let index = cache.index[first], index > 0, let last = shownRows(now).last?.id
             else { return }
             reveal(from: max(0, index - Self.more), keepingTo: last, in: now)
@@ -147,11 +147,11 @@ extension ConversationView {
     func jump(to id: String) {
         following = false
         Task {
-            var rows = self.rows(session.conversation)
-            while !rows.contains(where: { $0.id == id }), session.conversation.hasEarlierMessages {
+            var rows = self.rows(conversation)
+            while !rows.contains(where: { $0.id == id }), conversation.hasEarlierMessages {
                 let before = rows.count
-                await session.loadEarlier()
-                rows = self.rows(session.conversation)
+                await session.loadEarlier(in: place)
+                rows = self.rows(conversation)
                 if rows.count == before { break }
             }
             guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
@@ -170,15 +170,15 @@ extension ConversationView {
     /// comes in until it reaches that far back, then the conversation opens at it.
     func jump(toPosition position: Int) {
         Task {
-            while session.conversation.hasEarlierMessages,
-                (session.conversation.entries.first?.position ?? 0) > position
+            while conversation.hasEarlierMessages,
+                (conversation.entries.first?.position ?? 0) > position
             {
-                let before = session.conversation.entries.count
-                await session.loadEarlier()
-                if session.conversation.entries.count == before { break }
+                let before = conversation.entries.count
+                await session.loadEarlier(in: place)
+                if conversation.entries.count == before { break }
             }
             guard
-                let entry = session.conversation.entries.first(where: {
+                let entry = conversation.entries.first(where: {
                     ($0.position ?? .max) >= position
                 })
             else { return }

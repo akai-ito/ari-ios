@@ -31,10 +31,12 @@ struct AriApp: App {
                 case .active:
                     model.session?.start()
                     model.collectShares()
+                    model.resumeUploads()
                     model.refreshServer()
                     model.whereabouts.refresh()
                 case .background:
                     // A call carries on in your pocket: Ari's replies still have to arrive.
+                    model.pauseUploads()
                     if CallEngine.isOn { break }
                     model.session?.pause()
                 default:

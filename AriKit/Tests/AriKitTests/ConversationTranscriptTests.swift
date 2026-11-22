@@ -236,19 +236,21 @@ struct ConversationTranscriptTests {
         var replay = Replay(try Fixtures.transcript("15-something-fails"))
         let failedTurn: TurnID = "t_0002_56862"
         let error = ServerError(
-            code: .modelTimeout, message: "The model didn't respond for 60 seconds.",
-            detail: "No progress from the engine for 60 seconds while it was writing.")
-        try replay.play(throughLine: 29, expecting: "turn.ended e_0023_62373")
+            code: .modelUnavailable, message: "The model service isn't responding right now.",
+            detail:
+                "Reconnecting... 5/5 stream disconnected before completion: stream closed before response.completed"
+        )
+        try replay.play(throughLine: 28, expecting: "turn.ended e_0023_62373")
         #expect(replay.conversation["m_0002_07750"]?.outcome == .failed)
         #expect(replay.conversation["m_0002_07750"]?.error == error)
         let ended = try #require(replay.conversation.lastEndedTurn)
         #expect(ended.id == failedTurn && ended.outcome == .failed && ended.error == error)
         #expect(!replay.conversation.retriedTurns.contains(failedTurn))
 
-        try replay.play(throughLine: 30, expecting: "POST /v0/turns/t_0002_56862/retry")
+        try replay.play(throughLine: 29, expecting: "POST /v0/turns/t_0002_56862/retry")
         #expect(replay.conversation.retriedTurns.contains(failedTurn))
         // The new attempt starts, and Couldn't finish is gone.
-        try replay.play(throughLine: 31, expecting: "turn.started e_0024_98002")
+        try replay.play(throughLine: 30, expecting: "turn.started e_0024_98002")
         #expect(replay.conversation.turn?.retryOf == failedTurn)
         #expect(replay.conversation.lastEndedTurn == nil)
 
@@ -260,6 +262,38 @@ struct ConversationTranscriptTests {
         let empty = try #require(replay.conversation["m_0004_67083"])
         #expect(empty.outcome == .failed && empty.length == 0)
         #expect(empty.error?.code == .modelUnavailable)
+    }
+
+    @Test(
+        "Scenario 85: a quiet turn keeps running from when it started, drops a half reply when the stream does, and ends when you stop it"
+    )
+    func longQuietStretch() throws {
+        var replay = Replay(try Fixtures.transcript("85-a-long-quiet-stretch"))
+        let started = try #require(Timestamp("2026-10-12T08:41:02.000Z")).date
+        try replay.play(throughLine: 24, expecting: "message.ended e_0019_27413")
+        #expect(replay.conversation.turn?.startedAt == started)
+        let quietSince = try #require(Timestamp("2026-10-12T08:41:04.040Z")).date
+        // Four minutes with nothing new: no timer ended it, and Ari can say how long it's been.
+        #expect(
+            StillWorking.elapsed(
+                since: started, lastHeard: quietSince, at: quietSince.addingTimeInterval(240))
+                == "4 min")
+
+        // A reply begins, then the stream drops: the half reply leaves the conversation whole.
+        let half: MessageID = "m_0003_93533"
+        try replay.play(throughLine: 29, expecting: "message.delta e_0024_42596")
+        #expect(replay.conversation[half] != nil)
+        let before = replay.conversation.entries.map(\.id)
+        try replay.play(throughLine: 31, expecting: "turn.status e_0026_63409")
+        #expect(replay.conversation[half] == nil)
+        #expect(replay.conversation.entries.map(\.id) == before.filter { $0 != half })
+        #expect(
+            replay.conversation.turn?.status
+                == Status(kind: .waiting, label: "Reconnecting to the model", detail: nil))
+
+        try replay.play()
+        #expect(replay.conversation.turn == nil)
+        #expect(replay.conversation.lastEndedTurn?.outcome == .stopped)
     }
 
     @Test("Scenario 16: a working turn's steps carry their specifics, and the plan keeps up")
@@ -467,11 +501,25 @@ extension ConversationTranscriptTests {
                     seen = [:]
                     for message in json["messages"]?.array ?? [] { record(message) }
                 case "message.accepted", "message.amended", "message.started", "message.posted":
-                    if let message = json["message"] { record(message) }
+                    // The main chat's: a thread's messages are in the thread.
+                    if let message = json["message"], message["thread"]?.string == nil {
+                        record(message)
+                    }
+                case "message.moved":
+                    if let message = json["message"], let id = message["id"]?.string {
+                        if message["thread"]?.string == nil {
+                            record(message)
+                        } else {
+                            seen[id] = nil
+                        }
+                    }
                 case "message.delta":
                     if let id = json["message"]?.string, let text = json["text"]?.string {
                         seen[id]?.text += Array(text.utf16)
                     }
+                case "message.ended" where json["outcome"]?.string == "discarded":
+                    // Taken back whole, so it leaves the conversation.
+                    if let id = json["message"]?.string { seen[id] = nil }
                 case "message.ended":
                     if let id = json["message"]?.string {
                         seen[id]?.outcome = json["outcome"]?.string

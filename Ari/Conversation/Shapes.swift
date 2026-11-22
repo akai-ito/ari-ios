@@ -7,6 +7,8 @@ import SwiftUI
 struct ReplyActions {
     /// Sends a choice as your message; `nil` once the conversation has moved on.
     var choose: ((String) -> Void)?
+    /// The message the shapes are in, for what you choose on its proposed changes.
+    var message: MessageID?
 }
 
 extension EnvironmentValues {
@@ -17,12 +19,23 @@ extension EnvironmentValues {
 struct ShapeView: View {
     let shape: ReplyShape
 
+    @Environment(\.replyActions.message) private var message
+
     var body: some View {
         switch shape {
-        case .place(let place): PlaceView(place: place)
+        case .place(let place): PlaceActionCard(place: place)
         case .choices(let choices): ChoicesView(choices: choices)
         case .images(let images): ImagesView(images: images)
         case .motion(let line): CompactMotionLine(line: line)
+        case .picks(let picks): PickListView(picks: picks)
+        case .table(let table): PhoneTableView(table: table)
+        case .number(let number): KeyNumberView(number: number)
+        case .event(let event): EventActionCard(event: event)
+        case .desk(let item): DeskItemCard(item: item)
+        case .person(let person): PersonActionCard(person: person)
+        case .made(let card): MadeCardView(card: card)
+        case .file(let card): FileCardView(card: card)
+        case .proposals(let proposals): ProposalsView(proposals: proposals, message: message)
         }
     }
 }
@@ -39,49 +52,9 @@ struct ShapePlaceholder: View {
 
 // MARK: - A place
 
-/// A place you might go: a still picture of it on Apple's map in the card, and a tap opens a map you
-/// can move around, with Directions and Open in Maps, which go to the Maps app. The card's map is a
-/// picture, not a live map: a live map in every card, each searching Maps as it appeared, made a
-/// long conversation heavy to scroll.
-private struct PlaceView: View {
-    let place: ReplyShape.Place
-
-    @State private var coordinate: CLLocationCoordinate2D?
-    @State private var opens = false
-
-    var body: some View {
-        Button {
-            opens = true
-        } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                MapPicture(coordinate: coordinate)
-                    .frame(height: 150)
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(place.name).foregroundStyle(.ariText)
-                        if let address = place.address {
-                            Text(address).font(.footnote).foregroundStyle(.ariSecondary)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "map").font(.footnote).foregroundStyle(.ariTertiary)
-                }
-                .multilineTextAlignment(.leading)
-                .padding(14)
-            }
-            .background(.ariSurface)
-            .clipShape(.rect(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens a map")
-        .task(id: place.name) { coordinate = await Self.coordinate(of: place) }
-        .sheet(isPresented: $opens) {
-            PlaceSheet(place: place)
-        }
-    }
-
-    /// Where the place is: where Ari put it, or, without coordinates, where Maps finds it.
+/// Where one of Kumo's places is, for its map and the way there.
+enum PlaceLookup {
+    /// Where the place is: where Kumo put it, or, without coordinates, where Maps finds it.
     static func coordinate(of place: ReplyShape.Place) async -> CLLocationCoordinate2D? {
         if let lat = place.lat, let lon = place.lon {
             return CLLocationCoordinate2D(latitude: lat, longitude: lon)
@@ -89,7 +62,7 @@ private struct PlaceView: View {
         return await find(place)?.location.coordinate
     }
 
-    /// The place in Maps, for the way there: its listing, found by name and address near where Ari
+    /// The place in Maps, for the way there: its listing, found by name and address near where Kumo
     /// put it, or a pin there when Maps has none.
     static func find(_ place: ReplyShape.Place) async -> MKMapItem? {
         let near = place.lat.flatMap { lat in
@@ -104,11 +77,30 @@ private struct PlaceView: View {
     }
 }
 
+/// A place's spot on Apple's map, small, for a place card without a picture.
+struct PlaceMapThumbnail: View {
+    let place: ReplyShape.Place
+
+    @State private var coordinate: CLLocationCoordinate2D?
+
+    var body: some View {
+        // A pin in Kumo's dots until the map is drawn over it, or for good when Maps can't find it.
+        ZStack {
+            Rectangle().fill(.ariSurface)
+            DotGlyph(symbol: "mappin.and.ellipse", side: 40)
+            MapPicture(coordinate: coordinate, fill: .clear)
+        }
+        .task(id: place.name) { coordinate = await PlaceLookup.coordinate(of: place) }
+    }
+}
+
 /// A still picture of somewhere on Apple's map, dark like Ari, with a pin in Ari's bone. Made once
 /// for each place and size, and kept while there's memory for it (`NSCache` lets them go under
 /// memory pressure), so a row scrolling back into view shows it at once.
-private struct MapPicture: View {
+struct MapPicture: View {
     let coordinate: CLLocationCoordinate2D?
+    /// What shows until the picture is made.
+    var fill = Color.ariSurface
 
     @Environment(\.displayScale) private var scale
     @State private var size: CGSize = .zero
@@ -116,7 +108,7 @@ private struct MapPicture: View {
 
     var body: some View {
         Rectangle()
-            .fill(.ariSurface)
+            .fill(fill)
             .overlay {
                 if let image {
                     Image(uiImage: image).resizable().scaledToFill().transition(.opacity)
@@ -213,7 +205,7 @@ private struct PlaceMap: View {
 }
 
 /// A place, full screen: the map to move around, and the way there in Maps.
-private struct PlaceSheet: View {
+struct PlaceSheet: View {
     let place: ReplyShape.Place
 
     @Environment(\.dismiss) private var dismiss
@@ -246,7 +238,7 @@ private struct PlaceSheet: View {
                 }
             }
         }
-        .task { item = await PlaceView.find(place) }
+        .task { item = await PlaceLookup.find(place) }
     }
 }
 

@@ -98,14 +98,31 @@ public struct SendMessage: Sendable, Equatable, Codable {
     public let attachments: [AttachmentID]?
     /// The line of Done it replies to, such as a correction to one of Kumo's calls.
     public let done: DoneID?
+    /// The side thread it goes into; without one, the main chat.
+    public let thread: ThreadID?
+    /// The message it replies to: in the main chat, it goes into the thread under that message,
+    /// started now if there's none; in a thread, it's quoted there.
+    public let replyTo: MessageID?
+    /// It starts a new thread of yours, as Threads' New thread does.
+    public let newThread: Bool?
 
     public init(
-        id: MessageID, text: String, attachments: [AttachmentID] = [], done: DoneID? = nil
+        id: MessageID, text: String, attachments: [AttachmentID] = [], done: DoneID? = nil,
+        thread: ThreadID? = nil, replyTo: MessageID? = nil, newThread: Bool = false
     ) {
         self.id = id
         self.text = text
         self.attachments = attachments.isEmpty ? nil : attachments
         self.done = done
+        self.thread = thread
+        self.replyTo = replyTo
+        self.newThread = newThread ? true : nil
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, text, attachments, done, thread
+        case replyTo = "reply_to"
+        case newThread = "new_thread"
     }
 }
 
@@ -133,13 +150,13 @@ public struct MessagePage: Sendable, Equatable, Decodable {
     public let asks: [Ask]
     /// Every call that started in the same span.
     public let calls: [Call]
-    /// The topics Ari marked on these messages.
-    public let topics: [Topic]
+    /// In the main chat, the threads whose lines sit among these messages.
+    public let threads: [SideThread]
     /// Whether even older messages exist.
     public let hasMore: Bool
 
     enum CodingKeys: String, CodingKey {
-        case messages, steps, asks, calls, topics
+        case messages, steps, asks, calls, threads
         case hasMore = "has_more"
     }
 }

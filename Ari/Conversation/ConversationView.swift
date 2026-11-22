@@ -1,9 +1,10 @@
 import AriKit
 import SwiftUI
 
-/// The conversation: the floating header, everything said so far, and the composer. All of it
-/// comes from the session; this view adds only what's about the screen: the reading pace, the
-/// character's poses, holding each status long enough to read, and where you've scrolled.
+/// The conversation: the floating header, everything said so far, and the composer, for the main
+/// chat or one side thread. All of it comes from the session; this view adds only what's about the
+/// screen: the reading pace, the character's poses, holding each status long enough to read, and
+/// where you've scrolled.
 struct ConversationView: View {
     let session: Session
     var name = LeadName.current
@@ -15,6 +16,15 @@ struct ConversationView: View {
     /// Whether Ari may offer notifications, once a turn takes a while.
     var offersNotifications = false
     var answerOffer: (Bool) -> Void = { _ in }
+    /// The side thread this shows, or `nil` for the main chat.
+    var place: ThreadID?
+    /// A thread to open over the chat, from a tapped notification.
+    var openingThread: Binding<ThreadID?> = .constant(nil)
+    /// Back to the main chat, from a thread.
+    var close: () -> Void = {}
+
+    /// What's on screen: the main chat, or this thread.
+    var conversation: Conversation { session.conversation(in: place) }
 
     @State var reveal = RevealModel()
     /// The status line and the character's pose, paced for reading.
@@ -31,8 +41,17 @@ struct ConversationView: View {
     @State var distanceFromEnd = Distance.atEnd
     /// Whether your finger is on the conversation.
     @State var scrolling = false
-    /// The topics and days of the conversation, to jump between.
-    @State var showsTopics = Self.opensTopics
+    /// Threads by day, from the title.
+    @State var showsThreads = Self.opensThreads
+    /// The thread open over the main chat.
+    @State var openedThread: OpenedThread?
+    /// Inside a thread, the message you're replying to, which your next message quotes.
+    @State var replyingTo: Conversation.Entry?
+    /// Moving a message: the one chosen from its menu, or the ⋯ menu's picker.
+    @State var moving: MoveRequest?
+    /// Renaming the thread, with the name so far.
+    @State var renaming = false
+    @State var newTitle = ""
     /// Whether you've scrolled near the top of what's shown: more history comes in while you are.
     @State var nearTop = false
     /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
@@ -62,9 +81,12 @@ struct ConversationView: View {
     @Environment(Talk.self) var talk: Talk?
     /// Whether the server can talk.
     @Environment(Voices.self) var voices: Voices?
+    /// Recordings going up, for a thread's header and their cards.
+    @Environment(BigUploads.self) var bigUploads: BigUploads?
 
     var body: some View {
         screen
+            .filesInChat(session: session)
             // The pinned line, compact lines and the trail open what's in motion over the chat.
             .environment(
                 \.motionOpener,
@@ -97,6 +119,9 @@ struct ConversationView: View {
             }
             #if DEBUG
                 .task {
+                    // The main chat's alone: a thread opened over it, as a recording's is, would
+                    // send it all again.
+                    guard place == nil else { return }
                     for url in DebugScript.attachments {
                         if let attachment = try? await AttachmentMaker.file(at: url) {
                             attach(attachment)
@@ -107,18 +132,22 @@ struct ConversationView: View {
                         send: { message in _ = send(message) }, stop: stop)
                 }
                 .task {
+                    guard place == nil, let thread = DebugScript.openThread else { return }
+                    openedThread = OpenedThread(id: thread)
+                }
+                .task {
                     guard let row = DebugScript.openRow else { return }
-                    while !rows(session.conversation).contains(where: { $0.id == row }) {
+                    while !rows(conversation).contains(where: { $0.id == row }) {
                         try? await Task.sleep(for: .milliseconds(200))
                     }
-                    open(at: row, in: rows(session.conversation))
+                    open(at: row, in: rows(conversation))
                 }
             #endif
     }
 
     /// The conversation itself, the composer, and what follows the session and the screen.
     var screen: some View {
-        let conversation = session.conversation
+        let conversation = self.conversation
         let revealing = reveal.isRevealing
         let working = conversation.turn != nil || revealing
         let rows = rows(conversation)
@@ -193,9 +222,21 @@ struct ConversationView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            HeaderView(
-                header: header, name: name, openTopics: { showsTopics = true },
-                nudge: { header.nudge { pose(revealing: reveal.isRevealing) } })
+            if let place {
+                ThreadHeader(
+                    thread: conversation.thread, session: session, place: place, back: close,
+                    markDone: markDone,
+                    rename: {
+                        newTitle = conversation.thread?.title ?? ""
+                        renaming = true
+                    },
+                    move: { moving = MoveRequest(chosen: nil) })
+            } else {
+                HeaderView(
+                    header: header, name: name, openThreads: conversation.openThreads.count,
+                    openTopics: { showsThreads = true },
+                    nudge: { header.nudge { pose(revealing: reveal.isRevealing) } })
+            }
         }
         // The header follows what's at the top of the screen. Written to the header alone, which
         // only the header reads, so scrolling never redraws the conversation.
@@ -217,16 +258,37 @@ struct ConversationView: View {
         } action: { _, near in
             if near, lastShown != nil { showLater(rows) }
         }
-        .sheet(isPresented: $showsTopics) {
-            TopicsSheet(
-                marks: TopicsSheet.marks(in: rows), current: header.whereabouts?.topic,
-                hasEarlier: session.conversation.hasEarlierMessages,
-                loadEarlier: { await session.loadEarlier() }
-            ) { id in
-                showsTopics = false
-                jump(to: id)
-            }
-            .presentationDetents([.medium, .large])
+        .sheet(isPresented: $showsThreads) {
+            ThreadsSheet(
+                session: session,
+                open: { id in
+                    showsThreads = false
+                    openedThread = OpenedThread(id: id)
+                },
+                startThread: {
+                    showsThreads = false
+                    openedThread = OpenedThread(id: session.startThread(replyingTo: nil))
+                }
+            )
+            .presentationDetents([.fraction(0.8), .large])
+            .presentationBackground(.ariBackground)
+        }
+        .fullScreenCover(item: $openedThread) { opened in
+            ConversationView(
+                session: session, name: name, connectAgain: connectAgain, place: opened.id,
+                close: { openedThread = nil }
+            )
+            .environment(talk)
+            .environment(voices)
+            .environment(bigUploads)
+        }
+        .sheet(item: $moving) { request in
+            moveSheet(request)
+        }
+        .alert("Rename the thread", isPresented: $renaming) {
+            TextField("Name", text: $newTitle)
+            Button("Rename") { rename(to: newTitle) }
+            Button("Cancel", role: .cancel) {}
         }
         .overlay(alignment: .bottom) {
             if let pill = pillText(working: working) {
@@ -258,7 +320,14 @@ struct ConversationView: View {
                             working: working, stopping: conversation.pendingStop != nil,
                             asking: revealing ? nil : conversation.waitingAsk,
                             send: send, stop: stop, attach: attach, detach: detach,
-                            talk: talkAction, talkReady: talkReady
+                            talk: place == nil ? talkAction : nil, talkReady: talkReady,
+                            prompt: place == nil ? nil : "Reply in thread",
+                            draftKey: place.map {
+                                "draft \(session.resolved($0)?.rawValue ?? $0.rawValue)"
+                            }
+                                ?? "draft",
+                            quoting: replyingTo?.line,
+                            stopQuoting: { replyingTo = nil }
                         )
                         .equatable()
                     }
@@ -270,10 +339,10 @@ struct ConversationView: View {
         }
         .background(.ariBackground)
         // The reading pace, moving on in a view of its own.
-        .background { RevealDriver(model: reveal, session: session) }
+        .background { RevealDriver(model: reveal, session: session, place: place) }
         // New words to reveal, or a message that ended: the pace's state catches up.
         .onChange(of: conversation.revision, initial: true) { _, _ in
-            reveal.sync(session.conversation)
+            reveal.sync(self.conversation)
         }
         .onChange(of: pose(revealing: revealing), initial: true) { _, pose in
             header.show(pose: pose) { self.pose(revealing: reveal.isRevealing) }
@@ -281,11 +350,18 @@ struct ConversationView: View {
         .onChange(of: liveStatus(revealing: revealing), initial: true) { _, next in
             header.show(status: next) { liveStatus(revealing: reveal.isRevealing) }
         }
+        // How long Kumo has been working, for the line once it goes quiet.
+        .onChange(of: workingClock, initial: true) { _, clock in
+            header.follow(clock)
+        }
+        .onChange(of: conversation.revision) { _, _ in
+            header.heard()
+        }
         .onChange(of: session.link, initial: true) { _, link in
             header.notice(link: link) { session.link }
         }
         .onChange(of: conversation.lastEndedTurn?.id) { _, _ in
-            if session.conversation.lastEndedTurn?.outcome == .stopped { header.noticeStopped() }
+            if self.conversation.lastEndedTurn?.outcome == .stopped { header.noticeStopped() }
         }
         .onChange(of: working) { wasWorking, isWorking in
             if wasWorking, !isWorking, !following { repliedWhileAway = true }
@@ -294,13 +370,27 @@ struct ConversationView: View {
         .task(id: conversation.turn?.id) {
             guard offersNotifications, conversation.turn != nil, !offering else { return }
             try? await Task.sleep(for: .seconds(10))
-            if !Task.isCancelled, session.conversation.turn != nil { offering = true }
+            if !Task.isCancelled, self.conversation.turn != nil { offering = true }
         }
         // Tapping a reply's notification opens the conversation at that reply.
         .onChange(of: opening.wrappedValue) { _, message in
             guard let message else { return }
             opening.wrappedValue = nil
             open(at: message.rawValue, in: rows)
+        }
+        // A thread opens itself from the server, and says you've seen what's new while it's open.
+        .task(id: place) {
+            if let place { await session.openThread(place) }
+        }
+        .onChange(of: conversation.thread?.news?.message, initial: true) { _, news in
+            guard let place, news != nil else { return }
+            Task { await session.see(place) }
+        }
+        // A notification about a thread opens it over the chat.
+        .onChange(of: openingThread.wrappedValue, initial: true) { _, thread in
+            guard place == nil, let thread else { return }
+            openingThread.wrappedValue = nil
+            openedThread = OpenedThread(id: thread)
         }
         .onChange(of: openingPosition.wrappedValue) { _, position in
             guard let position else { return }
@@ -309,9 +399,9 @@ struct ConversationView: View {
         }
     }
 
-    static var opensTopics: Bool {
+    static var opensThreads: Bool {
         #if DEBUG
-            DebugScript.opensTopics
+            DebugScript.opensThreads
         #else
             false
         #endif
@@ -340,11 +430,17 @@ struct ConversationView: View {
     /// clear.
     func send(_ text: String) -> Bool {
         guard !Self.anyRefused(attached, in: session),
-            session.send(text, attachments: attached.map(\.id)) != nil
+            let id = session.send(
+                text, attachments: attached.map(\.id), in: place, replyingTo: replyingTo?.id)
         else { return false }
         attached = []
+        replyingTo = nil
         sent += 1
         scrollToEnd()
+        // A recording starts a thread of its own: it opens, saying how the upload is getting on.
+        if place == nil, let thread = session.draft(holding: id) {
+            openedThread = OpenedThread(id: thread)
+        }
         return true
     }
 
@@ -386,7 +482,7 @@ struct ConversationView: View {
 
     /// You tapped one of an ask's options: its label is your answer.
     func answer(_ ask: Ask, _ option: Ask.Option) {
-        guard session.send(option.label) != nil else { return }
+        guard session.send(option.label, in: place) != nil else { return }
         scrollToEnd()
     }
 
@@ -394,7 +490,7 @@ struct ConversationView: View {
     /// cancels what Ari asked.
     func stop() {
         stops += 1
-        let conversation = session.conversation
+        let conversation = self.conversation
         if conversation.turn == nil, !reveal.isRevealing,
             let ask = conversation.waitingAsk
         {
@@ -402,24 +498,24 @@ struct ConversationView: View {
             return
         }
         reveal.stop(in: conversation)
-        session.stop()
+        session.stop(in: place)
     }
 
     // MARK: - Status and poses
 
     func pose(revealing: Bool) -> Pose {
         if header.linkDown { return .offline }
-        if let turn = session.conversation.turn {
-            if session.conversation.pendingStop != nil { return .stopping }
+        if let turn = conversation.turn {
+            if conversation.pendingStop != nil { return .stopping }
             // An app waits on your approval inside the turn: Ari is asking you, not working.
-            if session.conversation.waitingAsk != nil { return .asking }
+            if conversation.waitingAsk != nil { return .asking }
             // Writing and adjusting come from the status; anything else from the newest step in the
             // turn, running or just ended, with its prop. Not the oldest one still running: a plan
             // stays open the whole turn and would hide everything after it.
             if let kind = turn.status?.kind, kind == .writing || kind == .adjusting {
                 return Pose(kind: kind)
             }
-            if let step = session.conversation.steps.last(where: { $0.turn == turn.id }),
+            if let step = conversation.steps.last(where: { $0.turn == turn.id }),
                 let pose = Pose(step: step)
             {
                 return pose
@@ -427,14 +523,24 @@ struct ConversationView: View {
             return turn.status.map { Pose(kind: $0.kind) } ?? .thinking
         }
         if revealing { return .writing }
-        return session.conversation.waitingAsk == nil ? .resting : .asking
+        return conversation.waitingAsk == nil ? .resting : .asking
+    }
+
+    /// The running turn while Kumo works on it by itself: not while it stops or waits on you.
+    var workingClock: HeaderState.Clock? {
+        let conversation = self.conversation
+        guard let turn = conversation.turn, conversation.pendingStop == nil,
+            conversation.waitingAsk == nil
+        else { return nil }
+        return HeaderState.Clock(
+            turn: turn.id, startedAt: turn.startedAt, keepsLabel: turn.status?.kind == .waiting)
     }
 
     func liveStatus(revealing: Bool) -> StatusText? {
         if header.linkDown {
             return .quiet(session.link == .offline ? "No connection" : "Reconnecting")
         }
-        let conversation = session.conversation
+        let conversation = self.conversation
         if let turn = conversation.turn {
             if conversation.pendingStop != nil { return .status("Stopping", detail: nil) }
             return turn.status.map { .status($0.label, detail: $0.detail) }

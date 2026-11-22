@@ -14,6 +14,10 @@ public struct ServerProblem: Sendable, Equatable, Decodable, Identifiable {
     /// How to fix it, in plain steps.
     public let fix: String
 
+    /// Kumo's paused by its model's usage limit, until the reset its title gives: nothing for you to
+    /// fix, so it reads as news rather than as something wrong.
+    public var isPause: Bool { id == "kumo:paused" }
+
     public init(id: String, area: ProblemArea, title: String, detail: String, fix: String) {
         self.id = id
         self.area = area
@@ -36,7 +40,9 @@ public struct ProblemArea: OpenValue {
     public static let capabilities = ProblemArea(rawValue: "capabilities")
     /// Memory isn't reaching its backup.
     public static let memory = ProblemArea(rawValue: "memory")
-    public static let known = [notifications, mail, calendar, contacts, capabilities, memory]
+    /// Kumo's own work in the background can't go on, or is paused by a usage limit.
+    public static let kumo = ProblemArea(rawValue: "kumo")
+    public static let known = [notifications, mail, calendar, contacts, capabilities, memory, kumo]
 }
 
 /// What's wrong on the server changed: all of it, empty once nothing is.

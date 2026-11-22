@@ -11,13 +11,14 @@ import SwiftUI
     /// `ARI_MOTION_PLACE` on a place's page,
     /// `ARI_MOTION_PIN` with a map pin's callout up (a stop's id), or `ARI_MOTION_CHANGES` showing what changed), `ARI_SETTINGS` opens Settings (or, with
     /// `capabilities`, `capability:<id>`, `setup:<id>`, `model`, `voice` or `backup`, goes on to that place, or with `memory` scrolls to it),
-    /// `ARI_TOPICS` opens the conversation's topics, `ARI_DESK` opens part of the Desk (`upto` for What I'm up to, `tracks` for it scrolled to Getting to know you, `day` for your day, `problems`, or `wrong` for That was wrong in Kumo's work), `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
+    /// `ARI_THREADS` opens Threads by day, `ARI_OPEN_THREAD` opens a thread (its id), `ARI_DESK` opens part of the Desk (`upto` for What I'm up to, `tracks` for it scrolled to Getting to know you, `day` for your day, `problems`, or `wrong` for That was wrong in Kumo's work), `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
     /// `ARI_SHELF` opens a shelf (`people`, or `journal` and with `ARI_CALENDAR` its calendar), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code, and
-    /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), and `ARI_TALK`
-    /// starts a call.
+    /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), `ARI_TALK`
+    /// starts a call, `ARI_MADE` opens a page Kumo made (its id; with `ARI_MADE_END` at its foot),
+    /// and `ARI_NAME` opens a name's card (such as `memory:people/alex`).
     enum DebugScript {
         static let environment = ProcessInfo.processInfo.environment
 
@@ -31,7 +32,8 @@ import SwiftUI
 
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
-        static let opensTopics = environment["ARI_TOPICS"] != nil
+        static let opensThreads = environment["ARI_THREADS"] != nil
+        static let openThread = environment["ARI_OPEN_THREAD"].map(ThreadID.init(rawValue:))
         /// `ARI_ONBOARDING` opens getting started, while it's on, at a step: `knowYou` or `checkIn`.
         static let onboardingStep: OnboardingModel.Step? = {
             switch environment["ARI_ONBOARDING"] {
@@ -50,6 +52,9 @@ import SwiftUI
         static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))
         static let shelf = environment["ARI_SHELF"]
         static let showsCalendar = environment["ARI_CALENDAR"] != nil
+        static let made = environment["ARI_MADE"].map(MadeID.init(rawValue:))
+        static let opensMadeAtEnd = environment["ARI_MADE_END"] != nil
+        static let name = environment["ARI_NAME"].flatMap(URL.init(string:)).flatMap(NameLink.init)
 
         /// Where `ARI_SETTINGS` goes past the top of Settings.
         static var settingsPath: [SettingsRoute] {
@@ -87,6 +92,8 @@ import SwiftUI
         static let motionPlace = environment["ARI_MOTION_PLACE"]
         static let motionPin = environment["ARI_MOTION_PIN"]
         static let opensChanges = environment["ARI_MOTION_CHANGES"] != nil
+        /// In motion's own pages: `history`, or `bottom` to scroll to its foot.
+        static let motionRoute = environment["ARI_MOTION_ROUTE"]
         static let openRow = environment["ARI_OPEN_ROW"]
         static let talks = environment["ARI_TALK"] != nil
         static let openURL = environment["ARI_OPEN_URL"].flatMap(URL.init(string:))

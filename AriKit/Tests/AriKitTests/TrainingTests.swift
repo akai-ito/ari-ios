@@ -42,17 +42,22 @@ struct TrainingTests {
             "sub-20-5k", list: TrainingReading.sessionsList, item: "w6-wed", done: true)
         #expect(state[TrainingReading.sessionsList]?["w6-wed"]?.done == true)
         let detail = try await server.client.motion("sub-20-5k")
-        guard case .training(let training) = detail.content else {
-            Issue.record("not training")
+        // 0.19 keeps a training block in Body.
+        guard case .body(let block) = detail.content else {
+            Issue.record("not a body block")
             return
         }
-        #expect(training.weeks.count == 10)
-        let line = TrainingReading.line(
-            training, state: detail.state, now: wednesday, calendar: london)
-        #expect(line.when == "Week 6 of 10" && line.today == "Intervals done")
+        #expect(detail.motion.section == .body && detail.motion.salience == .loud)
+        #expect(block.weeks.count == 10)
         #expect(
-            TrainingReading.currentWeek(of: training, now: wednesday, calendar: london)?.week.note
-                == "Intervals done. Keep tomorrow easy; Friday's tempo is next.")
+            BodyReading.weekLine(of: block, now: wednesday, calendar: london) == "Week 6 of 10")
+        let week = try #require(
+            BodyReading.currentWeek(of: block, now: wednesday, calendar: london))
+        #expect(week.week.note == "Intervals done. Keep tomorrow easy; Friday's tempo is next.")
+        #expect(BodyReading.doneLine(week.week, state: detail.state) == "2 of 4 done")
+        #expect(
+            BodyReading.today(in: block, state: detail.state, now: wednesday, calendar: london)
+                == nil)
         #expect(detail.changes.first?.note == "Week 6: intervals done")
         let mismatches = await server.mismatches
         #expect(mismatches.isEmpty, "\(mismatches)")

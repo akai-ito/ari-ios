@@ -19,16 +19,18 @@ enum StatusText: Equatable {
 }
 
 /// The floating header: the character, where you are, and one line of status, over the
-/// conversation, which scrolls under it and fades out. Where you are is the subject Ari marked for
-/// what's at the top of the screen, or its day when there's none, changing as you scroll; tap it
-/// for all the topics. The character is Ari, so it needs no name. Tap it and it notices you.
+/// conversation, which scrolls under it and fades out. Where you are is the day of what's at the top
+/// of the screen, changing as you scroll; tap it for Threads by day. Resting, the line under it says
+/// how many threads are open. The character is Ari, so it needs no name. Tap it and it notices you.
 struct HeaderView: View {
     /// Read here rather than by the conversation, so the header redrawing as you scroll, or as a
     /// status changes, doesn't redraw the whole conversation.
     let header: HeaderState
     /// For VoiceOver, and the title before there's anything said.
     let name: String
-    /// Opens the conversation's topics and days.
+    /// How many side threads are open, for the quiet line while Kumo rests.
+    var openThreads = 0
+    /// Opens Threads by day.
     var openTopics: (() -> Void)?
     /// You tapped the character.
     var nudge: (() -> Void)?
@@ -36,9 +38,10 @@ struct HeaderView: View {
     var body: some View {
         let whereabouts = header.whereabouts
         let day = whereabouts?.day.map { DayLabel.describe($0, time: false) }
-        let title = whereabouts?.topic ?? day ?? name
-        // Resting under a subject, the line beneath says which day it's on; working, the status.
-        let status = header.status ?? (whereabouts?.topic == nil ? nil : day.map(StatusText.quiet))
+        let title = day ?? name
+        // Working, the status; resting, how many threads are open.
+        let threads = openThreads == 1 ? "1 open thread" : "\(openThreads) open threads"
+        let status = header.status ?? (openThreads > 0 ? .quiet(threads) : nil)
         VStack(spacing: 2) {
             PresenceView(history: header.poses)
                 .padding(.bottom, 6)
@@ -66,7 +69,10 @@ struct HeaderView: View {
             .buttonStyle(.plain)
             .disabled(openTopics == nil)
             .animation(.easeInOut(duration: 0.3), value: title)
-            StatusLine(status: status)
+            // A quiet turn's line gains how long it's been going, a tick at a time.
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                StatusLine(status: header.clocked(status, at: context.date))
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -87,11 +93,11 @@ struct HeaderView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            [name, title == name ? nil : title, status?.spoken].compactMap(\.self).joined(
-                separator: ", ")
+            [name, title == name ? nil : title, header.clocked(status, at: .now)?.spoken]
+                .compactMap(\.self).joined(separator: ", ")
         )
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(openTopics == nil ? "" : "Shows the topics")
+        .accessibilityHint(openTopics == nil ? "" : "Shows your threads by day")
         .accessibilityAction { openTopics?() }
     }
 }

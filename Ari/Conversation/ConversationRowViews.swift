@@ -10,9 +10,12 @@ extension ConversationView {
     func rows(_ conversation: Conversation) -> [Row] {
         let key = RowsCache.Key(
             revision: conversation.revision, held: reveal.held,
-            offering: offering && offersNotifications)
+            offering: offering && offersNotifications,
+            waiting: place == nil ? session.waitingThreads : [])
         if cache.key == key { return cache.rows }
-        let rows = RowsCache.make(conversation, reveal: reveal.reveal, offering: key.offering)
+        let rows = RowsCache.make(
+            conversation, reveal: reveal.reveal, offering: key.offering,
+            anchor: anchor(of: conversation), waiting: key.waiting)
         cache.keep(rows, for: key)
         return rows
     }
@@ -22,23 +25,42 @@ extension ConversationView {
         switch row.kind {
         case .day(let date):
             DayLabel(date: date)
-        case .topic(let topic):
-            TopicLabel(label: topic.label) { showsTopics = true }
+        case .thread(let thread, let underAnchor):
+            ThreadLine(thread: thread, isUnderAnchor: underAnchor) {
+                openedThread = OpenedThread(id: thread.id)
+            }
+        case .startedHere(let thread):
+            StartedThreadLine(session: session, thread: thread) {
+                openedThread = OpenedThread(id: thread)
+            }
+        case .anchor(let entry):
+            ThreadAnchor(entry: entry)
+        case .done(let done):
+            ThreadDoneLine(done: done)
         case .yours(let entry):
-            YourMessage(
-                text: entry.text,
-                tag: tag(for: entry, in: conversation)
-            ) {
-                if !entry.attachments.isEmpty {
-                    MessageAttachments(attachments: entry.attachments) {
-                        await session.bytes(of: $0)
+            VStack(alignment: .trailing, spacing: 6) {
+                if let quote = entry.quotes { QuotedLine(text: quote.text) }
+                YourMessage(
+                    // A tap on Kumo's blocks shows as its words; the block is for Kumo.
+                    text: YourTap.words(of: entry.text),
+                    tag: tag(for: entry, in: conversation)
+                ) {
+                    if !entry.attachments.isEmpty {
+                        MessageAttachments(
+                            attachments: entry.attachments, recordings: entry.spoken == nil
+                        ) {
+                            await session.bytes(of: $0)
+                        }
+                    }
+                } footer: {
+                    if let spoken = entry.spoken {
+                        SpokenFooter(spoken: spoken) { await session.bytes(of: $0) }
                     }
                 }
-            } footer: {
-                if let spoken = entry.spoken {
-                    SpokenFooter(spoken: spoken) { await session.bytes(of: $0) }
-                }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .replySwipe(enabled: entry.position != nil) { reply(to: entry) }
+            .contextMenu { threadActions(for: entry) }
         case .call(let call):
             CallBlock(
                 call: call, returnToCall: returnToCall(call),
@@ -53,10 +75,15 @@ extension ConversationView {
                         ReplyView(document: document, position: position)
                             .environment(\.replyActions, replyActions(for: entry, in: conversation))
                     }
+                    if position == .infinity, let recording = RecordingLink.first(in: text) {
+                        TranscriptFold(recording: recording)
+                    }
                     if position == .infinity { footer(for: entry, in: conversation) }
                 }
             }
+            .replySwipe(enabled: entry.position != nil) { reply(to: entry) }
             .contextMenu {
+                threadActions(for: entry)
                 Button("Copy", systemImage: "doc.on.doc") { Pasteboard.copy(entry.text) }
                 Button("Select Text", systemImage: "selection.pin.in.out") {
                     sheet = .selecting(entry.text)
@@ -88,9 +115,10 @@ extension ConversationView {
         return ReplyActions(
             choose: latest
                 ? { label in
-                    guard session.send(label) != nil else { return }
+                    guard session.send(label, in: place) != nil else { return }
                     scrollToEnd()
-                } : nil)
+                } : nil,
+            message: entry.id)
     }
 
     /// Under your message: whether the server has it, and whether Ari took it in or it waits.

@@ -390,7 +390,7 @@ struct SessionDeskTests {
     ) -> String {
         let onboarding = onboarding.map { #","onboarding":\#($0)"# } ?? ""
         return
-            #"{"id":"\#(id)","type":"snapshot","at":"2026-11-10T08:00:00.000Z","reason":"no_cursor","messages":[\#(messages.joined(separator: ","))],"has_more":false,"steps":[],"asks":[],"calls":[],"topics":[],"turn":null,"next":[],"desk":\#(desk)\#(onboarding)}"#
+            #"{"id":"\#(id)","type":"snapshot","at":"2026-11-10T08:00:00.000Z","reason":"no_cursor","messages":[\#(messages.joined(separator: ","))],"has_more":false,"steps":[],"asks":[],"calls":[],"threads":[],"turn":null,"next":[],"desk":\#(desk)\#(onboarding)}"#
     }
 
     private static func message(_ id: String, _ text: String, _ position: Int) -> String {

@@ -22,8 +22,19 @@ import Observation
 @MainActor
 @Observable
 public final class Session {
-    /// The conversation as Ari shows it.
+    /// The main chat as Ari shows it.
     public private(set) var conversation: Conversation
+    /// The side threads you've opened, each a conversation of its own, fed by the same stream.
+    public private(set) var threadConversations: [ThreadID: Conversation] = [:]
+    /// Threads you started here before the server named them, and the thread each became.
+    public private(set) var adopted: [ThreadID: ThreadID] = [:]
+    /// Threads you're starting here, before the server has them: the main chat's message each
+    /// replies to, or none for a new thread.
+    public private(set) var drafts: [ThreadID: MessageID?] = [:]
+    /// Threads you started here that hold your message while the server hasn't named them yet,
+    /// such as one a recording started while it goes up, in the order you started them: the main
+    /// chat shows a line for each meanwhile.
+    public private(set) var waitingThreads: [ThreadID] = []
     /// The Desk, once the stream has said what's on it.
     public private(set) var desk: Desk?
     /// How getting started stands, once the stream or ``refreshOnboarding()`` has said.
@@ -43,6 +54,8 @@ public final class Session {
     public private(set) var voiceStatus: VoiceStatus?
     /// What's in motion, which follows the same stream.
     @ObservationIgnored public weak var motions: Motions?
+    /// The pages Kumo made, kept current from the stream.
+    @ObservationIgnored public weak var made: MadePages?
 
     public enum Link: Equatable, Sendable {
         /// The first attempt since ``start()``.
@@ -60,6 +73,8 @@ public final class Session {
     private struct StopRequest {
         /// `nil` until the turn it stops is announced.
         var turn: TurnID?
+        /// Where that turn runs: the main chat, or a thread.
+        var place: ThreadID?
     }
 
     public enum Problem: Equatable, Sendable {
@@ -72,7 +87,7 @@ public final class Session {
     /// The longest message the server takes, in characters.
     public static let maximumLength = 32_000
 
-    @ObservationIgnored private let client: ItoClient
+    @ObservationIgnored let client: ItoClient
     @ObservationIgnored private let outbox: OutboxStore
     @ObservationIgnored private let network: any NetworkPath
     @ObservationIgnored private let ticker: Ticker
@@ -99,6 +114,18 @@ public final class Session {
         /// The server refused it, such as for being too large; its message says why.
         case refused(RequestError)
     }
+
+    /// The recordings you sent, by attachment, as the server last said: for their cards.
+    public internal(set) var recordings: [AttachmentID: Recording] = [:]
+    /// Ari's big uploads: a message naming one waits for it, even across a restart, and is handed
+    /// to them too, so it goes once the upload finishes even with Ari in the background.
+    @ObservationIgnored public weak var bigUploads: BigUploads?
+    /// Big uploads as the conversation shows them before the server has them.
+    @ObservationIgnored private var bigAttachments: [AttachmentID: Attachment] = [:]
+    /// Files Kumo showed, once fetched: a card scrolling back into view draws at once.
+    @ObservationIgnored var shownFiles: [FileID: ShownFile] = [:]
+    /// What the server takes, once asked.
+    @ObservationIgnored var uploadList: UploadList?
     @ObservationIgnored private var isOnline = true
     @ObservationIgnored private var wantsSnapshot = false
     @ObservationIgnored private var lastHeard: Duration = .zero
@@ -114,6 +141,8 @@ public final class Session {
     @ObservationIgnored private var fetches: [AttachmentID: Task<Data?, Never>] = [:]
     /// Messages whose attachments went again because the server no longer had them, once each.
     @ObservationIgnored private var uploadedAgain: Set<MessageID> = []
+    /// Threads being opened, and the events that arrived meanwhile, applied once they're open.
+    @ObservationIgnored private var opening: [ThreadID: [Event]] = [:]
 
     /// - Parameters:
     ///   - conversation: Where to start: the cached conversation, or an empty one.
@@ -157,6 +186,9 @@ public final class Session {
         if lanes.isEmpty {
             let waiting = (try? outbox.load()) ?? []
             let named = Set(waiting.flatMap { $0.attachments ?? [] })
+            for upload in bigUploads?.store.all() ?? [] where named.contains(upload.id) {
+                bigUploadChanged(upload)
+            }
             for attachment in outbox.attachments() where uploads[attachment.id] == nil {
                 // A draft doesn't survive a restart, so what no waiting message names goes.
                 guard named.contains(attachment.id) else {
@@ -169,9 +201,19 @@ public final class Session {
             for message in waiting where !queue.contains(message) {
                 // Photos already uploaded show once the server accepts the message.
                 let waiting = (message.attachments ?? []).compactMap { id in
-                    uploadQueue.first { $0.id == id }?.attachment
+                    uploadQueue.first { $0.id == id }?.attachment ?? bigAttachments[id]
                 }
-                conversation.send(message.id, text: message.text, attachments: waiting)
+                // A message for a thread shows there once the thread is open and the server has it.
+                // One that starts a thread, such as a recording still going up, starts it here again.
+                if message.thread == nil, message.replyTo == nil, message.newThread != true {
+                    conversation.send(message.id, text: message.text, attachments: waiting)
+                } else if message.thread == nil {
+                    let draft = startThread(
+                        replyingTo: message.newThread == true ? nil : message.replyTo)
+                    threadConversations[draft]?.send(
+                        message.id, text: message.text, attachments: waiting)
+                    holding(in: draft)
+                }
                 queue.append(message)
             }
             let network = network
@@ -224,26 +266,197 @@ public final class Session {
     ///   - attachments: Photos and files attached with ``attach(_:)``. The message goes once
     ///     they're all on the server; the text may then be empty.
     ///   - done: The line of Done it replies to, telling Kumo it got that one wrong.
+    ///   - place: The thread it goes into, or `nil` for the main chat. A thread you're starting
+    ///     here (``startThread(replyingTo:)``) is named by the server once it has the message. A
+    ///     recording for the main chat starts a thread of its own instead, where Kumo's take on it
+    ///     comes too; ``draft(holding:)`` says which.
+    ///   - replyingTo: Inside a thread, the message you're replying to, which it quotes.
     @discardableResult
     public func send(
         _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
-        attachments: [AttachmentID] = [], done: DoneID? = nil
+        attachments: [AttachmentID] = [], done: DoneID? = nil, in place: ThreadID? = nil,
+        replyingTo: MessageID? = nil
     ) -> MessageID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
-        let message = SendMessage(id: id, text: text, attachments: attachments, done: done)
-        conversation.send(id, text: text, attachments: attachments.compactMap(attachment))
+        let shown = attachments.compactMap(attachment)
+        var place = place
+        if place == nil, conversation[id] == nil, Self.startsThread(carrying: shown) {
+            // Sent again, as a shared recording is each time Ari comes back, it stays where it is.
+            place =
+                threadConversations.first { $0.value[id] != nil }?.key
+                ?? startThread(replyingTo: nil)
+        }
+        let thread = resolved(place)
+        let draft = thread.flatMap { drafts[$0] }
+        let message = SendMessage(
+            id: id, text: text, attachments: attachments, done: done,
+            thread: draft == nil ? thread : nil, replyTo: replyingTo ?? draft ?? nil,
+            newThread: draft.map { $0 == nil } ?? false)
+        if let thread {
+            let quotes = replyingTo.flatMap { quote(of: $0, in: thread) }
+            threadConversations[thread, default: Conversation(place: thread)].send(
+                id, text: text, attachments: shown, quotes: quotes)
+            holding(in: thread)
+        } else {
+            conversation.send(id, text: text, attachments: shown)
+        }
+        for big in attachments where bigAttachments[big] != nil {
+            bigUploads?.send(message, after: big)
+        }
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         wake(.outbox)
         return id
     }
 
+    /// What your reply quotes: a line of the message, as the server writes it.
+    private func quote(of message: MessageID, in thread: ThreadID) -> Quote? {
+        guard let entry = threadConversations[thread]?[message] else { return nil }
+        return Quote(message: message, text: entry.line)
+    }
+
+    // MARK: - Threads
+
+    /// The main chat (`nil`), or a thread's conversation: empty until it's opened.
+    public func conversation(in place: ThreadID?) -> Conversation {
+        guard let thread = resolved(place) else { return conversation }
+        return threadConversations[thread] ?? Conversation(place: thread)
+    }
+
+    /// The thread a place is now: a thread you started here becomes the one the server named.
+    public func resolved(_ place: ThreadID?) -> ThreadID? {
+        place.map { adopted[$0] ?? $0 }
+    }
+
+    /// Replying to `message` in the main chat opens the thread under it, or starts one; with no
+    /// message, a new thread of your own. Returns where to show it: the thread, or a draft the
+    /// server names once your first message is there.
+    public func startThread(replyingTo message: MessageID?) -> ThreadID {
+        if let message, let existing = conversation.thread(hangingFrom: message) {
+            return existing.id
+        }
+        let draft = ThreadID("draft-\(UUID().uuidString.lowercased())")
+        drafts[draft] = .some(message)
+        threadConversations[draft] = Conversation(place: draft)
+        return draft
+    }
+
+    /// A message went into `thread`: one you're starting here waits for the server to name it.
+    private func holding(in thread: ThreadID) {
+        guard drafts[thread] != nil, !waitingThreads.contains(thread) else { return }
+        waitingThreads.append(thread)
+    }
+
+    /// Whether a message carrying these starts a thread of its own when it's for the main chat: a
+    /// recording does, so Kumo's take on it has a place of its own, as the server's follow-up
+    /// expects.
+    public nonisolated static func startsThread(carrying attachments: [Attachment]) -> Bool {
+        attachments.contains { $0.kind == .audio }
+    }
+
+    /// Opens a thread: its latest messages, steps and running turn. What the stream brings
+    /// meanwhile applies once it's open.
+    public func openThread(_ place: ThreadID) async {
+        guard let thread = resolved(place), drafts[thread] == nil, opening[thread] == nil else {
+            return
+        }
+        opening[thread] = []
+        defer { opening[thread] = nil }
+        do {
+            let page = try await client.thread(thread)
+            var opened = threadConversations[thread] ?? Conversation(place: thread)
+            opened.replace(with: page)
+            for event in opening[thread] ?? [] { opened.apply(event) }
+            threadConversations[thread] = opened
+            conversation.update(page.thread)
+        } catch {
+            // It stays as it was; opening it again tries again.
+        }
+    }
+
+    /// Every thread, for Threads by day: open ones, then done ones newest first, or those holding
+    /// all of `query`'s words.
+    public func threads(matching query: String = "", before: ThreadID? = nil)
+        async throws(RequestError) -> ThreadList
+    {
+        let listed = try await client.threads(matching: query, before: before)
+        conversation.learn(listed.open + listed.threads)
+        return listed
+    }
+
+    /// Renames a thread, or marks it done or open.
+    public func change(_ place: ThreadID, _ change: ThreadChange) async throws(RequestError) {
+        guard let thread = resolved(place), drafts[thread] == nil else { return }
+        learn(try await client.change(thread, change))
+    }
+
+    /// You've seen what's new in a thread, on every app.
+    public func see(_ place: ThreadID) async {
+        guard let thread = resolved(place), drafts[thread] == nil,
+            conversation(in: thread).thread?.news != nil
+                || conversation.threads[thread]?.news != nil,
+            let seen = try? await client.see(thread)
+        else { return }
+        learn(seen)
+    }
+
+    /// Moves a message into a thread, or back to the main chat with `nil`.
+    public func move(_ message: MessageID, to place: ThreadID?) async throws(RequestError) {
+        let thread = resolved(place)
+        guard thread.map({ drafts[$0] == nil }) ?? true else { return }
+        _ = try await client.move(message, to: thread)
+    }
+
+    private func learn(_ thread: SideThread) {
+        conversation.update(thread)
+        threadConversations[thread.id]?.update(thread)
+    }
+
+    /// Applies `change` to the main chat and every open thread.
+    private func updateEach(_ change: (inout Conversation) -> Void) {
+        change(&conversation)
+        for key in threadConversations.keys { change(&threadConversations[key]!) }
+    }
+
+    /// The thread you're starting here that holds your message `id`, if one does: where a recording
+    /// sent to the main chat went.
+    public func draft(holding id: MessageID) -> ThreadID? {
+        drafts.keys.first { threadConversations[$0]?[id] != nil }
+    }
+
+    /// The server put your first message of a draft in `thread`: the draft becomes it.
+    private func adopt(_ draft: ThreadID, as thread: ThreadID) {
+        guard var conversation = threadConversations.removeValue(forKey: draft) else { return }
+        conversation.adopt(thread)
+        if let existing = threadConversations[thread] { conversation = existing }
+        threadConversations[thread] = conversation
+        drafts[draft] = nil
+        if waitingThreads.contains(draft) { waitingThreads.removeAll { $0 == draft } }
+        adopted[draft] = thread
+        Task { await self.openThread(thread) }
+    }
+
     /// An attachment as the conversation shows it, once uploaded or while it waits to be.
     private func attachment(_ id: AttachmentID) -> Attachment? {
         if case .uploaded(let uploaded) = uploads[id] { return uploaded }
-        return uploadQueue.first { $0.id == id }?.attachment
+        return uploadQueue.first { $0.id == id }?.attachment ?? bigAttachments[id]
+    }
+
+    /// A big upload moved on: a message naming it goes once it's an attachment, and can't once the
+    /// server refused it. Its progress is ``BigUploads``'s to show.
+    public func bigUploadChanged(_ upload: BigUpload) {
+        bigAttachments[upload.id] = upload.attachment
+        let now: Upload =
+            switch upload.state {
+            case .sending: .uploading
+            case .finished(let attachment): .uploaded(attachment)
+            case .refused(let error): .refused(.refused(status: 400, error: error, retryAfter: nil))
+            }
+        guard uploads[upload.id] != now else { return }
+        uploads[upload.id] = now
+        wake(.upload)
     }
 
     /// You attached a photo or file: it starts uploading at once, while you write, saved on the
@@ -260,6 +473,9 @@ public final class Session {
     /// You removed an attachment before sending. It may already be on the server, unused; the
     /// server forgets unused uploads after a day.
     public func detach(_ attachment: AttachmentID) {
+        if bigAttachments.removeValue(forKey: attachment) != nil, let bigUploads {
+            Task { await bigUploads.cancel(attachment) }
+        }
         uploadQueue.removeAll { $0.id == attachment }
         uploads[attachment] = nil
         outbox.removeAttachment(attachment)
@@ -285,17 +501,22 @@ public final class Session {
     /// it.
     @discardableResult
     public func sendFromNotification(
-        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased())
+        _ text: String, id: MessageID = MessageID(UUID().uuidString.lowercased()),
+        in thread: ThreadID? = nil
     ) async -> Bool {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             text.count <= Self.maximumLength
         else { return false }
-        let message = SendMessage(id: id, text: text)
-        conversation.send(id, text: text)
+        let message = SendMessage(id: id, text: text, thread: thread)
+        if let thread {
+            threadConversations[thread]?.send(id, text: text)
+        } else {
+            conversation.send(id, text: text)
+        }
         try? outbox.add(message)
         if !queue.contains(message) { queue.append(message) }
         do {
-            conversation.confirm(try await client.send(message))
+            confirm(try await client.send(message))
             finish(message)
             return true
         } catch {
@@ -355,8 +576,16 @@ public final class Session {
 
     /// You tapped Stop while an ask waited: it settles at once, and the cancel goes on its own lane.
     public func cancel(_ ask: AskID) {
-        guard conversation[ask: ask]?.outcome == nil, !cancels.contains(ask) else { return }
-        conversation.cancel(ask)
+        guard !cancels.contains(ask) else { return }
+        let place = ([conversation] + Array(threadConversations.values)).first {
+            $0[ask: ask]?.outcome == nil
+        }
+        guard let place else { return }
+        if let thread = place.place {
+            threadConversations[thread]?.cancel(ask)
+        } else {
+            conversation.cancel(ask)
+        }
         cancels.append(ask)
         wake(.cancel)
     }
@@ -364,13 +593,19 @@ public final class Session {
     /// You tapped Stop. The request goes on its own lane, even before the stream is back, and the
     /// reply keeps what Kumo had written. Tapped before the turn is announced, it goes as soon as it
     /// is.
-    public func stop() {
-        if let turn = conversation.turn?.id {
+    public func stop(in place: ThreadID? = nil) {
+        let thread = resolved(place)
+        let stopping = conversation(in: thread)
+        if let turn = stopping.turn?.id {
             guard stopRequest?.turn != turn else { return }
-            conversation.stop(turn: turn)
-            stopRequest = StopRequest(turn: turn)
-        } else if conversation.entries.last?.role == .user {
-            stopRequest = StopRequest(turn: nil)
+            if let thread {
+                threadConversations[thread]?.stop(turn: turn)
+            } else {
+                conversation.stop(turn: turn)
+            }
+            stopRequest = StopRequest(turn: turn, place: thread)
+        } else if stopping.entries.last?.role == .user {
+            stopRequest = StopRequest(turn: nil, place: thread)
         } else {
             return
         }
@@ -380,21 +615,27 @@ public final class Session {
     /// You tapped Try again on the failed `turn`. Tapping twice is safe: the server starts one
     /// attempt.
     public func tryAgain(_ turn: TurnID) {
-        conversation.retry(turn: turn)
+        updateEach { $0.retry(turn: turn) }
         retries.append(turn)
         wake(.retry)
     }
 
     /// You scrolled near the top: fetch the page of messages before the oldest Ari has.
-    public func loadEarlier(limit: Int = 50) async {
-        guard conversation.hasEarlierMessages, !isLoadingEarlier,
-            let oldest = conversation.entries.first, oldest.delivery != .sending
+    public func loadEarlier(limit: Int = 50, in place: ThreadID? = nil) async {
+        let thread = resolved(place)
+        let earlier = conversation(in: thread)
+        guard earlier.hasEarlierMessages, !isLoadingEarlier,
+            let oldest = earlier.entries.first, oldest.delivery != .sending
         else { return }
         isLoadingEarlier = true
         defer { isLoadingEarlier = false }
         do {
             let page = try await client.messages(before: oldest.id, limit: limit)
-            conversation.insertEarlier(page, before: oldest.id)
+            if let thread {
+                threadConversations[thread]?.insertEarlier(page, before: oldest.id)
+            } else {
+                conversation.insertEarlier(page, before: oldest.id)
+            }
         } catch {
             // The server no longer has that message: Ari's view is stale, so replace it.
             if error.status == 404 {
@@ -610,26 +851,47 @@ public final class Session {
     }
 
     private func receive(_ event: Event) {
+        if case .messageAccepted(let accepted) = event.payload,
+            let thread = accepted.message.thread,
+            let draft = draft(holding: accepted.message.id)
+        {
+            adopt(draft, as: thread)
+        }
         conversation.apply(event)
+        for key in threadConversations.keys {
+            threadConversations[key]!.apply(event)
+            // A thread that missed something, or saw a snapshot, opens again from the server.
+            if threadConversations[key]!.needsSnapshot { Task { await self.openThread(key) } }
+        }
+        for key in opening.keys { opening[key]?.append(event) }
         motions?.apply(event)
+        made?.apply(event)
         switch event.payload {
         case .snapshot(let snapshot):
             desk = snapshot.desk
             onboarding = snapshot.onboarding
             problems = snapshot.problems ?? []
             wantsSnapshot = false
+            // Recordings' changes are compacted, so a snapshot means asking again.
+            refreshRecordings()
         case .problemsChanged(let changed):
             problems = changed.problems
         case .deskChanged(let changed):
             desk = changed.desk
+        case .recordingChanged(let changed):
+            recordings[changed.recording.attachment] = changed.recording
         case .onboardingChanged(let changed):
             onboarding = changed.onboarding
         case .voiceStatus(let status):
             voiceStatus = status
         case .turnStarted(let started):
-            if let request = stopRequest, request.turn == nil {
-                conversation.stop(turn: started.turn)
-                stopRequest = StopRequest(turn: started.turn)
+            if let request = stopRequest, request.turn == nil, request.place == started.thread {
+                if let thread = started.thread {
+                    threadConversations[thread]?.stop(turn: started.turn)
+                } else {
+                    conversation.stop(turn: started.turn)
+                }
+                stopRequest = StopRequest(turn: started.turn, place: started.thread)
                 wake(.stop)
             }
         default:
@@ -672,7 +934,7 @@ public final class Session {
                 continue
             }
             do {
-                conversation.confirm(try await client.send(message))
+                confirm(try await client.send(message))
                 finish(message)
                 failures = 0
             } catch {
@@ -706,6 +968,15 @@ public final class Session {
         }
         wake(.upload)
         return true
+    }
+
+    /// The server has your message: it shows as sent where it is. A draft's first message names the
+    /// thread the draft becomes.
+    private func confirm(_ result: MessageResult) {
+        if let thread = result.message.thread, let draft = draft(holding: result.message.id) {
+            adopt(draft, as: thread)
+        }
+        updateEach { $0.confirm(result) }
     }
 
     /// The message went, or can't: it, and the bytes of its attachments, leave the outbox.
@@ -765,7 +1036,8 @@ public final class Session {
         await runLane(.stop) {
             stopRequest?.turn
         } send: { turn throws(RequestError) in
-            conversation.confirm(try await client.stop(turn))
+            let result = try await client.stop(turn)
+            updateEach { $0.confirm(result) }
         } done: { turn in
             if stopRequest?.turn == turn { stopRequest = nil }
         }
@@ -775,7 +1047,8 @@ public final class Session {
         await runLane(.retry) {
             retries.first
         } send: { turn throws(RequestError) in
-            conversation.confirm(try await client.retry(turn))
+            let result = try await client.retry(turn)
+            updateEach { $0.confirm(result) }
         } done: { turn in
             if retries.first == turn { retries.removeFirst() }
         }
@@ -785,7 +1058,12 @@ public final class Session {
         await runLane(.cancel) {
             cancels.first
         } send: { ask throws(RequestError) in
-            conversation.confirm(try await client.cancelAsk(ask))
+            let result = try await client.cancelAsk(ask)
+            if let thread = result.ask.thread {
+                threadConversations[thread]?.confirm(result)
+            } else {
+                conversation.confirm(result)
+            }
         } done: { ask in
             if cancels.first == ask { cancels.removeFirst() }
         }

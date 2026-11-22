@@ -76,6 +76,14 @@ struct ProtocolDecodingTests {
                     // Settings' requests, a belief's answer, a cancelled plan and where the phone
                     // is, which have no answer to read.
                     continue
+                case .threads:
+                    _ = try body.decode(ThreadList.self)
+                case .thread(let thread):
+                    #expect(try body.decode(ThreadPage.self).thread.id == thread, "\(place)")
+                case .changeThread(let thread), .seeThread(let thread):
+                    #expect(try body.decode(ThreadResult.self).thread.id == thread, "\(place)")
+                case .moveMessage(let message):
+                    #expect(try body.decode(MessageResult.self).message.id == message, "\(place)")
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
                 case .retry(let turn):
@@ -103,6 +111,10 @@ struct ProtocolDecodingTests {
                     _ = try body.decode(PageList.self)
                 case .memoryRecent:
                     _ = try body.decode(RecentChanges.self)
+                case .memoryChapters:
+                    _ = try body.decode(ChapterList.self)
+                case .memoryLearnt:
+                    _ = try body.decode(LearntLines.self)
                 case .memoryPage:
                     #expect(try !body.decode(MemoryPage.self).title.isEmpty, "\(place)")
                 case .memoryChange(let change):
@@ -131,6 +143,13 @@ struct ProtocolDecodingTests {
                     #expect(detail.content != .unreadable && detail.content != .unknown, "\(place)")
                 case .motionState:
                     _ = try body.decode(MotionStateBody.self)
+                case .madePages:
+                    #expect(try !body.decode(MadeList.self).made.isEmpty, "\(place)")
+                case .madePage(let id):
+                    let detail = try body.decode(MadeDetail.self)
+                    #expect(detail.made.id == id && !detail.content.sections.isEmpty, "\(place)")
+                case .madeState:
+                    _ = try body.decode(MadeStateBody.self)
                 case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
@@ -155,8 +174,17 @@ struct ProtocolDecodingTests {
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
                     id: message.id, text: message.text, attachments: message.attachments ?? [],
-                    done: message.done)
+                    done: message.done, thread: message.thread, replyTo: message.replyTo,
+                    newThread: message.newThread == true)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .changeThread:
+                let change = try body.decode(ThreadChange.self)
+                let encoded = ThreadChange(title: change.title, state: change.state)
+                #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .moveMessage:
+                let move = try body.decode(MoveMessage.self)
+                #expect(
+                    try JSONValue(encoding: MoveMessage(thread: move.thread)) == body, "\(place)")
             case .answerCard:
                 #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
             case .answerGuess:
@@ -208,6 +236,9 @@ struct ProtocolDecodingTests {
             case .motionState:
                 let state = try body.decode(MotionState.self)
                 #expect(try JSONValue(encoding: state) == body, "\(place)")
+            case .madeState:
+                let state = try body.decode(MadeState.self)
+                #expect(try JSONValue(encoding: state) == body, "\(place)")
             case .correct:
                 let words = try body.decode(CorrectDone.self).text
                 #expect(try JSONValue(encoding: CorrectDone(text: words)) == body, "\(place)")
@@ -231,7 +262,7 @@ struct ProtocolDecodingTests {
         for text in ["0.1.7", "1", "0.", ".1", "a.b", "0.-1", "\u{0660}.\u{0661}", ""] {
             #expect(ProtocolVersion(text) == nil, "\(text)")
         }
-        #expect(ProtocolVersion(major: 0, minor: 19) > .supported)
+        #expect(ProtocolVersion(major: 0, minor: 20) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
@@ -269,15 +300,22 @@ extension Event.Payload {
         case .callEnded: "call.ended"
         case .callAudioDeleted: "call.audio_deleted"
         case .voiceStatus: "voice.status"
-        case .topicStarted: "topic.started"
+        case .threadStarted: "thread.started"
+        case .threadChanged: "thread.changed"
+        case .messageMoved: "message.moved"
         case .messageAmended: "message.amended"
         case .motionStarted: "motion.started"
         case .motionChanged: "motion.changed"
         case .motionFinished: "motion.finished"
         case .motionState: "motion.state"
         case .motionRemoved: "motion.removed"
+        case .madeCreated: "made.created"
+        case .madeChanged: "made.changed"
+        case .madeState: "made.state"
+        case .madeRemoved: "made.removed"
         case .deskChanged: "desk.changed"
         case .onboardingChanged: "onboarding.changed"
+        case .recordingChanged: "recording.changed"
         case .problemsChanged: "problems.changed"
         case .unknown: nil
         }

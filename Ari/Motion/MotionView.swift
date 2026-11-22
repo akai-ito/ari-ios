@@ -21,14 +21,7 @@ struct MotionView: View {
             ZStack(alignment: .top) {
                 Color.ariBackground.ignoresSafeArea()
                 if let detail = motions?.details[id] {
-                    switch detail.content {
-                    case .trip(let trip): TripView(detail: detail, trip: trip)
-                    case .training(let training): TrainingView(detail: detail, training: training)
-                    case .pursuit(let pursuit): PursuitView(detail: detail, pursuit: pursuit)
-                    case .occasion(let occasion): OccasionView(detail: detail, occasion: occasion)
-                    case .caseFile(let file): CaseView(detail: detail, file: file)
-                    case .unknown, .unreadable: PlainMotionView(detail: detail)
-                    }
+                    MotionContentView(detail: detail)
                 } else if let problem {
                     Notice(text: problem) {
                         self.problem = nil
@@ -108,6 +101,54 @@ struct MotionView: View {
         } catch {
             if motions.details[id] == nil { problem = "Couldn't open it: \(error.plainWords)" }
         }
+    }
+}
+
+/// A thing's page: once it's ended, its story; otherwise drawn for its kind.
+struct MotionContentView: View {
+    let detail: MotionDetail
+    /// As it was, for an ended thing's "What it held".
+    var asItWas = false
+
+    var body: some View {
+        if detail.motion.isInHistory, !asItWas {
+            StoryView(detail: detail)
+        } else {
+            switch detail.content {
+            case .career(let career): CareerView(detail: detail, career: career)
+            case .body(let block): BodyView(detail: detail, block: block)
+            case .trip(let trip): TripView(detail: detail, trip: trip)
+            case .project(let project): ProjectView(detail: detail, project: project)
+            case .learning(let learning): LearningView(detail: detail, learning: learning)
+            case .other(let other): OtherView(detail: detail, other: other)
+            case .training(let training): TrainingView(detail: detail, training: training)
+            case .pursuit(let pursuit): PursuitView(detail: detail, pursuit: pursuit)
+            case .occasion(let occasion): OccasionView(detail: detail, occasion: occasion)
+            case .caseFile(let file): CaseView(detail: detail, file: file)
+            case .unknown, .unreadable: PlainMotionView(detail: detail)
+            }
+        }
+    }
+}
+
+/// Another thing in motion, opened from this one's page, such as what followed it.
+struct LinkedMotionView: View {
+    let id: MotionID
+
+    @Environment(Motions.self) private var motions: Motions?
+
+    var body: some View {
+        Group {
+            if let detail = motions?.details[id] {
+                MotionContentView(detail: detail)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background(.ariBackground)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { _ = try? await motions?.detail(id) }
     }
 }
 

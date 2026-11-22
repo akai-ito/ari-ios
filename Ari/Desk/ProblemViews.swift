@@ -45,7 +45,7 @@ struct ProblemDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(problem.title, systemImage: ProblemLook.symbol(problem.area))
+            Label(problem.title, systemImage: ProblemLook.symbol(problem))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.ariText)
             Text(problem.detail)
@@ -63,16 +63,24 @@ struct ProblemDetail: View {
 
 /// How each area of problem looks: a symbol for what it's about.
 enum ProblemLook {
-    static func symbol(_ area: ProblemArea) -> String {
-        switch area {
-        case .notifications: "bell.slash"
-        case .mail: "envelope.badge"
-        case .calendar: "calendar.badge.exclamationmark"
-        case .contacts: "person.crop.circle.badge.exclamationmark"
-        case .capabilities: "puzzlepiece.extension"
-        case .memory: "externaldrive.badge.exclamationmark"
-        default: "exclamationmark.circle"
+    static func symbol(_ problem: ServerProblem) -> String {
+        if problem.isPause { return "pause.circle" }
+        switch problem.area {
+        case .notifications: return "bell.slash"
+        case .mail: return "envelope.badge"
+        case .calendar: return "calendar.badge.exclamationmark"
+        case .contacts: return "person.crop.circle.badge.exclamationmark"
+        case .capabilities: return "puzzlepiece.extension"
+        case .memory: return "externaldrive.badge.exclamationmark"
+        default: return "exclamationmark.circle"
         }
+    }
+
+    /// The quiet line under Kumo's face: the pause says until when; anything else, that something's
+    /// wrong.
+    static func line(_ problems: [ServerProblem]) -> String {
+        if let pause = problems.first, problems.allSatisfy(\.isPause) { return pause.title }
+        return "Something's wrong"
     }
 }
 
@@ -80,12 +88,21 @@ enum ProblemLook {
     #Preview("Needs you") {
         Color.ariBackground
             .sheet(isPresented: .constant(true)) {
-                ProblemsSheet(problems: [ProblemSamples.push, ProblemSamples.outlook])
+                ProblemsSheet(problems: [
+                    ProblemSamples.paused, ProblemSamples.push, ProblemSamples.outlook,
+                ])
             }
             .preferredColorScheme(.dark)
     }
 
     enum ProblemSamples {
+        static let paused = ServerProblem(
+            id: "kumo:paused", area: .kumo, title: "Kumo's paused until 18:00",
+            detail:
+                "Your plan's usage limit was reached, so wake-ups and mail wait until it resets. Then Kumo catches up once, and tells you in one message what it missed.",
+            fix:
+                "Nothing to do: Kumo picks up on its own. To go on sooner, add usage to your plan; Kumo starts again as soon as a message in the chat goes through."
+        )
         static let push = ServerProblem(
             id: "push", area: .notifications, title: "Notifications can't be sent",
             detail:

@@ -133,9 +133,11 @@ struct DeskScreen: View {
                 Button {
                     showsProblems = true
                 } label: {
-                    Text("Something's wrong \(Text("›").foregroundStyle(.ariTertiary))")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.ariBone)
+                    Text(
+                        "\(ProblemLook.line(session.problems)) \(Text("›").foregroundStyle(.ariTertiary))"
+                    )
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.ariBone)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Shows what's wrong, and how to fix it")

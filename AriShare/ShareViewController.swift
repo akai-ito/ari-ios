@@ -5,7 +5,9 @@ import UniformTypeIdentifiers
 
 /// Share to Ari: from any app's share sheet, a photo, a file, a link or some text goes to Ari, with
 /// a note if you like. It's sent at once when it can be; otherwise it waits in the app group, and
-/// Ari sends it the next time it opens.
+/// Ari sends it the next time it opens. A recording, or any file too big for one request, is handed
+/// to iOS to carry in the background in chunks, so the sheet can close at once; Ari finishes it
+/// and sends its message when iOS wakes it.
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -32,6 +34,14 @@ final class ShareModel {
     private(set) var attachments: [PendingAttachment] = []
     /// Links and text, which go as the message's words, after your note.
     private(set) var words: [String] = []
+    /// A recording, or another file too big for one request, which goes in chunks.
+    private(set) var big: BigUpload?
+    /// Where its copy waits until it's taken in.
+    private var bigFile: URL?
+    /// What the server takes and whether it can transcribe now, when it could be asked.
+    private(set) var limits: UploadList?
+    /// Kept while the share sheet is open, so iOS has every chunk before it closes.
+    private var uploads: BigUploads?
     var note = ""
     private(set) var state = State.reading
 
@@ -62,7 +72,31 @@ final class ShareModel {
 
     var canSend: Bool {
         state == .ready && isConnected
-            && (!attachments.isEmpty || !text.trimmingCharacters(in: .whitespaces).isEmpty)
+            && (!attachments.isEmpty || big != nil
+                || !text.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
+    /// The recording being shared, big or small, for its card.
+    var recording: (name: String, detail: String)? {
+        if let big, big.mediaType.hasPrefix("audio/") {
+            return (big.name, recordingDetail(seconds: big.durationSeconds, bytes: big.size))
+        }
+        guard let audio = attachments.first(where: { $0.mediaType.hasPrefix("audio/") }) else {
+            return nil
+        }
+        return (audio.name, recordingDetail(seconds: nil, bytes: audio.bytes.count))
+    }
+
+    private func recordingDetail(seconds: Double?, bytes: Int) -> String {
+        (["Recording"] + [seconds.map { "\(Int(($0 / 60).rounded())) min" }].compactMap(\.self)
+            + [UploadLimits.sizeWords(bytes)]).joined(separator: " · ")
+    }
+
+    private var client: ItoClient? {
+        guard let address = group.address, let token = try? group.tokens.token(for: address) else {
+            return nil
+        }
+        return ItoClient(address: address, token: token, transport: URLSessionTransport())
     }
 
     /// The message's words: your note, then the links and text you shared.
@@ -74,9 +108,15 @@ final class ShareModel {
     func send() {
         guard canSend, let shares = group.shares() else { return }
         state = .sending
+        // A recording starts a thread of its own, as from the chat, wherever it's sent from.
+        let carried = attachments.map(\.attachment) + (big.map { [$0.attachment] } ?? [])
         let message = SendMessage(
             id: MessageID(UUID().uuidString.lowercased()), text: text,
-            attachments: attachments.map(\.id))
+            attachments: carried.map(\.id), newThread: Session.startsThread(carrying: carried))
+        if let big, let bigFile {
+            sendBig(big, from: bigFile, with: message, shares: shares)
+            return
+        }
         do {
             for attachment in attachments { try shares.add(attachment) }
             try shares.add(message)
@@ -98,15 +138,55 @@ final class ShareModel {
         }
     }
 
+    /// The big file goes to iOS in chunks, with the message waiting on it; small photos alongside go
+    /// first, as any share's do. If the server can't be reached now, Ari carries on when it opens.
+    private func sendBig(
+        _ big: BigUpload, from file: URL, with message: SendMessage, shares: OutboxStore
+    ) {
+        guard let store = BigUploadStore.shared(group), let client else {
+            state = .problem("Couldn't keep this for \(LeadName.current).")
+            return
+        }
+        var upload = big
+        upload.message = message
+        let carrier = BackgroundChunkCarrier(
+            identifier: group.identifier + ".uploads.share", sharedContainer: group.identifier)
+        let uploads = BigUploads(store: store, client: client, carrier: carrier, name: "share")
+        carrier.uploads = uploads
+        self.uploads = uploads
+        Task {
+            for attachment in attachments { try? shares.add(attachment) }
+            _ = await ShareDelivery.deliver(shares, with: client)
+            do {
+                try await uploads.start(upload, file: file)
+            } catch {
+                state = .problem(
+                    "Couldn't keep \(upload.name) on the phone to send: there may not be room.")
+                return
+            }
+            try? FileManager.default.removeItem(at: file)
+            if case .refused(let error) = uploads.uploads[upload.id]?.state {
+                state = .problem(error.message)
+                return
+            }
+            state = .sent
+            try? await Task.sleep(for: .seconds(1))
+            finish()
+        }
+    }
+
     // MARK: - Reading what was shared
 
     private func read(_ providers: [NSItemProvider]) async {
+        if let client {
+            limits = try? await client.uploads()
+        }
         var problems: [String] = []
         for provider in providers.prefix(AttachmentMaker.mostPerMessage) {
             do {
                 try await read(provider)
-            } catch let error as AttachmentMaker.TooLarge {
-                problems.append("\(error.name) is larger than Ito accepts: up to 20 MB.")
+            } catch let refusal as BigAttachment.Refusal {
+                problems.append(refusal.words)
             } catch {
                 problems.append("Couldn't read \(provider.suggestedName ?? "one of them").")
             }
@@ -140,8 +220,21 @@ final class ShareModel {
                 words.append(text)
             }
         } else if let type = provider.registeredContentTypes.first {
-            attachments.append(
-                try await AttachmentMaker.file(at: try await Self.copy(provider, type)))
+            let copy = try await Self.copy(provider, type)
+            let size = (try? copy.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            guard BigAttachment.isBig(size: size, limits: limits?.limits) else {
+                attachments.append(try await AttachmentMaker.file(at: copy))
+                return
+            }
+            // One big file a share: a recording goes on its own.
+            guard big == nil else { throw BigAttachment.Refusal(words: "One recording at a time.") }
+            switch await BigAttachment.upload(for: copy, limits: limits?.limits) {
+            case .success(let upload):
+                big = upload
+                bigFile = copy
+            case .failure(let refusal):
+                throw refusal
+            }
         }
     }
 
@@ -164,8 +257,8 @@ final class ShareModel {
         }
     }
 
-    /// A copy of the shared file, made before the system takes the original away, and only if it's
-    /// small enough to send.
+    /// A copy of the shared file, made before the system takes the original away: a big one is
+    /// copied, never read into memory.
     private nonisolated static func copy(_ provider: NSItemProvider, _ type: UTType) async throws
         -> URL
     {
@@ -176,10 +269,6 @@ final class ShareModel {
                     return
                 }
                 do {
-                    let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                    guard size <= AttachmentMaker.largest else {
-                        throw AttachmentMaker.TooLarge(name: url.lastPathComponent)
-                    }
                     let folder = URL.temporaryDirectory.appending(path: UUID().uuidString)
                     try FileManager.default.createDirectory(
                         at: folder, withIntermediateDirectories: true)

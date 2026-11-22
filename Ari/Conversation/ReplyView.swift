@@ -65,16 +65,25 @@ struct ReplyView: View {
             var attributes = AttributeContainer()
             attributes.font = font(for: run.style, base: base, strong: tone.strong)
             if run.style.contains(.strikethrough) { attributes.strikethroughStyle = .single }
-            if let link = run.link {
+            if let link = run.link, link.scheme == RecordingLink.scheme {
+                // A moment in a recording: a quiet time that opens the transcript there.
                 attributes.link = link
-                // Another page of memory is a quiet dotted line; the web, a full one.
+                attributes.font = .footnote.monospacedDigit()
+            } else if let link = run.link {
+                attributes.link = link
+                // Another page of memory, or a name Kumo keeps, is a quiet dotted line; the web, a
+                // full one.
                 attributes.underlineStyle =
-                    link.scheme == PageLink.scheme ? Text.LineStyle(pattern: .dot) : .single
+                    link.scheme == PageLink.scheme || NameLink.isName(link)
+                    ? Text.LineStyle(pattern: .dot) : .single
             }
             let fullyShown =
                 position == .infinity || Double(run.start + run.text.utf16.count) + edge <= position
             if fullyShown {
-                attributes.foregroundColor = run.style.contains(.stamp) ? .ariTertiary : tone.color
+                attributes.foregroundColor =
+                    run.style.contains(.stamp)
+                    ? .ariTertiary
+                    : run.link?.scheme == RecordingLink.scheme ? .ariSecondary : tone.color
                 result += AttributedString(run.text, attributes: attributes)
                 continue
             }
@@ -121,6 +130,19 @@ private struct BlockView: View {
     var shape: ReplyShape??
 
     var body: some View {
+        if hasNames {
+            framed.opensNames()
+        } else {
+            framed
+        }
+    }
+
+    /// Whether a name Kumo keeps is linked here, to open its card when tapped.
+    private var hasNames: Bool {
+        block.runs.contains { run in run.link.map(NameLink.isName) ?? false }
+    }
+
+    private var framed: some View {
         content
             .padding(.leading, CGFloat(max(0, block.depth - 1)) * 18)
             .padding(.leading, block.quoted ? 14 : 0)

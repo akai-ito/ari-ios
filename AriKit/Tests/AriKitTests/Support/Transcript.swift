@@ -309,6 +309,8 @@ enum Route: Equatable {
     case memoryShelves
     case memoryPages
     case memoryRecent
+    case memoryChapters
+    case memoryLearnt
     case memoryPage
     case memoryChange(String)
     case models
@@ -324,6 +326,14 @@ enum Route: Equatable {
     case motions
     case motion(MotionID)
     case motionState(MotionID)
+    case threads
+    case thread(ThreadID)
+    case changeThread(ThreadID)
+    case seeThread(ThreadID)
+    case moveMessage(MessageID)
+    case madePages
+    case madePage(MadeID)
+    case madeState(MadeID)
     case other
 
     init(method: String, path: String) {
@@ -341,6 +351,15 @@ enum Route: Equatable {
             self = .earlierMessages(
                 before: MessageID(query["before"] ?? ""), limit: query["limit"].flatMap { Int($0) })
         case ("GET", 2) where parts == ["v0", "done"]: self = .done
+        case ("GET", 2) where parts == ["v0", "threads"]: self = .threads
+        case ("GET", 3) where parts[0] == "v0" && parts[1] == "threads":
+            self = .thread(ThreadID(parts[2]))
+        case ("PATCH", 3) where parts[0] == "v0" && parts[1] == "threads":
+            self = .changeThread(ThreadID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "threads" && parts[3] == "seen":
+            self = .seeThread(ThreadID(parts[2]))
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "messages" && parts[3] == "move":
+            self = .moveMessage(MessageID(parts[2]))
         case ("GET", 2) where parts == ["v0", "wakeups"]: self = .wakeUps
         case ("PATCH", 3) where parts[0] == "v0" && parts[1] == "wakeups":
             self = .changeWakeUp(WakeUpID(parts[2]))
@@ -402,6 +421,8 @@ enum Route: Equatable {
             case "shelves": self = .memoryShelves
             case "pages": self = .memoryPages
             case "recent": self = .memoryRecent
+            case "chapters": self = .memoryChapters
+            case "learnt": self = .memoryLearnt
             case "page": self = .memoryPage
             default: self = .other
             }
@@ -426,6 +447,11 @@ enum Route: Equatable {
             self = .motion(MotionID(parts[2]))
         case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "motion" && parts[3] == "state":
             self = .motionState(MotionID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "made"]: self = .madePages
+        case ("GET", 3) where parts[0] == "v0" && parts[1] == "made":
+            self = .madePage(MadeID(parts[2]))
+        case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "made" && parts[3] == "state":
+            self = .madeState(MadeID(parts[2]))
         default: self = .other
         }
     }
@@ -438,9 +464,10 @@ enum Route: Equatable {
         case .capabilities, .switchCapability, .setUpCapability, .checkCapability,
             .connectCapability,
             .memoryInMind,
-            .memoryShelves, .memoryPages, .memoryRecent, .memoryPage, .memoryChange, .models,
+            .memoryShelves, .memoryPages, .memoryRecent, .memoryChapters, .memoryLearnt,
+            .memoryPage, .memoryChange, .models,
             .chooseModel, .voices, .chooseVoice, .forgetVoiceprint, .speech,
-            .callStream, .motions, .motion, .motionState:
+            .callStream, .motions, .motion, .motionState, .madePages, .madePage, .madeState:
             true
         default: false
         }
