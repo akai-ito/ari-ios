@@ -35,14 +35,14 @@ struct ThreadTests {
     }
 
     @Test(
-        "Scenario 90: a reply thread hangs under its message, quotes, moves a message and reopens")
+        "Scenario 88: a reply thread hangs under its message, quotes, moves a message and reopens")
     func replyThread() throws {
-        var replay = Replay(try Fixtures.transcript("90-reply-in-a-thread"))
+        var replay = Replay(try Fixtures.transcript("88-reply-in-a-thread"))
         try replay.play()
-        let anchor: MessageID = "m_0002_71695"
-        let thread: ThreadID = "h_0001_33878"
-        let legs: MessageID = "c18c0493-767c-4d3c-acf5-9069508bac2a"
-        let moved: MessageID = "8fe045b5-9d87-49c0-82e4-46462772ba40"
+        let anchor: MessageID = "m_0002_66016"
+        let thread: ThreadID = "h_0001_92563"
+        let legs: MessageID = "b6a8aa41-36a7-4788-b49b-0aeb0725c4a0"
+        let moved: MessageID = "acde56c1-629d-476b-933f-379df11eb759"
 
         // Under the message it hangs from, straight after it.
         let items = Timeline(replay.conversation, reveal: Reveal()).items.map(\.id)
@@ -61,12 +61,12 @@ struct ThreadTests {
     }
 
     @Test(
-        "Scenario 91: Kumo comes back to a thread: its line moves to the end with the news, then done"
+        "Scenario 89: Kumo comes back to a thread: its line moves to the end with the news, then done"
     )
     func comesBack() throws {
-        var replay = Replay(try Fixtures.transcript("91-kumo-comes-back-to-a-thread"))
+        var replay = Replay(try Fixtures.transcript("89-kumo-comes-back-to-a-thread"))
         try replay.play(throughLine: 38)
-        let thread: ThreadID = "h_0001_83442"
+        let thread: ThreadID = "h_0001_29990"
         let news = try #require(replay.conversation.threads[thread]?.news)
         #expect(news.text == "Theo confirmed you for 11:30 on Saturday. It's in your calendar.")
         let items = Timeline(replay.conversation, reveal: Reveal()).items.map(\.id)

@@ -77,9 +77,9 @@ struct MemoryTests {
         #expect(await server.unanswered == 0)
     }
 
-    @Test("plays transcript 90: chapters in their own row, what Kumo learnt, a chapter's facts")
+    @Test("plays transcript 87: chapters in their own row, what Kumo learnt, a chapter's facts")
     func chapters() async throws {
-        let transcript = try Fixtures.transcript("90-chapters-and-what-kumo-learnt")
+        let transcript = try Fixtures.transcript("87-chapters-and-what-kumo-learnt")
         let server = TranscriptServer(
             transcript,
             only: { [.memoryChapters, .memoryLearnt, .memoryPage, .memoryShelves].contains($0) })
@@ -148,7 +148,7 @@ struct MemoryTests {
     /// The Library's requests in the contract's transcripts, made through the real client.
     @Test(
         arguments: [
-            "35-ari-updates-what-it-knows", "36-forget-that", "90-chapters-and-what-kumo-learnt",
+            "35-ari-updates-what-it-knows", "36-forget-that", "87-chapters-and-what-kumo-learnt",
         ])
     func transcripts(_ name: String) async throws {
         let transcript = try Fixtures.transcript(name)
