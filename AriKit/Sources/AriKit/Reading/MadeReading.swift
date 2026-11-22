@@ -92,6 +92,89 @@ public enum MadeReading {
         ReplyDocument(markdown: markdown).withoutShapes.plainText
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    // MARK: - The Made shelf
+
+    /// Something on the Made shelf: a page Kumo made, or a file it showed you for review.
+    public enum ShelfItem: Sendable, Equatable, Identifiable {
+        case page(Made)
+        case document(ShownFile)
+
+        public var id: String {
+            switch self {
+            case .page(let page): "page \(page.id.rawValue)"
+            case .document(let file): "document \(file.id.rawValue)"
+            }
+        }
+
+        /// When it was made: a page's making, a document's first version.
+        public var madeAt: Date {
+            switch self {
+            case .page(let page): page.madeAt.date
+            case .document(let file): file.versions.first?.madeAt.date ?? .distantPast
+            }
+        }
+    }
+
+    /// One stretch of time on the shelf, such as "This week".
+    public struct ShelfGroup: Sendable, Equatable, Identifiable {
+        public let title: String
+        public let items: [ShelfItem]
+
+        public var id: String { title }
+    }
+
+    /// The shelf by when each thing was made, newest first: "This week", then "Earlier in
+    /// November", then each month before, with its year once it's another year's.
+    public static func shelf(
+        pages: [Made], documents: [ShownFile], now: Date = .now, calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> [ShelfGroup] {
+        let items = (pages.map(ShelfItem.page) + documents.map(ShelfItem.document))
+            .sorted { $0.madeAt > $1.madeAt }
+        var groups: [ShelfGroup] = []
+        for item in items {
+            let title = shelfTitle(of: item.madeAt, now: now, calendar: calendar, locale: locale)
+            if groups.last?.title == title {
+                groups[groups.count - 1] = ShelfGroup(
+                    title: title, items: groups[groups.count - 1].items + [item])
+            } else {
+                groups.append(ShelfGroup(title: title, items: [item]))
+            }
+        }
+        return groups
+    }
+
+    private static func shelfTitle(of date: Date, now: Date, calendar: Calendar, locale: Locale)
+        -> String
+    {
+        if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) { return "This week" }
+        let month = DateFormatter()
+        month.locale = locale
+        month.calendar = calendar
+        month.timeZone = calendar.timeZone
+        if calendar.isDate(date, equalTo: now, toGranularity: .month) {
+            month.setLocalizedDateFormatFromTemplate("MMMM")
+            return "Earlier in \(month.string(from: date))"
+        }
+        let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
+        month.setLocalizedDateFormatFromTemplate(sameYear ? "MMMM" : "MMMM y")
+        return month.string(from: date)
+    }
+
+    /// When it was made, as the shelf says it: "Today", "Tuesday" within the week, or "9 Nov".
+    public static func shelfDay(
+        _ date: Date, now: Date = .now, calendar: Calendar = .current, locale: Locale = .current
+    ) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return "Today" }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        let thisWeek = calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear)
+        formatter.setLocalizedDateFormatFromTemplate(thisWeek ? "EEEE" : "d MMM")
+        return formatter.string(from: date)
+    }
 }
 
 /// A name in a reply linked to what Kumo keeps: a page in memory (`memory:people/maya-lind`), a

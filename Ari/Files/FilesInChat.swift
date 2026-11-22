@@ -2,14 +2,18 @@ import AriKit
 import SwiftUI
 
 /// What files, recordings and proposed changes can do in the conversation: open a transcript at a
-/// moment, and send what a tap says. Equal while it's the same session, so a conversation redrawing
-/// every frame as a reply reveals doesn't redraw every card reading it.
+/// moment, and send what a tap says. Equal while it's the same session in the same conversation, so
+/// a conversation redrawing every frame as a reply reveals doesn't redraw every card reading it.
 struct FilesActions: Equatable {
     var session: Session?
+    /// Which conversation on screen opens the transcript. A thread open over the main chat has its
+    /// own: equal to the main chat's, SwiftUI kept the main chat's actions in the thread, so its
+    /// Transcript fold opened the sheet behind the thread, where it couldn't show.
+    var conversation: UUID?
     var openTranscript: (AttachmentID, Double?) -> Void = { _, _ in }
 
     static func == (a: FilesActions, b: FilesActions) -> Bool {
-        a.session === b.session
+        a.session === b.session && a.conversation == b.conversation
     }
 
     /// Sends a tap's message, as if you'd typed its words.
@@ -41,6 +45,7 @@ private struct FilesInChat: ViewModifier {
     let session: Session
 
     @State private var transcript: TranscriptOpening?
+    @State private var conversation = UUID()
     /// The conversation's own way of opening links, for everything but a recording's moments.
     @Environment(\.openURL) private var opensLinks
 
@@ -49,7 +54,7 @@ private struct FilesInChat: ViewModifier {
         content
             .environment(
                 \.filesActions,
-                FilesActions(session: session) { recording, at in
+                FilesActions(session: session, conversation: conversation) { recording, at in
                     transcript = TranscriptOpening(recording: recording, at: at)
                 }
             )

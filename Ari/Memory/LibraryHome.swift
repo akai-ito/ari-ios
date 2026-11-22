@@ -29,7 +29,7 @@ struct LibraryHome: View {
                     inMind
                     ChaptersRow(memory: memory)
                     LearntLately(lines: memory.learnt)
-                    if !memory.shelves.isEmpty || !(made?.all.isEmpty ?? true) { shelves }
+                    if !memory.shelves.isEmpty || (made?.shelfCount ?? 0) > 0 { shelves }
                 }
             }
             .padding(.horizontal, 20)
@@ -73,8 +73,8 @@ struct LibraryHome: View {
                     ShelfTile(shelf: shelf)
                 }
                 // What Kumo made you, beside what it knows.
-                if let made, !made.all.isEmpty {
-                    MadeShelfTile(count: made.all.count)
+                if let made, made.shelfCount > 0 {
+                    MadeShelfTile(count: made.shelfCount)
                 }
             }
         }

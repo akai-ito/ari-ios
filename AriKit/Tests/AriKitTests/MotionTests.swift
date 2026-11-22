@@ -23,6 +23,12 @@ struct MotionTests {
         #expect(trip.days.map(\.id) == ["fri", "sat", "sun"])
         let line = TripReading.line(trip, state: detail.state, locale: english)
         #expect(line.name == "Florence" && line.when == "6–9 Nov" && line.left == 4)
+        // Next: the Uffizi, at its stop's time, with the place's price and where to book it.
+        let next = try #require(TripReading.next(trip, state: detail.state, locale: english))
+        #expect(next.todo.id == "book-uffizi" && next.title == "Uffizi Gallery")
+        #expect(next.detail == "Sat 7 Nov · 08:15 · €25")
+        #expect(next.booking == URL(string: "https://www.uffizi.it/en/tickets"))
+        #expect(next.isTimed && next.category == .museum)
         let mismatches = await server.mismatches
         #expect(mismatches.isEmpty, "\(mismatches)")
         #expect(await server.unanswered == 0)
@@ -43,6 +49,9 @@ struct MotionTests {
         // The Uffizi as Ari wrote it, the Pisa train by your tick.
         #expect(
             TripReading.left(trip, state: detail.state).map(\.id) == ["book-duomo", "book-pitti"])
+        let next = try #require(TripReading.next(trip, state: detail.state, locale: english))
+        #expect(next.todo.id == "book-duomo" && next.detail == "Fri 6 Nov · 16:30")
+        #expect(next.booking == nil)
         let train = try #require(trip.days.flatMap(\.stops).first { $0.id == "pisa-train" })
         #expect(train.booking?.status == .toBook)
         #expect(
@@ -153,6 +162,39 @@ struct MotionTests {
         #expect(TripReading.duration(80) == "1 h 20 min")
         #expect(TripReading.when("2026-11-08T09:12", locale: english) == "Sun 8 Nov, 09:12")
         #expect(TripReading.leftText(3) == "3 to do" && TripReading.leftText(0) == "All done")
+    }
+
+    @Test("Next is a leg's way and time, or a place's hours, and nothing once all's done")
+    func next() throws {
+        let tickets = try #require(URL(string: "https://trains.example.org/pisa"))
+        let trip = Trip(
+            destination: "Florence", dates: .init(start: "2026-11-06", end: "2026-11-09"),
+            timezone: "Europe/Rome",
+            places: [
+                .init(
+                    id: "boboli", name: "Boboli Gardens", category: .park, why: "Fountains.",
+                    hours: "8:15–18:30", price: "€10")
+            ],
+            travel: [
+                .init(
+                    id: "pisa-day", mode: .train, title: "Train to Pisa", from: "Firenze SMN",
+                    to: "Pisa Centrale", depart: "2026-11-08T09:12", arrive: "2026-11-08T10:12",
+                    booking: .init(status: .toBook, url: tickets))
+            ],
+            todo: [
+                .init(id: "book-pisa", text: "Pisa train tickets", about: ["pisa-day"]),
+                .init(id: "boboli", text: "Fit in the Boboli Gardens", about: ["boboli"]),
+            ])
+        let leg = try #require(TripReading.next(trip, state: [:], locale: english))
+        #expect(leg.detail == "Sun 8 Nov, 09:12 · Firenze SMN → Pisa Centrale · 1 h")
+        #expect(leg.booking == tickets && leg.mode == .train && leg.isTimed)
+        let ticked: MotionState = [TripReading.todoList: ["book-pisa": .init(done: true)]]
+        let place = try #require(TripReading.next(trip, state: ticked, locale: english))
+        #expect(place.detail == "Boboli Gardens · 8:15–18:30 · €10" && !place.isTimed)
+        let done: MotionState = [
+            TripReading.todoList: ["book-pisa": .init(done: true), "boboli": .init(done: true)]
+        ]
+        #expect(TripReading.next(trip, state: done, locale: english) == nil)
     }
 
     @Test("the map numbers every stop with a place, in order through the trip")

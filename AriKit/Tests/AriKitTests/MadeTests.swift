@@ -79,6 +79,63 @@ struct MadeTests {
         #expect(pages.details[guide]?.state.ticks.count == 2, "ticks from another device show")
     }
 
+    @Test("a page made in a side thread names it, for its way back; one from the chat doesn't")
+    func madeInAThread() throws {
+        let json = """
+            {"id":"va-guide","title":"Your guide to the V&A","summary":"","version":1,\
+            "made_at":"2026-11-21T18:10:15.000Z","changed_at":"2026-11-21T18:10:15.000Z",\
+            "position":4,"thread":"h_va_guide"}
+            """
+        let page = try JSONDecoder().decode(Made.self, from: Data(json.utf8))
+        #expect(page.thread == "h_va_guide")
+        let chat = try JSONDecoder().decode(
+            Made.self,
+            from: Data(json.replacingOccurrences(of: #","thread":"h_va_guide""#, with: "").utf8))
+        #expect(chat.thread == nil)
+    }
+
+    @Test(
+        "the Made shelf goes by when things were made: this week, earlier this month, then months")
+    func shelf() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/London"))
+        calendar.firstWeekday = 2
+        let english = Locale(identifier: "en_GB")
+        let now = try #require(Timestamp("2026-11-22T12:00:00.000Z")).date
+        func page(_ id: MadeID, _ at: String) throws -> Made {
+            Made(id: id, title: id.rawValue, summary: "", madeAt: try #require(Timestamp(at)))
+        }
+        let cv = try JSONDecoder().decode(
+            ShownFile.self,
+            from: Data(
+                """
+                {"id":"cv-fernhill","name":"CV – Fernhill.pdf","versions":[\
+                {"version":1,"made_at":"2026-11-20T09:00:00.000Z","attachment":{"id":"f_1","kind":"file",\
+                "name":"CV – Fernhill.pdf","media_type":"application/pdf","size":2048}},\
+                {"version":2,"made_at":"2026-11-21T09:00:00.000Z","note":"Shorter","attachment":{"id":"f_2",\
+                "kind":"file","name":"CV – Fernhill.pdf","media_type":"application/pdf","size":2048}}]}
+                """.utf8))
+        let groups = MadeReading.shelf(
+            pages: [
+                try page("kiln", "2026-11-17T19:00:00.000Z"),
+                try page("half-marathon", "2026-11-09T08:00:00.000Z"),
+                try page("va-saturday", "2026-10-31T10:00:00.000Z"),
+                try page("lisbon", "2025-12-02T10:00:00.000Z"),
+            ],
+            documents: [cv], now: now, calendar: calendar, locale: english)
+        #expect(
+            groups.map(\.title) == ["This week", "Earlier in November", "October", "December 2025"])
+        #expect(groups.first?.items.map(\.id) == ["document cv-fernhill", "page kiln"])
+        let tuesday = try #require(Timestamp("2026-11-17T19:00:00.000Z")).date
+        let ninth = try #require(Timestamp("2026-11-09T08:00:00.000Z")).date
+        #expect(MadeReading.shelfDay(now, now: now, calendar: calendar, locale: english) == "Today")
+        #expect(
+            MadeReading.shelfDay(tuesday, now: now, calendar: calendar, locale: english)
+                == "Tuesday")
+        #expect(
+            MadeReading.shelfDay(ninth, now: now, calendar: calendar, locale: english) == "9 Nov")
+    }
+
     @Test("a forgotten page leaves the shelf, and its cards can say so")
     func forgotten() throws {
         let pages = MadePages(client: try Self.offline())

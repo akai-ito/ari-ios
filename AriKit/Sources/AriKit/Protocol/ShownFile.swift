@@ -44,3 +44,8 @@ public struct ShownFile: Sendable, Equatable, Decodable, Identifiable {
 public struct FileResult: Sendable, Equatable, Decodable {
     public let file: ShownFile
 }
+
+/// Every file Kumo showed you, newest change first.
+public struct FileList: Sendable, Equatable, Decodable {
+    public let files: [ShownFile]
+}

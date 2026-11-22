@@ -224,6 +224,14 @@ struct TripView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 28)
                 }
+                if detail.motion.status != .done,
+                    let next = TripReading.next(trip, state: detail.state)
+                {
+                    MotionLabel("Next")
+                    TripNextCard(next: next)
+                        .padding(.top, 10)
+                        .padding(.bottom, 28)
+                }
                 DaysSection(
                     motion: detail.motion.id, trip: trip, state: detail.state, space: placeSpace
                 ) {
@@ -242,6 +250,64 @@ struct TripView: View {
         case .stay:
             StayList(trip: trip, state: detail.state).padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - Next
+
+/// What's next on the trip: the first thing left to do, when and where it is, and the way to book
+/// it, or to have Kumo find another time.
+private struct TripNextCard: View {
+    let next: TripReading.Next
+
+    @Environment(\.openURL) private var openURL
+    @Environment(\.askKumo) private var askKumo
+    @State private var asked = false
+
+    var body: some View {
+        MotionCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    DotGlyph(symbol: symbol, side: 40)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(next.todo.text).font(.headline).foregroundStyle(.ariText)
+                        if let detail = next.detail {
+                            Text(detail).font(.subheadline).foregroundStyle(.ariSecondary)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                if asked {
+                    Text("Asked \(LeadName.current) in the chat")
+                        .font(.footnote)
+                        .foregroundStyle(.ariTertiary)
+                } else if next.booking != nil || anotherTime != nil {
+                    HStack(spacing: 8) {
+                        if let booking = next.booking {
+                            DeskPill(title: "Book it", acts: true) { openURL(booking) }
+                        }
+                        if let anotherTime {
+                            DeskPill(title: "Pick another time", action: anotherTime)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Asks Kumo, in the chat, to move a stop or a leg to another time.
+    private var anotherTime: (() -> Void)? {
+        guard next.isTimed, let title = next.title, let askKumo else { return nil }
+        return {
+            askKumo("Pick another time for \(title)")
+            asked = true
+        }
+    }
+
+    private var symbol: String {
+        if let mode = next.mode { return MotionSymbol.name(for: mode) }
+        if let category = next.category { return MotionSymbol.name(for: category) }
+        return "checklist"
     }
 }
 

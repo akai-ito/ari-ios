@@ -20,6 +20,11 @@ public final class MadePages {
     /// Pages Kumo forgot while this ran: their cards say so rather than wait to load.
     public private(set) var forgotten: Set<MadeID> = []
     public private(set) var load = Load.loading
+    /// The files Kumo showed you for review, such as a CV, newest change first: documents on the
+    /// shelf beside the pages.
+    public private(set) var documents: [ShownFile] = []
+    /// The names of the threads pages were made in, once asked for.
+    public private(set) var threadNames: [ThreadID: String] = [:]
 
     @ObservationIgnored private let client: ItoClient
 
@@ -27,18 +32,32 @@ public final class MadePages {
         self.client = client
     }
 
+    /// How many things the shelf holds: the pages and the documents.
+    public var shelfCount: Int { all.count + documents.count }
+
     public subscript(id: MadeID) -> Made? {
         all.first { $0.id == id } ?? details[id]?.made
     }
 
-    /// Asks for the shelf.
+    /// Asks for the shelf: the pages, and the documents beside them.
     public func refresh() async {
+        async let files = try? client.files()
         do {
             all = Self.ordered(try await client.madePages().made)
             load = .loaded
         } catch {
             if load != .loaded { load = .failed(RequestError(error)) }
         }
+        if let files = await files { documents = files }
+    }
+
+    /// The name of the thread a page was made in, as "From your thread" says it: asked for once,
+    /// then kept. `nil` while it has none yet, or the server can't say.
+    public func threadName(_ thread: ThreadID) async -> String? {
+        if let known = threadNames[thread] { return known }
+        guard let title = try? await client.thread(thread).thread.title else { return nil }
+        threadNames[thread] = title
+        return title
     }
 
     /// Fetches a page's content, ticks and what changed, and keeps them.

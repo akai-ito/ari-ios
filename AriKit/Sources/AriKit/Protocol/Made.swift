@@ -27,10 +27,13 @@ public struct Made: Sendable, Equatable, Decodable, Identifiable {
     public let changedAt: Timestamp
     /// The position of your message Kumo was answering when it made the page.
     public let position: Int
+    /// The side thread it was made in, which "From your thread" opens; `nil` for the main chat.
+    public let thread: ThreadID?
 
     public init(
         id: MadeID, title: String, summary: String, cover: Photo? = nil, forDay: String? = nil,
-        version: Int = 1, madeAt: Timestamp, changedAt: Timestamp? = nil, position: Int = 1
+        version: Int = 1, madeAt: Timestamp, changedAt: Timestamp? = nil, position: Int = 1,
+        thread: ThreadID? = nil
     ) {
         self.id = id
         self.title = title
@@ -41,10 +44,11 @@ public struct Made: Sendable, Equatable, Decodable, Identifiable {
         self.madeAt = madeAt
         self.changedAt = changedAt ?? madeAt
         self.position = position
+        self.thread = thread
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, summary, cover, version, position
+        case id, title, summary, cover, version, position, thread
         case forDay = "for_day"
         case madeAt = "made_at"
         case changedAt = "changed_at"
