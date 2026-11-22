@@ -1,62 +1,80 @@
 import AriKit
 import SwiftUI
 
-/// The In motion tab: what's going on, each with its line and how far along it is, then what's
-/// done. These are the things you're actually doing, which Ari keeps current as you talk.
+/// The In motion tab: the same six sections in the same order every time, like rooms in a home,
+/// each loud inside. Kumo puts what matters most now first and largest, with its picture; what
+/// stopped mattering folds into "+ N quieter". An empty section stays in its place as one quiet
+/// line, so nothing moves. Ended things leave for History.
 struct InMotionView: View {
     let openSettings: () -> Void
 
     @Environment(Motions.self) private var motions: Motions?
     @State private var opened: OpenedMotion?
     @State private var appeared = false
+    @State private var path: [MotionRoute] = []
     @Namespace private var space
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let motions {
-                        ForEach(Array(motions.going.enumerated()), id: \.element.id) {
-                            index, motion in
-                            row(motion, detail: motions.details[motion.id])
+        NavigationStack(path: $path) {
+            ScrollViewReader { scroller in
+                ScrollView {
+                    if let motions, !motions.all.isEmpty {
+                        let sections = InMotionReading.sections(motions.going)
+                        VStack(alignment: .leading, spacing: 34) {
+                            ForEach(Array(sections.enumerated()), id: \.element.id) {
+                                index, section in
+                                SectionView(
+                                    section: section, details: motions.details, space: space
+                                )
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 14)
                                 .animation(
-                                    .smooth(duration: 0.45).delay(0.06 * Double(index)),
+                                    .smooth(duration: 0.45).delay(0.05 * Double(index)),
                                     value: appeared)
+                            }
+                            if !InMotionReading.history(motions.done).isEmpty {
+                                HistoryLink(done: motions.done).padding(.top, 4)
+                            }
+                            Color.clear.frame(height: 1).id("foot")
                         }
-                        if !motions.done.isEmpty {
-                            Text("Done")
-                                .font(.ariHeading)
-                                .foregroundStyle(.ariText)
-                                .padding(.top, 22)
-                                .padding(.bottom, 2)
-                            ForEach(motions.done) { motion in done(motion) }
-                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 6)
+                        .padding(.bottom, 40)
+                        .frame(maxWidth: Rhythm.column, alignment: .leading)
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 30)
-                .frame(maxWidth: Rhythm.column)
-                .frame(maxWidth: .infinity)
-            }
-            .overlay { quiet }
-            .background(.ariBackground)
-            .navigationTitle("In motion")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Settings", systemImage: "gearshape", action: openSettings)
-                }
-            }
-            .refreshable { await motions?.refresh() }
-            .onAppear { appeared = true }
-            #if DEBUG
-                .task {
-                    if let id = DebugScript.motion {
-                        opened = OpenedMotion(id: MotionID(id), source: "row \(id)")
+                .overlay { quiet }
+                .background(.ariBackground)
+                .navigationTitle("In motion")
+                .navigationDestination(for: MotionRoute.self) { route in
+                    switch route {
+                    case .history: HistoryView()
+                    case .section(let section): SectionListView(section: section)
                     }
                 }
-            #endif
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Settings", systemImage: "gearshape", action: openSettings)
+                    }
+                }
+                .refreshable { await motions?.refresh() }
+                .onAppear { appeared = true }
+                #if DEBUG
+                    .task {
+                        if let id = DebugScript.motion {
+                            opened = OpenedMotion(id: MotionID(id), source: "row \(id)")
+                        }
+                        switch DebugScript.motionRoute {
+                        case "history": path = [.history]
+                        case "bottom":
+                            try? await Task.sleep(for: .seconds(2))
+                            scroller.scrollTo("foot", anchor: .bottom)
+                        default: break
+                        }
+                    }
+                #endif
+            }
         }
         .environment(
             \.motionOpener,
@@ -87,8 +105,9 @@ struct InMotionView: View {
                 .padding(40)
             case .loaded:
                 Text(
-                    "Nothing in motion yet. When \(LeadName.current) plans something with you, like a trip, it "
-                        + "lives here, and \(LeadName.current) keeps it current as you talk."
+                    "Nothing in motion yet. When \(LeadName.current) keeps something going with you, "
+                        + "like a trip, a role or a training block, it lives here, and "
+                        + "\(LeadName.current) keeps it current as you talk."
                 )
                 .font(.ariBody)
                 .foregroundStyle(.ariTertiary)
@@ -97,96 +116,148 @@ struct InMotionView: View {
             }
         }
     }
+}
 
-    private func row(_ motion: Motion, detail: MotionDetail?) -> some View {
-        let line = MotionLineText(motion, detail)
-        let source = "row \(motion.id)"
-        return Button {
-            opened = OpenedMotion(id: motion.id, source: source)
-        } label: {
-            HStack(spacing: 14) {
-                SymbolDisc(symbol: MotionSymbol.name(for: motion.kind), size: 40)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(motion.title).font(.headline).foregroundStyle(.ariText)
-                    HStack(spacing: 5) {
-                        Text(line.detail)
-                        if let left = line.left {
-                            Text("·").foregroundStyle(.ariTertiary)
-                            LeftCount(left: left)
-                        }
-                        if let today = line.today {
-                            Text("·").foregroundStyle(.ariTertiary)
-                            Text(today)
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.ariSecondary)
-                    .lineLimit(1)
-                    if let progress = line.progress {
-                        ProgressLine(progress: progress)
+/// Where In motion goes within its tab.
+enum MotionRoute: Hashable {
+    case history
+    /// Everything in a section, the quiet ones too.
+    case section(MotionSection)
+}
+
+/// One section: its head with its art, then the loudest thing big with the rest as rows under it,
+/// and what's quieter one tap away. Empty, it's one quiet line.
+private struct SectionView: View {
+    let section: InMotionReading.Section
+    let details: [MotionID: MotionDetail]
+    let space: Namespace.ID
+
+    var body: some View {
+        if section.isEmpty {
+            HStack(spacing: 12) {
+                HalftoneArt(art: section.kind, side: 36, across: 20, faded: true)
+                    .frame(width: 56)
+                Text(section.kind.name).font(.ariHeading).foregroundStyle(.ariTertiary)
+                Spacer(minLength: 8)
+                Text("nothing right now").font(.footnote).foregroundStyle(.ariTertiary)
+            }
+            .opacity(0.8)
+            .accessibilityElement(children: .combine)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    HalftoneArt(art: section.kind, side: 56, across: 27)
+                    Text(section.kind.name).font(.ariHeading).foregroundStyle(.ariText)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    if let trailing {
+                        Text(trailing).font(.footnote).foregroundStyle(.ariTertiary)
                     }
                 }
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.ariTertiary)
+                if section.lead != nil || !section.rows.isEmpty {
+                    VStack(spacing: 0) {
+                        if let lead = section.lead {
+                            MotionLead(motion: lead, detail: details[lead.id], space: space)
+                        }
+                        ForEach(section.rows) { motion in
+                            Hairline().padding(.leading, 16)
+                            MotionRow(motion: motion, detail: details[motion.id], space: space)
+                        }
+                    }
+                    .background(.ariSurface, in: .rect(cornerRadius: 20, style: .continuous))
+                }
+                if !section.quieter.isEmpty {
+                    NavigationLink(value: MotionRoute.section(section.kind)) {
+                        QuieterLink(text: quieterText)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .padding(14)
-            .background(.ariSurface, in: .rect(cornerRadius: 18, style: .continuous))
-            .contentShape(.rect(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .motionSource(source, in: space)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens it")
     }
 
-    private func done(_ motion: Motion) -> some View {
-        let source = "row \(motion.id)"
-        return Button {
-            opened = OpenedMotion(id: motion.id, source: source)
-        } label: {
-            // A quieter card than the ones still going, with the same insets: the transition
-            // rounds its source's corners, and a row with none had its tick and date cut off.
-            HStack(spacing: 12) {
-                Image(systemName: "checkmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.ariTertiary)
-                    .frame(width: 20)
-                Text(motion.title)
-                    .foregroundStyle(.ariSecondary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                if let doneAt = motion.doneAt {
-                    Text(doneAt.date, format: .dateTime.day().month(.abbreviated))
-                        .font(.caption)
-                        .foregroundStyle(.ariTertiary)
-                        .fixedSize()
-                }
+    /// "3 going", "week 1 of 8", "1 coming".
+    private var trailing: String? {
+        let shown = (section.lead.map { [$0] } ?? []) + section.rows
+        switch section.kind {
+        case .body:
+            if let lead = section.lead, case .body(let block)? = details[lead.id]?.content {
+                return BodyReading.weekLine(of: block)?.lowercased()
             }
-            .font(.subheadline)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background(.ariSurface.opacity(0.6), in: .rect(cornerRadius: 18, style: .continuous))
-            .contentShape(.rect(cornerRadius: 18, style: .continuous))
+            return shown.isEmpty ? nil : "\(shown.count) going"
+        case .trips:
+            return shown.isEmpty ? nil : "\(shown.count) coming"
+        default:
+            return shown.isEmpty ? nil : "\(shown.count) going"
         }
-        .buttonStyle(.plain)
-        .motionSource(source, in: space)
+    }
+
+    /// "+ 4 quieter", or for one, what it is: "+ 1 quieter: Japan in spring".
+    private var quieterText: String {
+        let quiet = section.quieter
+        if quiet.count == 1, let only = quiet.first { return "+ 1 quieter: \(only.title)" }
+        return section.kind == .career
+            ? "+ \(quiet.count) quieter leads" : "+ \(quiet.count) quieter"
     }
 }
 
-/// How far along, as a thin line that fills with bone.
-private struct ProgressLine: View {
-    let progress: Double
+/// Everything in a section, loudest first, the quiet ones too: what "+ N quieter" opens.
+private struct SectionListView: View {
+    let section: MotionSection
+
+    @Environment(Motions.self) private var motions: Motions?
+    @Environment(\.motionOpener) private var opener
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.ariLine)
-                Capsule().fill(.ariBone).frame(width: geometry.size.width * progress)
+        ScrollView {
+            let all =
+                InMotionReading.sections(motions?.going ?? [])
+                .first { $0.kind == section }?.all ?? []
+            VStack(spacing: 0) {
+                ForEach(all) { motion in
+                    if motion.id != all.first?.id { Hairline().padding(.leading, 16) }
+                    MotionRow(
+                        motion: motion, detail: motions?.details[motion.id],
+                        space: opener.namespace, source: "list")
+                }
             }
+            .background(.ariSurface, in: .rect(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .padding(.bottom, 40)
+            .frame(maxWidth: Rhythm.column)
+            .frame(maxWidth: .infinity)
         }
-        .frame(height: 3)
-        .animation(.smooth(duration: 0.6), value: progress)
-        .accessibilityHidden(true)
+        .background(.ariBackground)
+        .navigationTitle(section.name)
+    }
+}
+
+/// The way to History: how each ended thing ended, as marks.
+private struct HistoryLink: View {
+    let done: [Motion]
+
+    var body: some View {
+        let ended = InMotionReading.history(done).flatMap(\.items)
+        NavigationLink(value: MotionRoute.history) {
+            HStack(spacing: 12) {
+                Text("History").font(.ariHeading).foregroundStyle(.ariSecondary)
+                HStack(spacing: 4) {
+                    ForEach(ended.prefix(10)) { motion in
+                        OutcomeMark(outcome: motion.outcome, side: 9)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text("\(ended.count) ended").font(.footnote).foregroundStyle(.ariTertiary)
+                    .fixedSize()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.ariTertiary)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .background(.ariSurface.opacity(0.55), in: .rect(cornerRadius: 18, style: .continuous))
+            .contentShape(.rect(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("History, \(ended.count) ended")
     }
 }

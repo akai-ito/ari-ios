@@ -87,11 +87,16 @@ struct MattersTests {
         #expect(dinner.prep.map(\.id) == ["book-table", "buy-present"] && dinner.checkIn)
     }
 
-    @Test("the three new kinds are known, and the old ones still are")
+    @Test("0.19's kinds are known, and 0.18's still are")
     func kinds() {
-        #expect(MotionKind.known == [.trip, .training, .pursuit, .occasion, .caseFile])
+        #expect(
+            MotionKind.known == [
+                .career, .body, .trip, .project, .learning, .other, .training, .pursuit, .occasion,
+                .caseFile,
+            ])
         #expect(MotionKind(rawValue: "case").isKnown)
-        #expect(!MotionKind(rawValue: "career").isKnown)
+        #expect(MotionKind(rawValue: "career").isKnown)
+        #expect(!MotionKind(rawValue: "shopping").isKnown)
     }
 
     @Test("a kind Ari doesn't know still decodes, as a plain card")

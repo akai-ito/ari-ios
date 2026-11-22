@@ -86,13 +86,21 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   short talk about how Kumo should check in, where the first plans it sets show as they come, then
   notifications, then what's in motion. Kumo's questions can offer answers to tap.
   Settings opens it again, with nothing wiped: Kumo reads mail again only for an account you add.
-- **In motion.** What you're actually doing, kept current as you talk: a trip, a training block, a
-  pursuit such as a job search, an occasion such as a dentist appointment, or a case such as the
-  boiler.
-  It's pinned above the composer and opens full screen; In motion is its own tab. A trip has its
-  days, a map whose pins show their place, its places by kind (each with a page of its own, where
-  you say whether it's an idea, in the plan or not for you), and travel; what Ari changed is behind
-  a button at the top.
+- **In motion.** What you're actually doing, kept current as you talk, in six sections that never
+  move: Career, Body, Trips, Projects, Learning and Other, each with its art printed in dots. Kumo
+  judges what's loud: the loudest thing in a section is big, the rest are rows, and the quiet ones
+  fold into "+ N quieter". Solid means done or booked, dotted planned or still to book, dashed moved
+  or let go. A role shows its pipeline (lead, talking, interviewing, offer) with each stage's date,
+  its next step and its source to open; a training block shows this week and next as a coach would,
+  planned against done, its trends only where the Watch or your words gave real numbers, and why
+  the plan changed; a session opens on its own. A trip has its bookings laid on the days, its days,
+  a map whose pins show their place, its places by kind (each with a page of its own, where you say
+  whether it's an idea, in the plan or not for you), and travel. Every page keeps Kumo's line for
+  you on top and Kumo's notes (sources, guesses, ids) folded at the bottom. Ended things go to
+  History by how they ended (achieved, not met, let go, merged), each with its short story; copies,
+  tests and admin never show. 0.18's kinds still open as they did until Kumo reshapes them.
+  A thing is pinned above the composer and opens full screen; what Kumo changed is behind a button
+  at the top.
 - **What Kumo knows.** You shows Kumo's memory: In mind, shelves of pages (each with its glyph
   in Ari's dots; people by circle), and the journal, all in the device's search. A photo you shared
   stays where Kumo put it in the story; tap it to see it full screen. Settings › Memory
@@ -141,15 +149,18 @@ the token it prints. In debug builds, `ARI_SERVER` and `ARI_TOKEN` fill in the c
 `ARI_DRAFT` fills in the composer, `ARI_ATTACH` attaches files (paths, separated by commas),
 `ARI_OPEN_TRAIL` opens every step on the trail, `ARI_TOPICS` opens the topics sheet, `ARI_PLACE`
 opens a tab (`chat`, `motion` or `you`; Ito opens on the Desk; `ARI_MOTION` then opens a thing in
-motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE`, `ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going
-further in), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the Journal's calendar),
-`ARI_ONBOARDING` opens getting started at a step (`knowYou` or `checkIn`) while it's on,
+motion, with `ARI_MOTION_TAB`, `ARI_MOTION_PLACE` (a trip's place, or a block's session),
+`ARI_MOTION_PIN` or `ARI_MOTION_CHANGES` going further in, and `ARI_MOTION_ROUTE` opening `history`
+or scrolling to the `bottom`), `ARI_SHELF` opens a shelf in You (`ARI_CALENDAR` shows the
+Journal's calendar), `ARI_ONBOARDING` opens getting started at a step (`knowYou` or `checkIn`)
+while it's on,
 `ARI_DESK` opens part of the Desk (`upto`, `tracks`, `day`, `problems` or `wrong`),
 `ARI_SETTINGS` opens Settings and
 `ARI_OPEN_URL` opens a link such as `ito://pair?…`, which is handy from `xcrun simctl launch`
 (prefix each with `SIMCTL_CHILD_`). A message with *busy* in it
 makes the demo engine walk a whole trail of steps; *long*, *fail* and *silent* try Stop, a failure
-and a timeout; *trip* and *training* start things in motion, and *booked* changes the trip; *desk*,
+and a timeout; *trip* and *training* start things in motion, *motion* fills In motion with every
+kind, and *booked* changes the trip; *desk*,
 *times*, *invite* and *mail* put cards on the Desk, *work* fills Kumo's work, and *plan* lays out a
 day of Kumo's plan and guesses (`ARI_GUESS` shows the day's first guess `open`, or with what it
 really was, `correct`).

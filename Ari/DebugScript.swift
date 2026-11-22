@@ -87,6 +87,8 @@ import SwiftUI
         static let motionPlace = environment["ARI_MOTION_PLACE"]
         static let motionPin = environment["ARI_MOTION_PIN"]
         static let opensChanges = environment["ARI_MOTION_CHANGES"] != nil
+        /// In motion's own pages: `history`, or `bottom` to scroll to its foot.
+        static let motionRoute = environment["ARI_MOTION_ROUTE"]
         static let openRow = environment["ARI_OPEN_ROW"]
         static let talks = environment["ARI_TALK"] != nil
         static let openURL = environment["ARI_OPEN_URL"].flatMap(URL.init(string:))

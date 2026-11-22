@@ -6,20 +6,28 @@ public struct MotionID: OpaqueIdentifier {
     public init(rawValue: String) { self.rawValue = rawValue }
 }
 
-/// A thing in motion: something going on that Ari keeps for you, such as a trip being planned. Its
-/// content and your ticks come with its detail, from `GET /v0/motion/{id}`.
+/// A thing in motion: something going on that Kumo keeps for you, such as a trip being planned or
+/// a role you're interviewing for. Its content and your ticks come with its detail, from
+/// `GET /v0/motion/{id}`.
 public struct Motion: Sendable, Equatable, Decodable, Identifiable {
     public let id: MotionID
-    /// Which widget draws it. A kind Ari doesn't know shows as a plain card.
+    /// Which widget draws it, and which section it sits in. A kind Ari doesn't know shows as a
+    /// plain card in Other.
     public let kind: MotionKind
     /// Such as "Florence with Mira".
     public let title: String
-    /// Where it stands, in one line, as Ari last wrote it, such as "6–9 Nov · 3 to book".
+    /// Kumo's line for you: where it stands, such as "6–9 Nov · 3 to book"; once it's ended, how.
     public let summary: String
     public let status: MotionStatus
     /// Whether it's pinned above the composer. Ari pins what it starts, and pins or unpins on your
     /// word.
     public let pinned: Bool
+    /// How much it matters now, by Kumo's judgement: normal when the server says nothing.
+    public let salience: Salience
+    /// How it ended, once it's done; `nil` for one ended before 0.19, shown as ended.
+    public let outcome: MotionOutcome?
+    /// What it went into, when it was merged or a copy.
+    public let mergedInto: MotionID?
     /// The cover photo, for the card.
     public let cover: AttachmentID?
     /// How many times it has changed, counting its start as 1.
@@ -32,7 +40,8 @@ public struct Motion: Sendable, Equatable, Decodable, Identifiable {
 
     public init(
         id: MotionID, kind: MotionKind, title: String, summary: String,
-        status: MotionStatus = .active, pinned: Bool = true, cover: AttachmentID? = nil,
+        status: MotionStatus = .active, pinned: Bool = true, salience: Salience = .normal,
+        outcome: MotionOutcome? = nil, mergedInto: MotionID? = nil, cover: AttachmentID? = nil,
         version: Int = 1, startedAt: Timestamp, changedAt: Timestamp? = nil,
         doneAt: Timestamp? = nil, position: Int = 1
     ) {
@@ -42,6 +51,9 @@ public struct Motion: Sendable, Equatable, Decodable, Identifiable {
         self.summary = summary
         self.status = status
         self.pinned = pinned
+        self.salience = salience
+        self.outcome = outcome
+        self.mergedInto = mergedInto
         self.cover = cover
         self.version = version
         self.startedAt = startedAt
@@ -51,11 +63,37 @@ public struct Motion: Sendable, Equatable, Decodable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, title, summary, status, pinned, cover, version, position
+        case id, kind, title, summary, status, pinned, salience, outcome, cover, version, position
+        case mergedInto = "merged_into"
         case startedAt = "started_at"
         case changedAt = "changed_at"
         case doneAt = "done_at"
     }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(MotionID.self, forKey: .id)
+        kind = try c.decode(MotionKind.self, forKey: .kind)
+        title = try c.decode(String.self, forKey: .title)
+        summary = try c.decode(String.self, forKey: .summary)
+        status = try c.decode(MotionStatus.self, forKey: .status)
+        pinned = try c.decode(Bool.self, forKey: .pinned)
+        salience = try c.decodeIfPresent(Salience.self, forKey: .salience) ?? .normal
+        outcome = try c.decodeIfPresent(MotionOutcome.self, forKey: .outcome)
+        mergedInto = try c.decodeIfPresent(MotionID.self, forKey: .mergedInto)
+        cover = try c.decodeIfPresent(AttachmentID.self, forKey: .cover)
+        version = try c.decode(Int.self, forKey: .version)
+        startedAt = try c.decode(Timestamp.self, forKey: .startedAt)
+        changedAt = try c.decode(Timestamp.self, forKey: .changedAt)
+        doneAt = try c.decodeIfPresent(Timestamp.self, forKey: .doneAt)
+        position = try c.decode(Int.self, forKey: .position)
+    }
+
+    /// The section of In motion it sits in.
+    public var section: MotionSection { kind.section }
+
+    /// Whether History shows it: ended, and not a copy, a test or small admin kept elsewhere.
+    public var isInHistory: Bool { status == .done && (outcome?.isShown ?? true) }
 }
 
 /// Which widget draws a thing in motion. Show a plain card for a kind Ari doesn't know.
@@ -63,6 +101,16 @@ public struct MotionKind: OpenValue {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 
+    /// One role in your career pipeline.
+    public static let career = MotionKind(rawValue: "career")
+    /// A training block, as a coach keeps it.
+    public static let body = MotionKind(rawValue: "body")
+    /// Something being made, in parts.
+    public static let project = MotionKind(rawValue: "project")
+    /// Something being learnt.
+    public static let learning = MotionKind(rawValue: "learning")
+    /// Something unfolding over weeks with no shape yet.
+    public static let other = MotionKind(rawValue: "other")
     /// A day, a weekend or a longer trip.
     public static let trip = MotionKind(rawValue: "trip")
     /// A training block towards a goal, such as a sub-20 5K.
@@ -75,7 +123,21 @@ public struct MotionKind: OpenValue {
     /// because `case` is a Swift keyword: `.case` would need backticks at every use, and reads like
     /// the start of a `switch` arm.
     public static let caseFile = MotionKind(rawValue: "case")
-    public static let known = [trip, training, pursuit, occasion, caseFile]
+    public static let known = [
+        career, body, trip, project, learning, other, training, pursuit, occasion, caseFile,
+    ]
+
+    /// Its section: 0.18's kinds where they belong, and a kind Ari doesn't know in Other.
+    public var section: MotionSection {
+        switch self {
+        case .career, .pursuit: .career
+        case .body, .training: .body
+        case .trip: .trips
+        case .project: .projects
+        case .learning: .learning
+        default: .other
+        }
+    }
 }
 
 /// Whether a thing is going on, or done. Ari treats a status it doesn't know as going on.
@@ -193,16 +255,19 @@ public struct MotionList: Sendable, Equatable, Decodable {
 public struct MotionDetail: Sendable, Equatable, Decodable {
     public let motion: Motion
     public let content: MotionContent
+    /// Kumo's notes, why the plan changed, and the story, whatever the kind.
+    public let extras: MotionExtras
     public var state: MotionState
     /// The 20 newest entries of "What changed", newest first.
     public var changes: [MotionChange]
 
     public init(
-        motion: Motion, content: MotionContent, state: MotionState = [:],
-        changes: [MotionChange] = []
+        motion: Motion, content: MotionContent, extras: MotionExtras = .none,
+        state: MotionState = [:], changes: [MotionChange] = []
     ) {
         self.motion = motion
         self.content = content
+        self.extras = extras
         self.state = state
         self.changes = changes
     }
@@ -214,8 +279,24 @@ public struct MotionDetail: Sendable, Equatable, Decodable {
         motion = try c.decode(Motion.self, forKey: .motion)
         changes = try c.decode([MotionChange].self, forKey: .changes)
         state = c.decodeState(forKey: .state)
+        extras = (try? c.decode(MotionExtras.self, forKey: .content)) ?? .none
         content =
             switch motion.kind {
+            case .career:
+                (try? c.decode(Career.self, forKey: .content)).map(MotionContent.career)
+                    ?? .unreadable
+            case .body:
+                (try? c.decode(BodyBlock.self, forKey: .content)).map(MotionContent.body)
+                    ?? .unreadable
+            case .project:
+                (try? c.decode(Project.self, forKey: .content)).map(MotionContent.project)
+                    ?? .unreadable
+            case .learning:
+                (try? c.decode(Learning.self, forKey: .content)).map(MotionContent.learning)
+                    ?? .unreadable
+            case .other:
+                (try? c.decode(OtherMatter.self, forKey: .content)).map(MotionContent.other)
+                    ?? .unreadable
             case .trip:
                 (try? c.decode(Trip.self, forKey: .content)).map(MotionContent.trip)
                     ?? .unreadable
@@ -238,6 +319,11 @@ public struct MotionDetail: Sendable, Equatable, Decodable {
 
 /// What a thing holds, as its kind describes.
 public enum MotionContent: Sendable, Equatable {
+    case career(Career)
+    case body(BodyBlock)
+    case project(Project)
+    case learning(Learning)
+    case other(OtherMatter)
     case trip(Trip)
     case training(Training)
     case pursuit(Pursuit)
