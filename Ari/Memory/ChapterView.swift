@@ -1,7 +1,7 @@
 import AriKit
 import SwiftUI
 
-/// A chapter, open: its cover in halftone, its name and when, the story in Kumo's hand with photos
+/// A chapter, open: its cover photo, its name and when, the story in Kumo's hand with photos
 /// where it shows them and what changed, the pages it links to, and where it came from.
 struct ChapterView: View {
     let page: MemoryPage
@@ -19,7 +19,7 @@ struct ChapterView: View {
         let cover = page.photos.first
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ChapterCover(photo: cover, memory: memory, step: 5.5)
+                ChapterCover(photo: cover, memory: memory, longest: 1600)
                     .frame(height: Self.coverHeight)
                     .frame(maxWidth: .infinity)
                     .clipped()

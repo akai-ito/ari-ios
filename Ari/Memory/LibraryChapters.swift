@@ -1,8 +1,9 @@
 import AriKit
 import SwiftUI
+import Vision
 
-/// The chapters of your life Kumo noticed, as a row under Now: each a photo in Ari's halftone, a
-/// name and when, those still going first with a dotted ring. "All" opens every chapter.
+/// The chapters of your life Kumo noticed, as a row under Now: each its photo, a name and when,
+/// those still going first with a dotted ring. "All" opens every chapter.
 struct ChaptersRow: View {
     let memory: Memory
 
@@ -54,7 +55,7 @@ private struct ChapterCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ChapterCover(photo: chapter.cover, memory: memory, step: 4.5)
+            ChapterCover(photo: chapter.cover, memory: memory)
                 .frame(width: 220, height: 104)
                 .clipped()
             VStack(alignment: .leading, spacing: 4) {
@@ -99,25 +100,93 @@ struct GoingRing: View {
     }
 }
 
-/// A chapter's cover in halftone, once its photo is here; a quiet dusk of dots until then, or for a
-/// chapter without a photo.
+/// A chapter's cover: its photo as it is, in full colour, filling the frame and cropped around
+/// what the eye goes to, so the subject stays at a card's size. A quiet dusk until the photo is
+/// here, or for a chapter without one.
 struct ChapterCover: View {
     let photo: MemoryPhoto?
     let memory: Memory?
-    var step: CGFloat = 5
+    /// The longest side to decode, in pixels: enough to fill the frame at the screen's scale.
+    var longest = 900
 
-    @State private var image: CGImage?
+    @State private var cover: Cover?
 
     var body: some View {
-        HalftoneImage(image: image, step: step)
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [.ariSurface, .ariDusk.opacity(0.3)], startPoint: .top,
+                    endPoint: .bottom)
+            )
+            .overlay {
+                if let cover {
+                    FocusedPhoto(image: cover.image, focus: cover.focus).transition(.opacity)
+                }
+            }
+            .clipped()
             .task(id: photo?.name) {
                 guard let photo, let memory, let data = await memory.photo(photo) else { return }
-                image = await Self.decode(data)
+                let loaded = await Self.cover(from: data, longest: longest)
+                withAnimation(.easeOut(duration: 0.25)) { cover = loaded }
             }
+            .accessibilityHidden(true)
     }
 
-    @concurrent private nonisolated static func decode(_ data: Data) async -> CGImage? {
-        AttachmentMaker.image(from: data, longest: 600)
+    nonisolated private struct Cover: Sendable {
+        let image: CGImage
+        let focus: UnitPoint
+    }
+
+    @concurrent private nonisolated static func cover(from data: Data, longest: Int) async
+        -> Cover?
+    {
+        guard let image = AttachmentMaker.image(from: data, longest: longest) else { return nil }
+        return Cover(image: image, focus: focus(of: image))
+    }
+
+    /// Where the eye goes in a photo: the middle of what Vision finds salient. When it finds
+    /// nothing, the middle, a little high on a tall photo, where a subject usually stands.
+    private nonisolated static func focus(of image: CGImage) -> UnitPoint {
+        let request = VNGenerateAttentionBasedSaliencyImageRequest()
+        guard (try? VNImageRequestHandler(cgImage: image).perform([request])) != nil,
+            let objects = request.results?.first?.salientObjects, !objects.isEmpty
+        else {
+            return UnitPoint(x: 0.5, y: image.height > image.width ? 0.4 : 0.5)
+        }
+        let box = objects.map(\.boundingBox).reduce(CGRect.null) { $0.union($1) }
+        // Vision measures from the bottom left.
+        return UnitPoint(x: box.midX, y: 1 - box.midY)
+    }
+}
+
+/// A photo filling its frame, cropped to keep its focus as near the middle as the photo allows.
+private struct FocusedPhoto: View {
+    let image: CGImage
+    let focus: UnitPoint
+
+    var body: some View {
+        GeometryReader { frame in
+            let size = frame.size
+            let scale = max(
+                size.width / CGFloat(max(image.width, 1)),
+                size.height / CGFloat(max(image.height, 1)))
+            let drawn = CGSize(
+                width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .frame(width: drawn.width, height: drawn.height)
+                .offset(
+                    x: -Self.shift(
+                        focus.x * drawn.width - size.width / 2, room: drawn.width - size.width),
+                    y: -Self.shift(
+                        focus.y * drawn.height - size.height / 2, room: drawn.height - size.height))
+        }
+        .clipped()
+    }
+
+    /// How far to move the photo to centre its focus, without showing past its edge.
+    private static func shift(_ wanted: CGFloat, room: CGFloat) -> CGFloat {
+        min(max(wanted, 0), max(room, 0))
     }
 }
 
@@ -131,7 +200,7 @@ struct ChapterListView: View {
                 ForEach(memory?.chapters ?? []) { chapter in
                     NavigationLink(value: chapter.address) {
                         HStack(spacing: 14) {
-                            ChapterCover(photo: chapter.cover, memory: memory, step: 3.5)
+                            ChapterCover(photo: chapter.cover, memory: memory, longest: 400)
                                 .frame(width: 64, height: 64)
                                 .clipShape(.rect(cornerRadius: 12, style: .continuous))
                             VStack(alignment: .leading, spacing: 4) {

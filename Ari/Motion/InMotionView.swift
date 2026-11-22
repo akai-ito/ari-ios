@@ -2,8 +2,8 @@ import AriKit
 import SwiftUI
 
 /// The In motion tab: the same six sections in the same order every time, like rooms in a home,
-/// each loud inside. Kumo puts what matters most now first and largest, with its picture; what
-/// stopped mattering folds into "+ N quieter". An empty section stays in its place as one quiet
+/// each loud inside. Kumo puts what matters most now first and largest; what stopped mattering
+/// folds into "+ N quieter". An empty section stays in its place as one quiet
 /// line, so nothing moves. Ended things leave for History.
 struct InMotionView: View {
     let openSettings: () -> Void
@@ -125,8 +125,9 @@ enum MotionRoute: Hashable {
     case section(MotionSection)
 }
 
-/// One section: its head with its art, then the loudest thing big with the rest as rows under it,
-/// and what's quieter one tap away. Empty, it's one quiet line.
+/// One section: its serif title over the accent's hairline, then the loudest thing big with the
+/// rest as rows under it, and what's quieter one tap away. Type only: the pipelines, weeks and
+/// rows are the pictures. Empty, it's one quiet line.
 private struct SectionView: View {
     let section: InMotionReading.Section
     let details: [MotionID: MotionDetail]
@@ -134,25 +135,28 @@ private struct SectionView: View {
 
     var body: some View {
         if section.isEmpty {
-            HStack(spacing: 12) {
-                HalftoneArt(art: section.kind, side: 36, across: 20, faded: true)
-                    .frame(width: 56)
-                Text(section.kind.name).font(.ariHeading).foregroundStyle(.ariTertiary)
-                Spacer(minLength: 8)
-                Text("nothing right now").font(.footnote).foregroundStyle(.ariTertiary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(section.kind.name).font(.ariHeading).foregroundStyle(.ariTertiary)
+                    Spacer(minLength: 8)
+                    Text("nothing right now").font(.footnote).foregroundStyle(.ariTertiary)
+                }
+                AccentRule(quiet: true)
             }
             .opacity(0.8)
             .accessibilityElement(children: .combine)
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    HalftoneArt(art: section.kind, side: 56, across: 27)
-                    Text(section.kind.name).font(.ariHeading).foregroundStyle(.ariText)
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 8)
-                    if let trailing {
-                        Text(trailing).font(.footnote).foregroundStyle(.ariTertiary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(section.kind.name).font(.ariHeading).foregroundStyle(.ariText)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: 8)
+                        if let trailing {
+                            Text(trailing).font(.footnote).foregroundStyle(.ariTertiary)
+                        }
                     }
+                    AccentRule()
                 }
                 if section.lead != nil || !section.rows.isEmpty {
                     VStack(spacing: 0) {

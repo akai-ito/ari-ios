@@ -16,7 +16,6 @@ struct BodyView: View {
         let current = BodyReading.currentWeek(of: block)
         MotionPage {
             MotionPageHead(
-                art: .body,
                 kicker: ["Body", current.map { "week \($0.number) of \(block.weeks.count)" }]
                     .compactMap(\.self).joined(separator: " · "),
                 title: detail.motion.title,
@@ -390,9 +389,7 @@ struct SessionView: View {
         let result = session.result
         let isDone = BodyReading.isDone(session, in: detail.state)
         MotionPage {
-            MotionPageHead(
-                art: .body, kicker: kicker, title: session.title,
-                symbol: SessionSymbol.name(session.kind))
+            MotionPageHead(kicker: kicker, title: session.title)
             if let line = session.line { KumoLine(line).padding(.top, 16) }
             if let result, result.source == .watch {
                 HStack(spacing: 6) {

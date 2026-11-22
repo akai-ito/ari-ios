@@ -9,9 +9,7 @@ struct ProjectView: View {
 
     var body: some View {
         MotionPage {
-            MotionPageHead(
-                art: .projects, kicker: "Project", title: detail.motion.title, subtitle: project.aim
-            )
+            MotionPageHead(kicker: "Project", title: detail.motion.title, subtitle: project.aim)
             KumoLine(detail.motion.summary).padding(.top, 16)
             if !project.parts.isEmpty {
                 MotionLabel(
@@ -36,7 +34,6 @@ struct LearningView: View {
     var body: some View {
         MotionPage {
             MotionPageHead(
-                art: .learning,
                 kicker: ["Learning", learning.habit].compactMap(\.self).joined(separator: " · "),
                 title: detail.motion.title, subtitle: learning.aim)
             KumoLine(detail.motion.summary).padding(.top, 16)
@@ -90,8 +87,7 @@ struct OtherView: View {
 
     var body: some View {
         MotionPage {
-            MotionPageHead(
-                art: .other, kicker: "Other", title: detail.motion.title, subtitle: other.about)
+            MotionPageHead(kicker: "Other", title: detail.motion.title, subtitle: other.about)
             KumoLine(detail.motion.summary).padding(.top, 16)
             if let status = other.status {
                 Text(status).font(.subheadline).foregroundStyle(.ariSecondary).padding(.top, 8)
