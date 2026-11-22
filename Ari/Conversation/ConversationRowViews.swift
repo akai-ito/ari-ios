@@ -36,11 +36,14 @@ extension ConversationView {
             VStack(alignment: .trailing, spacing: 6) {
                 if let quote = entry.quotes { QuotedLine(text: quote.text) }
                 YourMessage(
-                    text: entry.text,
+                    // A tap on Kumo's blocks shows as its words; the block is for Kumo.
+                    text: YourTap.words(of: entry.text),
                     tag: tag(for: entry, in: conversation)
                 ) {
                     if !entry.attachments.isEmpty {
-                        MessageAttachments(attachments: entry.attachments) {
+                        MessageAttachments(
+                            attachments: entry.attachments, recordings: entry.spoken == nil
+                        ) {
                             await session.bytes(of: $0)
                         }
                     }
@@ -66,6 +69,9 @@ extension ConversationView {
                     if !text.isEmpty {
                         ReplyView(document: document, position: position)
                             .environment(\.replyActions, replyActions(for: entry, in: conversation))
+                    }
+                    if position == .infinity, let recording = RecordingLink.first(in: text) {
+                        TranscriptFold(recording: recording)
                     }
                     if position == .infinity { footer(for: entry, in: conversation) }
                 }
@@ -106,7 +112,8 @@ extension ConversationView {
                 ? { label in
                     guard session.send(label, in: place) != nil else { return }
                     scrollToEnd()
-                } : nil)
+                } : nil,
+            message: entry.id)
     }
 
     /// Under your message: whether the server has it, and whether Ari took it in or it waits.

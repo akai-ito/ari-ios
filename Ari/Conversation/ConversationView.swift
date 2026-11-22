@@ -84,6 +84,7 @@ struct ConversationView: View {
 
     var body: some View {
         screen
+            .filesInChat(session: session)
             // The pinned line, compact lines and the trail open what's in motion over the chat.
             .environment(
                 \.motionOpener,

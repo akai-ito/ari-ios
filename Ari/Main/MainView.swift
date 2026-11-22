@@ -58,6 +58,7 @@ struct MainView: View {
             }
         }
         .environment(memory)
+        .environment(model.uploads)
         .environment(\.hidesYou, youTab.isHidden)
         .environment(motions)
         .environment(made)

@@ -45,6 +45,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case deskChanged(DeskChanged)
         case onboardingChanged(OnboardingChanged)
         case problemsChanged(ProblemsChanged)
+        case recordingChanged(RecordingChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -58,7 +59,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "thread.changed", "message.moved",
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
         "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
-        "desk.changed", "onboarding.changed", "problems.changed",
+        "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -107,6 +108,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "desk.changed": .deskChanged(try DeskChanged(from: decoder))
             case "onboarding.changed": .onboardingChanged(try OnboardingChanged(from: decoder))
             case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))
+            case "recording.changed": .recordingChanged(try RecordingChanged(from: decoder))
             default: .unknown
             }
     }

@@ -315,6 +315,7 @@ extension Event.Payload {
         case .madeRemoved: "made.removed"
         case .deskChanged: "desk.changed"
         case .onboardingChanged: "onboarding.changed"
+        case .recordingChanged: "recording.changed"
         case .problemsChanged: "problems.changed"
         case .unknown: nil
         }
