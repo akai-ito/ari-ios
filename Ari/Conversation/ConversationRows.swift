@@ -18,6 +18,9 @@ struct ConversationRow: Identifiable {
         case call(Call)
         /// A side thread's line in the main chat; `underAnchor` when it hangs from the message above.
         case thread(SideThread, underAnchor: Bool)
+        /// The line of a thread you started here, such as with a recording, until the server names
+        /// it.
+        case startedHere(ThreadID)
         /// In a reply thread: the main chat's message it hangs from.
         case anchor(Conversation.Entry)
         /// At the end of a thread that's done.
@@ -37,11 +40,13 @@ struct Whereabouts: Equatable {
 /// doesn't ask SwiftUI to draw again.
 final class RowsCache {
     /// What the rows were worked out from: the conversation's changes, where the reveal holds
-    /// steps back, and whether Ari offers notifications.
+    /// steps back, whether Ari offers notifications, and the threads you started that wait for
+    /// the server.
     struct Key: Equatable {
         let revision: Int
         let held: Int?
         let offering: Bool
+        var waiting: [ThreadID] = []
     }
 
     var key: Key?
@@ -79,10 +84,11 @@ final class RowsCache {
     }
 
     /// The conversation as it reads: messages, Ari's trail between them, the date at the start of
-    /// each day, a failure that left no reply, and the notification offer.
+    /// each day, the threads you started that wait for the server, a failure that left no reply,
+    /// and the notification offer.
     static func make(
         _ conversation: Conversation, reveal: Reveal, offering: Bool,
-        anchor: Conversation.Entry? = nil
+        anchor: Conversation.Entry? = nil, waiting: [ThreadID] = []
     ) -> [ConversationRow] {
         var rows: [ConversationRow] = []
         var day: Date?
@@ -115,6 +121,9 @@ final class RowsCache {
                 ConversationRow(
                     id: entry.id.rawValue, kind: entry.role == .user ? .yours(entry) : .ari(entry)))
             above = entry.id
+        }
+        for thread in waiting {
+            rows.append(ConversationRow(id: "started \(thread)", kind: .startedHere(thread)))
         }
         if let ended = conversation.lastEndedTurn, ended.outcome == .failed,
             !conversation.entries.contains(where: {

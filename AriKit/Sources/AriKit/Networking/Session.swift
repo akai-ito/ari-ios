@@ -31,6 +31,10 @@ public final class Session {
     /// Threads you're starting here, before the server has them: the main chat's message each
     /// replies to, or none for a new thread.
     public private(set) var drafts: [ThreadID: MessageID?] = [:]
+    /// Threads you started here that hold your message while the server hasn't named them yet,
+    /// such as one a recording started while it goes up, in the order you started them: the main
+    /// chat shows a line for each meanwhile.
+    public private(set) var waitingThreads: [ThreadID] = []
     /// The Desk, once the stream has said what's on it.
     public private(set) var desk: Desk?
     /// How getting started stands, once the stream or ``refreshOnboarding()`` has said.
@@ -200,8 +204,15 @@ public final class Session {
                     uploadQueue.first { $0.id == id }?.attachment ?? bigAttachments[id]
                 }
                 // A message for a thread shows there once the thread is open and the server has it.
+                // One that starts a thread, such as a recording still going up, starts it here again.
                 if message.thread == nil, message.replyTo == nil, message.newThread != true {
                     conversation.send(message.id, text: message.text, attachments: waiting)
+                } else if message.thread == nil {
+                    let draft = startThread(
+                        replyingTo: message.newThread == true ? nil : message.replyTo)
+                    threadConversations[draft]?.send(
+                        message.id, text: message.text, attachments: waiting)
+                    holding(in: draft)
                 }
                 queue.append(message)
             }
@@ -256,7 +267,9 @@ public final class Session {
     ///     they're all on the server; the text may then be empty.
     ///   - done: The line of Done it replies to, telling Kumo it got that one wrong.
     ///   - place: The thread it goes into, or `nil` for the main chat. A thread you're starting
-    ///     here (``startThread(replyingTo:)``) is named by the server once it has the message.
+    ///     here (``startThread(replyingTo:)``) is named by the server once it has the message. A
+    ///     recording for the main chat starts a thread of its own instead, where Kumo's take on it
+    ///     comes too; ``draft(holding:)`` says which.
     ///   - replyingTo: Inside a thread, the message you're replying to, which it quotes.
     @discardableResult
     public func send(
@@ -267,17 +280,25 @@ public final class Session {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
             text.count <= Self.maximumLength
         else { return nil }
+        let shown = attachments.compactMap(attachment)
+        var place = place
+        if place == nil, conversation[id] == nil, Self.startsThread(carrying: shown) {
+            // Sent again, as a shared recording is each time Ari comes back, it stays where it is.
+            place =
+                threadConversations.first { $0.value[id] != nil }?.key
+                ?? startThread(replyingTo: nil)
+        }
         let thread = resolved(place)
         let draft = thread.flatMap { drafts[$0] }
         let message = SendMessage(
             id: id, text: text, attachments: attachments, done: done,
             thread: draft == nil ? thread : nil, replyTo: replyingTo ?? draft ?? nil,
             newThread: draft.map { $0 == nil } ?? false)
-        let shown = attachments.compactMap(attachment)
         if let thread {
             let quotes = replyingTo.flatMap { quote(of: $0, in: thread) }
             threadConversations[thread, default: Conversation(place: thread)].send(
                 id, text: text, attachments: shown, quotes: quotes)
+            holding(in: thread)
         } else {
             conversation.send(id, text: text, attachments: shown)
         }
@@ -320,6 +341,19 @@ public final class Session {
         drafts[draft] = .some(message)
         threadConversations[draft] = Conversation(place: draft)
         return draft
+    }
+
+    /// A message went into `thread`: one you're starting here waits for the server to name it.
+    private func holding(in thread: ThreadID) {
+        guard drafts[thread] != nil, !waitingThreads.contains(thread) else { return }
+        waitingThreads.append(thread)
+    }
+
+    /// Whether a message carrying these starts a thread of its own when it's for the main chat: a
+    /// recording does, so Kumo's take on it has a place of its own, as the server's follow-up
+    /// expects.
+    public nonisolated static func startsThread(carrying attachments: [Attachment]) -> Bool {
+        attachments.contains { $0.kind == .audio }
     }
 
     /// Opens a thread: its latest messages, steps and running turn. What the stream brings
@@ -386,8 +420,9 @@ public final class Session {
         for key in threadConversations.keys { change(&threadConversations[key]!) }
     }
 
-    /// The draft that holds your message `id`, if one does.
-    private func draft(holding id: MessageID) -> ThreadID? {
+    /// The thread you're starting here that holds your message `id`, if one does: where a recording
+    /// sent to the main chat went.
+    public func draft(holding id: MessageID) -> ThreadID? {
         drafts.keys.first { threadConversations[$0]?[id] != nil }
     }
 
@@ -398,6 +433,7 @@ public final class Session {
         if let existing = threadConversations[thread] { conversation = existing }
         threadConversations[thread] = conversation
         drafts[draft] = nil
+        if waitingThreads.contains(draft) { waitingThreads.removeAll { $0 == draft } }
         adopted[draft] = thread
         Task { await self.openThread(thread) }
     }

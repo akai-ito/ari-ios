@@ -81,6 +81,8 @@ struct ConversationView: View {
     @Environment(Talk.self) var talk: Talk?
     /// Whether the server can talk.
     @Environment(Voices.self) var voices: Voices?
+    /// Recordings going up, for a thread's header and their cards.
+    @Environment(BigUploads.self) var bigUploads: BigUploads?
 
     var body: some View {
         screen
@@ -117,6 +119,9 @@ struct ConversationView: View {
             }
             #if DEBUG
                 .task {
+                    // The main chat's alone: a thread opened over it, as a recording's is, would
+                    // send it all again.
+                    guard place == nil else { return }
                     for url in DebugScript.attachments {
                         if let attachment = try? await AttachmentMaker.file(at: url) {
                             attach(attachment)
@@ -217,19 +222,20 @@ struct ConversationView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if place == nil {
-                HeaderView(
-                    header: header, name: name, openThreads: conversation.openThreads.count,
-                    openTopics: { showsThreads = true },
-                    nudge: { header.nudge { pose(revealing: reveal.isRevealing) } })
-            } else {
+            if let place {
                 ThreadHeader(
-                    thread: conversation.thread, back: close, markDone: markDone,
+                    thread: conversation.thread, session: session, place: place, back: close,
+                    markDone: markDone,
                     rename: {
                         newTitle = conversation.thread?.title ?? ""
                         renaming = true
                     },
                     move: { moving = MoveRequest(chosen: nil) })
+            } else {
+                HeaderView(
+                    header: header, name: name, openThreads: conversation.openThreads.count,
+                    openTopics: { showsThreads = true },
+                    nudge: { header.nudge { pose(revealing: reveal.isRevealing) } })
             }
         }
         // The header follows what's at the top of the screen. Written to the header alone, which
@@ -274,6 +280,7 @@ struct ConversationView: View {
             )
             .environment(talk)
             .environment(voices)
+            .environment(bigUploads)
         }
         .sheet(item: $moving) { request in
             moveSheet(request)
@@ -423,13 +430,17 @@ struct ConversationView: View {
     /// clear.
     func send(_ text: String) -> Bool {
         guard !Self.anyRefused(attached, in: session),
-            session.send(
-                text, attachments: attached.map(\.id), in: place, replyingTo: replyingTo?.id) != nil
+            let id = session.send(
+                text, attachments: attached.map(\.id), in: place, replyingTo: replyingTo?.id)
         else { return false }
         attached = []
         replyingTo = nil
         sent += 1
         scrollToEnd()
+        // A recording starts a thread of its own: it opens, saying how the upload is getting on.
+        if place == nil, let thread = session.draft(holding: id) {
+            openedThread = OpenedThread(id: thread)
+        }
         return true
     }
 

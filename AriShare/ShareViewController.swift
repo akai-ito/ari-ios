@@ -108,9 +108,11 @@ final class ShareModel {
     func send() {
         guard canSend, let shares = group.shares() else { return }
         state = .sending
+        // A recording starts a thread of its own, as from the chat, wherever it's sent from.
+        let carried = attachments.map(\.attachment) + (big.map { [$0.attachment] } ?? [])
         let message = SendMessage(
             id: MessageID(UUID().uuidString.lowercased()), text: text,
-            attachments: attachments.map(\.id) + (big.map { [$0.id] } ?? []))
+            attachments: carried.map(\.id), newThread: Session.startsThread(carrying: carried))
         if let big, let bigFile {
             sendBig(big, from: bigFile, with: message, shares: shares)
             return
