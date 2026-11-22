@@ -31,8 +31,6 @@ struct ConversationView: View {
     @State var distanceFromEnd = Distance.atEnd
     /// Whether your finger is on the conversation.
     @State var scrolling = false
-    /// The topics and days of the conversation, to jump between.
-    @State var showsTopics = Self.opensTopics
     /// Whether you've scrolled near the top of what's shown: more history comes in while you are.
     @State var nearTop = false
     /// The first row on screen, once you've scrolled back past the latest ones; `nil` shows the
@@ -194,7 +192,7 @@ struct ConversationView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             HeaderView(
-                header: header, name: name, openTopics: { showsTopics = true },
+                header: header, name: name, openTopics: nil,
                 nudge: { header.nudge { pose(revealing: reveal.isRevealing) } })
         }
         // The header follows what's at the top of the screen. Written to the header alone, which
@@ -216,17 +214,6 @@ struct ConversationView: View {
             geometry.contentSize.height - geometry.visibleRect.maxY < Self.ahead
         } action: { _, near in
             if near, lastShown != nil { showLater(rows) }
-        }
-        .sheet(isPresented: $showsTopics) {
-            TopicsSheet(
-                marks: TopicsSheet.marks(in: rows), current: header.whereabouts?.topic,
-                hasEarlier: session.conversation.hasEarlierMessages,
-                loadEarlier: { await session.loadEarlier() }
-            ) { id in
-                showsTopics = false
-                jump(to: id)
-            }
-            .presentationDetents([.medium, .large])
         }
         .overlay(alignment: .bottom) {
             if let pill = pillText(working: working) {
@@ -314,14 +301,6 @@ struct ConversationView: View {
             openingPosition.wrappedValue = nil
             jump(toPosition: position)
         }
-    }
-
-    static var opensTopics: Bool {
-        #if DEBUG
-            DebugScript.opensTopics
-        #else
-            false
-        #endif
     }
 
     // MARK: - What you do

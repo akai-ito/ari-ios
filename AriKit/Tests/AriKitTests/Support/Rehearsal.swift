@@ -182,7 +182,33 @@ final class Rehearsal {
             let attachments = request.body?["attachments"]?.array?.compactMap(\.string)
                 .map(AttachmentID.init(rawValue:))
             let done = request.body?["done"]?.string.map(DoneID.init(rawValue:))
-            session.send(text, id: MessageID(id), attachments: attachments ?? [], done: done)
+            let replyTo = request.body?["reply_to"]?.string.map(MessageID.init(rawValue:))
+            // Into a thread; a reply in the main chat, or Threads' New thread, starts one.
+            let place: ThreadID? =
+                if let thread = request.body?["thread"]?.string {
+                    ThreadID(thread)
+                } else if request.body?["new_thread"] == .bool(true) || replyTo != nil {
+                    session.startThread(replyingTo: replyTo)
+                } else {
+                    nil
+                }
+            session.send(
+                text, id: MessageID(id), attachments: attachments ?? [], done: done, in: place,
+                replyingTo: request.body?["thread"] == nil ? nil : replyTo)
+        case .thread(let thread):
+            Task { await session.openThread(thread) }
+        case .seeThread(let thread):
+            Task { await session.see(thread) }
+        case .changeThread(let thread):
+            guard let change = try? request.body?.decode(ThreadChange.self) else { return }
+            Task { try? await session.change(thread, change) }
+        case .moveMessage(let message):
+            guard let move = try? request.body?.decode(MoveMessage.self) else { return }
+            Task { try? await session.move(message, to: move.thread) }
+        case .threads:
+            let query =
+                URLComponents(string: request.path)?.queryItems?.first { $0.name == "query" }?.value
+            Task { _ = try? await session.threads(matching: query ?? "") }
         case .desk:
             Task { try? await session.refreshDesk() }
         case .answerCard(let card):

@@ -76,6 +76,14 @@ struct ProtocolDecodingTests {
                     // Settings' requests, a belief's answer, a cancelled plan and where the phone
                     // is, which have no answer to read.
                     continue
+                case .threads:
+                    _ = try body.decode(ThreadList.self)
+                case .thread(let thread):
+                    #expect(try body.decode(ThreadPage.self).thread.id == thread, "\(place)")
+                case .changeThread(let thread), .seeThread(let thread):
+                    #expect(try body.decode(ThreadResult.self).thread.id == thread, "\(place)")
+                case .moveMessage(let message):
+                    #expect(try body.decode(MessageResult.self).message.id == message, "\(place)")
                 case .stop(let turn):
                     #expect(try body.decode(StopResult.self).turn == turn, "\(place)")
                 case .retry(let turn):
@@ -155,8 +163,17 @@ struct ProtocolDecodingTests {
                 let message = try body.decode(SendMessage.self)
                 let encoded = SendMessage(
                     id: message.id, text: message.text, attachments: message.attachments ?? [],
-                    done: message.done)
+                    done: message.done, thread: message.thread, replyTo: message.replyTo,
+                    newThread: message.newThread == true)
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .changeThread:
+                let change = try body.decode(ThreadChange.self)
+                let encoded = ThreadChange(title: change.title, state: change.state)
+                #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .moveMessage:
+                let move = try body.decode(MoveMessage.self)
+                #expect(
+                    try JSONValue(encoding: MoveMessage(thread: move.thread)) == body, "\(place)")
             case .answerCard:
                 #expect(try JSONValue(encoding: body.decode(CardAnswer.self)) == body, "\(place)")
             case .answerGuess:
@@ -269,7 +286,9 @@ extension Event.Payload {
         case .callEnded: "call.ended"
         case .callAudioDeleted: "call.audio_deleted"
         case .voiceStatus: "voice.status"
-        case .topicStarted: "topic.started"
+        case .threadStarted: "thread.started"
+        case .threadChanged: "thread.changed"
+        case .messageMoved: "message.moved"
         case .messageAmended: "message.amended"
         case .motionStarted: "motion.started"
         case .motionChanged: "motion.changed"

@@ -27,6 +27,10 @@ public struct PushNotification: Sendable, Equatable, Decodable {
     public var message: MessageID?
     /// What's needed to answer an ask from the notification.
     public var ask: AskSummary?
+    /// When it happened in a side thread: the thread, so a tap opens it there.
+    public var thread: ThreadID?
+    /// The thread's name, for the notification's subtitle.
+    public var threadTitle: String?
 
     public struct AskSummary: Sendable, Equatable, Decodable {
         public var id: AskID
@@ -44,6 +48,11 @@ public struct PushNotification: Sendable, Equatable, Decodable {
             case id, options
             case allowsText = "allows_text"
         }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, text, turn, message, ask, thread
+        case threadTitle = "thread_title"
     }
 }
 

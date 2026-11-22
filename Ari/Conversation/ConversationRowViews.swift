@@ -22,8 +22,6 @@ extension ConversationView {
         switch row.kind {
         case .day(let date):
             DayLabel(date: date)
-        case .topic(let topic):
-            TopicLabel(label: topic.label) { showsTopics = true }
         case .yours(let entry):
             YourMessage(
                 text: entry.text,

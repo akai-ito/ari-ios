@@ -19,9 +19,9 @@ enum StatusText: Equatable {
 }
 
 /// The floating header: the character, where you are, and one line of status, over the
-/// conversation, which scrolls under it and fades out. Where you are is the subject Ari marked for
-/// what's at the top of the screen, or its day when there's none, changing as you scroll; tap it
-/// for all the topics. The character is Ari, so it needs no name. Tap it and it notices you.
+/// conversation, which scrolls under it and fades out. Where you are is the day of what's at the top
+/// of the screen, changing as you scroll. The character is Ari, so it needs no name. Tap it and it
+/// notices you.
 struct HeaderView: View {
     /// Read here rather than by the conversation, so the header redrawing as you scroll, or as a
     /// status changes, doesn't redraw the whole conversation.
@@ -36,9 +36,8 @@ struct HeaderView: View {
     var body: some View {
         let whereabouts = header.whereabouts
         let day = whereabouts?.day.map { DayLabel.describe($0, time: false) }
-        let title = whereabouts?.topic ?? day ?? name
-        // Resting under a subject, the line beneath says which day it's on; working, the status.
-        let status = header.status ?? (whereabouts?.topic == nil ? nil : day.map(StatusText.quiet))
+        let title = day ?? name
+        let status = header.status
         VStack(spacing: 2) {
             PresenceView(history: header.poses)
                 .padding(.bottom, 6)

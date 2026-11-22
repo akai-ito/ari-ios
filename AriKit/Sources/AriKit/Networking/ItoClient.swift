@@ -453,6 +453,54 @@ public struct ItoClient: Sendable, CustomStringConvertible {
                 Self.path("/v0/messages", ["before": oldest.rawValue, "limit": String(limit)])))
     }
 
+    // MARK: - Threads
+
+    /// `GET /v0/threads`: every open thread, then done ones newest first; with words, only the
+    /// threads that hold them all.
+    public func threads(matching query: String = "", before: ThreadID? = nil, limit: Int = 50)
+        async throws(RequestError) -> ThreadList
+    {
+        var parameters: [String: String] = [:]
+        if limit != 50 { parameters["limit"] = String(limit) }
+        if !query.isEmpty { parameters["query"] = query }
+        if let before { parameters["before"] = before.rawValue }
+        let path = parameters.isEmpty ? "/v0/threads" : Self.path("/v0/threads", parameters)
+        return try await call(HTTPRequest(.get, path))
+    }
+
+    /// `GET /v0/threads/{thread}`: the thread with its latest messages.
+    public func thread(_ id: ThreadID) async throws(RequestError) -> ThreadPage {
+        try await call(HTTPRequest(.get, "/v0/threads/\(Self.segment(id.rawValue))"))
+    }
+
+    /// `PATCH /v0/threads/{thread}`: renames it, or marks it done or open.
+    public func change(_ thread: ThreadID, _ change: ThreadChange) async throws(RequestError)
+        -> SideThread
+    {
+        let answer: ThreadResult = try await call(
+            HTTPRequest(
+                .patch, "/v0/threads/\(Self.segment(thread.rawValue))", body: try Self.json(change))
+        )
+        return answer.thread
+    }
+
+    /// `POST /v0/threads/{thread}/seen`: its news is seen, on every app.
+    public func see(_ thread: ThreadID) async throws(RequestError) -> SideThread {
+        let answer: ThreadResult = try await call(
+            HTTPRequest(.post, "/v0/threads/\(Self.segment(thread.rawValue))/seen"))
+        return answer.thread
+    }
+
+    /// `POST /v0/messages/{message}/move`: into a thread, or back to the main chat.
+    public func move(_ message: MessageID, to thread: ThreadID?) async throws(RequestError)
+        -> MessageResult
+    {
+        try await call(
+            HTTPRequest(
+                .post, "/v0/messages/\(Self.segment(message.rawValue))/move",
+                body: try Self.json(MoveMessage(thread: thread))))
+    }
+
     /// `GET /v0/events`, resuming after `cursor` or, without one, from a snapshot.
     public func events(after cursor: EventID?) async throws(RequestError) -> HTTPStream {
         var request = authorize(

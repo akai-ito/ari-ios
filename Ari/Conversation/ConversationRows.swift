@@ -1,8 +1,8 @@
 import AriKit
 import Foundation
 
-/// One row of the conversation: a day's date, where the subject changed, your message, Ari's, a
-/// trail of what Ari did, a failure that left no reply, or the offer to tell you when Ari's done.
+/// One row of the conversation: a day's date, your message, Ari's, a trail of what Ari did, a
+/// failure that left no reply, or the offer to tell you when Ari's done.
 struct ConversationRow: Identifiable {
     enum Kind {
         case day(Date)
@@ -15,17 +15,14 @@ struct ConversationRow: Identifiable {
         case failure(TurnID, ServerError?)
         /// A call, where it started.
         case call(Call)
-        /// Where the subject changed: Ari's label, above the message that changed it.
-        case topic(Topic)
     }
 
     let id: String
     let kind: Kind
 }
 
-/// Where you are in the conversation: the subject Ari last marked, and the day.
+/// Where you are in the conversation: the day of what's at the top of the screen.
 struct Whereabouts: Equatable {
-    let topic: String?
     let day: Date?
 }
 
@@ -53,16 +50,11 @@ final class RowsCache {
         self.rows = rows
         index = [:]
         whereabouts = [:]
-        var topic: String?
         var day: Date?
         for (position, row) in rows.enumerated() {
-            switch row.kind {
-            case .day(let date): day = date
-            case .topic(let marked): topic = marked.label
-            default: break
-            }
+            if case .day(let date) = row.kind { day = date }
             index[row.id] = position
-            whereabouts[row.id] = Whereabouts(topic: topic, day: day)
+            whereabouts[row.id] = Whereabouts(day: day)
         }
     }
 
@@ -86,22 +78,8 @@ final class RowsCache {
     {
         var rows: [ConversationRow] = []
         var day: Date?
-        // A topic waits for its message, so a new day's date comes first, then the label.
-        var topic: Topic?
-        func placeTopic() {
-            if let waiting = topic {
-                rows.append(ConversationRow(id: "topic \(waiting.id)", kind: .topic(waiting)))
-            }
-            topic = nil
-        }
         for item in Timeline(conversation, reveal: reveal).items {
             guard case .message(let entry) = item else {
-                if case .topic(let marked) = item {
-                    placeTopic()
-                    topic = marked
-                    continue
-                }
-                placeTopic()
                 if case .trail(let trail) = item {
                     rows.append(ConversationRow(id: trail.id, kind: .trail(trail)))
                 } else if case .call(let call) = item {
@@ -114,7 +92,6 @@ final class RowsCache {
                 rows.append(ConversationRow(id: "day \(entry.id)", kind: .day(date)))
                 day = date
             }
-            placeTopic()
             rows.append(
                 ConversationRow(
                     id: entry.id.rawValue, kind: entry.role == .user ? .yours(entry) : .ari(entry)))
