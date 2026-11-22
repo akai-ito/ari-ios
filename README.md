@@ -47,10 +47,18 @@ live.** (The repository and its code still say Ari, the app's earlier name.)
   the screen falls behind. `ReplyDocument` reads its Markdown with Apple's
   [swift-markdown](https://github.com/swiftlang/swift-markdown) and keeps where each run sits in the
   source, so text never reflows as it arrives. Stop shows everything Ari wrote at once.
-- **Replies shaped by what they are.** Where Markdown can't, Ari writes a block the app draws: a
-  place on Apple's map (a still picture in the chat, a live map with Directions when you open it),
-  short answers to tap, pictures it found (credited on tap), and a line that opens a thing in
-  motion.
+- **Replies that show.** Where Markdown can't, Kumo writes a block the app draws: a table that
+  fits a phone with its verdict on each row as a chip (bone and grey, never a rainbow), its picks in
+  order with a picture, a price and a line each, the number that matters, short answers to tap,
+  pictures it found (credited on tap), and a line that opens a thing in motion. What you can act on
+  comes as a card with its buttons: a place with Directions (a live map when you open it), an event
+  with Add (the phone's own sheet, filled in, so Ito needs no access to your calendars), a Desk
+  card exactly as the Desk has it (a draft opens in Mail; nothing ever sends), and a person. A name
+  Kumo keeps is dotted; tap it for a small card about them, their page, and Ask about them.
+- **Pages Kumo made.** A rich answer worth keeping, such as a gallery guide, comes as a card that
+  opens a page: its cover, how far along your ticks are, what Kumo last changed ("Updated 2 hours
+  ago", with why), sections that fold, things to tick off with the time you did, and places with
+  Directions. Share sends it as clean text. Every page is on the Library's Made shelf.
 - **Kumo's trail.** Between your message and Kumo's answer, what it did along the way, in plain
   words that change tense as it finishes, with its short notes as quiet grey lines. `Timeline`
   merges messages and steps, groups similar steps, and folds each run once the turn is over; tap a

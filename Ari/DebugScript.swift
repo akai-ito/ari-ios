@@ -16,8 +16,9 @@ import SwiftUI
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code, and
-    /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), and `ARI_TALK`
-    /// starts a call.
+    /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), `ARI_TALK`
+    /// starts a call, `ARI_MADE` opens a page Kumo made (its id; with `ARI_MADE_END` at its foot),
+    /// and `ARI_NAME` opens a name's card (such as `memory:people/alex`).
     enum DebugScript {
         static let environment = ProcessInfo.processInfo.environment
 
@@ -50,6 +51,9 @@ import SwiftUI
         static let page = environment["ARI_PAGE"].map(PageAddress.init(rawValue:))
         static let shelf = environment["ARI_SHELF"]
         static let showsCalendar = environment["ARI_CALENDAR"] != nil
+        static let made = environment["ARI_MADE"].map(MadeID.init(rawValue:))
+        static let opensMadeAtEnd = environment["ARI_MADE_END"] != nil
+        static let name = environment["ARI_NAME"].flatMap(URL.init(string:)).flatMap(NameLink.init)
 
         /// Where `ARI_SETTINGS` goes past the top of Settings.
         static var settingsPath: [SettingsRoute] {

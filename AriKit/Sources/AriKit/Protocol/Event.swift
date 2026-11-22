@@ -36,6 +36,10 @@ public struct Event: Sendable, Equatable, Decodable {
         case motionFinished(MotionEvent)
         case motionState(MotionStateChanged)
         case motionRemoved(MotionRemoved)
+        case madeCreated(MadeEvent)
+        case madeChanged(MadeEvent)
+        case madeState(MadeStateChanged)
+        case madeRemoved(MadeRemoved)
         case deskChanged(DeskChanged)
         case onboardingChanged(OnboardingChanged)
         case problemsChanged(ProblemsChanged)
@@ -50,7 +54,8 @@ public struct Event: Sendable, Equatable, Decodable {
         "message.started", "message.delta", "message.ended", "message.posted", "turn.ended",
         "call.started", "call.ended", "call.audio_deleted", "voice.status", "topic.started",
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
-        "motion.removed", "desk.changed", "onboarding.changed", "problems.changed",
+        "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
+        "desk.changed", "onboarding.changed", "problems.changed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -90,6 +95,10 @@ public struct Event: Sendable, Equatable, Decodable {
             case "motion.finished": .motionFinished(try MotionEvent(from: decoder))
             case "motion.state": .motionState(try MotionStateChanged(from: decoder))
             case "motion.removed": .motionRemoved(try MotionRemoved(from: decoder))
+            case "made.created": .madeCreated(try MadeEvent(from: decoder))
+            case "made.changed": .madeChanged(try MadeEvent(from: decoder))
+            case "made.state": .madeState(try MadeStateChanged(from: decoder))
+            case "made.removed": .madeRemoved(try MadeRemoved(from: decoder))
             case "desk.changed": .deskChanged(try DeskChanged(from: decoder))
             case "onboarding.changed": .onboardingChanged(try OnboardingChanged(from: decoder))
             case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))

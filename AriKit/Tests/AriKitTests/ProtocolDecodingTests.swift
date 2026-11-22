@@ -131,6 +131,13 @@ struct ProtocolDecodingTests {
                     #expect(detail.content != .unreadable && detail.content != .unknown, "\(place)")
                 case .motionState:
                     _ = try body.decode(MotionStateBody.self)
+                case .madePages:
+                    #expect(try !body.decode(MadeList.self).made.isEmpty, "\(place)")
+                case .madePage(let id):
+                    let detail = try body.decode(MadeDetail.self)
+                    #expect(detail.made.id == id && !detail.content.sections.isEmpty, "\(place)")
+                case .madeState:
+                    _ = try body.decode(MadeStateBody.self)
                 case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
@@ -208,6 +215,9 @@ struct ProtocolDecodingTests {
             case .motionState:
                 let state = try body.decode(MotionState.self)
                 #expect(try JSONValue(encoding: state) == body, "\(place)")
+            case .madeState:
+                let state = try body.decode(MadeState.self)
+                #expect(try JSONValue(encoding: state) == body, "\(place)")
             case .correct:
                 let words = try body.decode(CorrectDone.self).text
                 #expect(try JSONValue(encoding: CorrectDone(text: words)) == body, "\(place)")
@@ -276,6 +286,10 @@ extension Event.Payload {
         case .motionFinished: "motion.finished"
         case .motionState: "motion.state"
         case .motionRemoved: "motion.removed"
+        case .madeCreated: "made.created"
+        case .madeChanged: "made.changed"
+        case .madeState: "made.state"
+        case .madeRemoved: "made.removed"
         case .deskChanged: "desk.changed"
         case .onboardingChanged: "onboarding.changed"
         case .problemsChanged: "problems.changed"

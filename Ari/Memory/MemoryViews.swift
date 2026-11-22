@@ -36,6 +36,7 @@ struct LibraryView: View {
             .navigationDestination(for: ShelfRoute.self) { route in
                 ShelfView(memory: memory, shelf: route.shelf)
             }
+            .navigationDestination(for: MadeShelfRoute.self) { _ in MadeShelfView() }
         }
     }
 }

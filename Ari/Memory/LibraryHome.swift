@@ -7,6 +7,8 @@ import SwiftUI
 struct LibraryHome: View {
     let memory: Memory
 
+    @Environment(MadePages.self) private var made: MadePages?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
@@ -25,7 +27,7 @@ struct LibraryHome: View {
                 case .loaded:
                     inMind
                     lately
-                    if !memory.shelves.isEmpty { shelves }
+                    if !memory.shelves.isEmpty || !(made?.all.isEmpty ?? true) { shelves }
                 }
             }
             .padding(.horizontal, 20)
@@ -112,6 +114,10 @@ struct LibraryHome: View {
             ) {
                 ForEach(Self.ordered(memory.shelves)) { shelf in
                     ShelfTile(shelf: shelf)
+                }
+                // What Kumo made you, beside what it knows.
+                if let made, !made.all.isEmpty {
+                    MadeShelfTile(count: made.all.count)
                 }
             }
         }

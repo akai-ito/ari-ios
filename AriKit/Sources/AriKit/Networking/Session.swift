@@ -43,6 +43,8 @@ public final class Session {
     public private(set) var voiceStatus: VoiceStatus?
     /// What's in motion, which follows the same stream.
     @ObservationIgnored public weak var motions: Motions?
+    /// The pages Kumo made, kept current from the stream.
+    @ObservationIgnored public weak var made: MadePages?
 
     public enum Link: Equatable, Sendable {
         /// The first attempt since ``start()``.
@@ -612,6 +614,7 @@ public final class Session {
     private func receive(_ event: Event) {
         conversation.apply(event)
         motions?.apply(event)
+        made?.apply(event)
         switch event.payload {
         case .snapshot(let snapshot):
             desk = snapshot.desk
