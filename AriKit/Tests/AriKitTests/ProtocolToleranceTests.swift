@@ -88,7 +88,7 @@ struct ProtocolToleranceTests {
             throw TranscriptError("not an end")
         }
         #expect(failure.error?.code.rawValue == "disk_on_fire")
-        #expect(failure.error?.message == "The model didn't respond for 60 seconds.")
+        #expect(failure.error?.message == "The model service isn't responding right now.")
 
         let stop = try JSONValue(json: #"{"turn":"t_0002_40331","state":"pondering"}"#).decode(
             StopResult.self)
@@ -103,7 +103,7 @@ struct ProtocolToleranceTests {
         guard case .messageEnded(let failure) = failed.payload else {
             throw TranscriptError("not an end")
         }
-        #expect(failure.error?.code == .modelTimeout)
+        #expect(failure.error?.code == .modelUnavailable)
         #expect(failure.error?.detail == nil)
     }
 
@@ -116,7 +116,8 @@ struct ProtocolToleranceTests {
             $0["turn"] = try JSONValue(
                 json: #"""
                     {"id":"t_0009_00001","inputs":["bafdbba2-d851-4593-bc68-fdb68d9ab705"],"read":["read-message"],
-                     "retry_of":"t_0008_00001","status":{"kind":"working","label":"Searching the web","detail":"cafés"}}
+                     "retry_of":"t_0008_00001","started_at":"2026-10-12T08:41:02.000Z",
+                     "status":{"kind":"working","label":"Searching the web","detail":"cafés"}}
                     """#)
         }
         guard case .snapshot(let view) = snapshot.payload else {
@@ -127,7 +128,11 @@ struct ProtocolToleranceTests {
             turn.id == "t_0009_00001" && turn.inputs == ["bafdbba2-d851-4593-bc68-fdb68d9ab705"])
         #expect(turn.read == ["read-message"] && turn.retryOf == "t_0008_00001")
         #expect(turn.status == Status(kind: .working, label: "Searching the web", detail: "cafés"))
+        #expect(turn.startedAt == Timestamp("2026-10-12T08:41:02.000Z"))
         #expect(view.hasMore && view.next == ["next-message"])
+        var conversation = Conversation()
+        conversation.apply(snapshot)
+        #expect(conversation.turn?.startedAt == Timestamp("2026-10-12T08:41:02.000Z")?.date)
 
         let quiet = try changed("14-the-server-restarts-or-is-restored", "snapshot") {
             $0["turn"] = try JSONValue(
@@ -137,6 +142,7 @@ struct ProtocolToleranceTests {
             throw TranscriptError("not a snapshot")
         }
         #expect(early.turn?.status == nil)
+        #expect(early.turn?.startedAt == nil)
     }
 
     /// The first event of `type` in a transcript (with `outcome`, if given), changed by `change` and
