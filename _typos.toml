@@ -2,3 +2,5 @@
 [default.extend-words]
 # SF Symbols names, such as "mappin.circle".
 mappin = "mappin"
+# Core Audio Format, a recording's file extension and media type (audio/x-caf).
+caf = "caf"
