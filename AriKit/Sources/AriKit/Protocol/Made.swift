@@ -203,7 +203,7 @@ public struct MadeItem: Sendable, Equatable, Decodable, Identifiable {
 }
 
 /// A value that may not read, as from a newer server: `nil` instead of failing what holds it.
-struct Lenient<Value: Decodable & Sendable>: Decodable, Sendable {
+private struct Lenient<Value: Decodable & Sendable>: Decodable, Sendable {
     let value: Value?
 
     init(from decoder: any Decoder) throws {
