@@ -25,6 +25,8 @@ extension EnvironmentValues {
     @Entry var motionOpener = MotionOpener()
     /// Goes to the message at a position in the chat, as "What changed" links back to it.
     @Entry var openInChat: ((Int) -> Void)?
+    /// Opens a side thread over the chat, as a page Kumo made links back to where it was made.
+    @Entry var openThread: ((ThreadID) -> Void)?
     /// An attachment's bytes, from the server or the device's cache.
     @Entry var attachmentBytes: ((AttachmentID) async -> Data?)?
 }

@@ -54,6 +54,9 @@ struct MainView: View {
             if !youTab.isHidden {
                 Tab("You", systemImage: "person.crop.circle", value: .library) {
                     LibraryView(memory: memory, path: $libraryPath) { showsSettings = true }
+                        // The Made shelf's documents open in the viewer, as their cards do in a
+                        // thread.
+                        .environment(\.filesActions, FilesActions(session: session))
                 }
             }
         }
@@ -76,6 +79,8 @@ struct MainView: View {
         .environment(\.askKumo) { session.send($0) }
         // "What changed" goes back to where in the chat it happened.
         .environment(\.openInChat) { model.openingPosition = $0 }
+        // A page Kumo made goes back to the thread it was made in.
+        .environment(\.openThread) { model.openingThread = $0 }
         .task {
             if motions == nil, let client = model.client() {
                 let made = Motions(client: client)
@@ -100,6 +105,8 @@ struct MainView: View {
             .fullScreenCover(item: $debugMade) {
                 MadePageView(id: $0).environment(made)
                 .environment(\.attachmentBytes) { await session.bytes(of: $0) }
+                .environment(\.openInChat) { model.openingPosition = $0 }
+                .environment(\.openThread) { model.openingThread = $0 }
             }
             .sheet(item: $debugName) { name in
                 NameCardContent(name: name).padding(20).presentationDetents([.medium])

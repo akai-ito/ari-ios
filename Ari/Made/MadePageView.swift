@@ -139,7 +139,10 @@ struct MadePageView: View {
     @Environment(MadePages.self) private var made: MadePages?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openInChat) private var openInChat
+    @Environment(\.openThread) private var openThread
     @State private var open: Set<String>?
+    /// The name of the thread it was made in, once the server has said.
+    @State private var threadName: String?
     @State private var problem: String?
     /// Scrolled past the cover: a strip behind the buttons keeps the words from the clock.
     @State private var isPastCover = false
@@ -265,17 +268,7 @@ struct MadePageView: View {
 
     private func heading(_ detail: MadeDetail) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let openInChat {
-                Button {
-                    dismiss()
-                    openInChat(detail.made.position)
-                } label: {
-                    Label("From your chat", systemImage: "arrow.turn.up.left")
-                        .font(.footnote)
-                        .foregroundStyle(.ariTertiary)
-                }
-                .buttonStyle(.plain)
-            }
+            backLink(detail.made)
             Text(detail.made.title)
                 .font(.ariTitle)
                 .foregroundStyle(.ariText)
@@ -291,6 +284,39 @@ struct MadePageView: View {
                 .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    /// Back to where it was made: "From your thread · V&A guide", which opens the thread, or
+    /// "From your chat", at the message Kumo was answering.
+    @ViewBuilder
+    private func backLink(_ page: Made) -> some View {
+        if let thread = page.thread, let openThread {
+            Button {
+                dismiss()
+                openThread(thread)
+            } label: {
+                backLabel(
+                    ["From your thread", threadName].compactMap(\.self).joined(separator: " · "))
+            }
+            .buttonStyle(.plain)
+            .task(id: thread) { threadName = await made?.threadName(thread) }
+        } else if page.thread == nil, let openInChat {
+            Button {
+                dismiss()
+                openInChat(page.position)
+            } label: {
+                backLabel("From your chat")
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func backLabel(_ text: String) -> some View {
+        Label(text, systemImage: "arrow.turn.up.left")
+            .font(.footnote)
+            .foregroundStyle(.ariTertiary)
+            .lineLimit(1)
+            .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -615,26 +641,45 @@ struct MadeShelfTile: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Made, \(count) pages")
+        .accessibilityLabel("Made, \(count) \(count == 1 ? "thing" : "things")")
     }
 }
 
-/// Every page Kumo made, most recently changed first; each opens as it does from the chat.
+/// Everything Kumo made for you, by when it was made: its pages, and the files it showed you for
+/// review, such as a CV. A page opens as it does from the chat, with its way back to where it was
+/// made; a document opens in the viewer.
 struct MadeShelfView: View {
     @Environment(MadePages.self) private var made: MadePages?
     @State private var opened: MadeID?
+    @State private var document: ShownFile?
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if let made, !made.all.isEmpty {
-                    ForEach(made.all) { page in
-                        Button {
-                            opened = page.id
-                        } label: {
-                            MadeCardFace(page: page, showsOpen: false)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(
+                    "Guides, comparisons, plans and documents \(LeadName.current) made for you. Each opens where it was made."
+                )
+                .font(.footnote)
+                .foregroundStyle(.ariTertiary)
+                .padding(.bottom, 22)
+                if let made, made.shelfCount > 0 {
+                    ForEach(MadeReading.shelf(pages: made.all, documents: made.documents)) {
+                        group in
+                        Text(group.title)
+                            .font(.ariHeading)
+                            .foregroundStyle(.ariText)
+                            .accessibilityAddTraits(.isHeader)
+                            .padding(.bottom, 10)
+                        VStack(spacing: 0) {
+                            ForEach(group.items) { item in
+                                if item.id != group.items.first?.id {
+                                    Hairline().padding(.leading, 86)
+                                }
+                                row(item)
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .background(.ariSurface, in: .rect(cornerRadius: 20, style: .continuous))
+                        .padding(.bottom, 26)
                     }
                 } else if case .failed(let error) = made?.load {
                     Text("Couldn't reach your server: \(error.plainWords)")
@@ -654,8 +699,139 @@ struct MadeShelfView: View {
         }
         .background(.ariBackground)
         .navigationTitle("Made")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await made?.refresh() }
         .refreshable { await made?.refresh() }
         .fullScreenCover(item: $opened) { MadePageView(id: $0) }
+        .sheet(item: $document) { file in
+            DocumentViewer(file: file, version: file.latest)
+                .presentationDetents([.large])
+                .preferredColorScheme(.dark)
+                .tint(.ariText)
+        }
+    }
+
+    private func row(_ item: MadeReading.ShelfItem) -> some View {
+        Button {
+            switch item {
+            case .page(let page): opened = page.id
+            case .document(let file): document = file
+            }
+        } label: {
+            switch item {
+            case .page(let page): MadeShelfRow(page: page)
+            case .document(let file): DocumentShelfRow(file: file)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A page on the shelf: its cover, its title, what's in it and when it was made, and Kumo's latest
+/// change.
+private struct MadeShelfRow: View {
+    let page: Made
+
+    var body: some View {
+        ShelfRowFrame {
+            MadeCover(page: page, longest: 240)
+        } words: {
+            Text(page.title)
+                .font(.ariName)
+                .foregroundStyle(.ariText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text(
+                [page.summary, MadeReading.shelfDay(page.madeAt.date)].filter { !$0.isEmpty }
+                    .joined(separator: " · ")
+            )
+            .font(.caption)
+            .foregroundStyle(.ariSecondary)
+            .lineLimit(1)
+            if page.version > 1 {
+                HStack(spacing: 6) {
+                    Circle().fill(Color.ariBone).frame(width: 5, height: 5)
+                    Text(
+                        "Updated \(page.changedAt.date.formatted(.relative(presentation: .named)))")
+                }
+                .font(.caption)
+                .foregroundStyle(.ariBone)
+            }
+        }
+    }
+}
+
+/// A file Kumo showed you, on the shelf: its first page, its name, and which version.
+private struct DocumentShelfRow: View {
+    let file: ShownFile
+
+    @Environment(\.filesActions) private var actions
+    @State private var loaded: Loaded?
+
+    var body: some View {
+        let latest = file.version(file.latest)
+        ShelfRowFrame {
+            if let thumbnail = loaded?.thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                ZStack {
+                    Rectangle().fill(Color.ariField)
+                    Image(systemName: "doc.text").foregroundStyle(.ariTertiary)
+                }
+            }
+        } words: {
+            Text(((latest?.attachment.name ?? file.name) as NSString).deletingPathExtension)
+                .font(.ariName)
+                .foregroundStyle(.ariText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text(details)
+                .font(.caption)
+                .foregroundStyle(.ariSecondary)
+                .lineLimit(1)
+        }
+        .task(id: latest?.attachment.id) {
+            guard let latest, let session = actions.session,
+                let bytes = await session.bytes(of: latest.attachment.id)
+            else { return }
+            loaded = await Loaded.read(bytes, mediaType: latest.attachment.mediaType)
+        }
+    }
+
+    /// "Document · version 2 · 2 pages".
+    private var details: String {
+        var parts = ["Document"]
+        if file.versions.count > 1 { parts.append("version \(file.latest)") }
+        if let pages = loaded?.pages { parts.append(pages == 1 ? "1 page" : "\(pages) pages") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// A shelf row's shape: a small picture, the words beside it, and a chevron.
+private struct ShelfRowFrame<Picture: View, Words: View>: View {
+    @ViewBuilder let picture: () -> Picture
+    @ViewBuilder let words: () -> Words
+
+    var body: some View {
+        HStack(spacing: 16) {
+            picture()
+                .frame(width: 54, height: 66)
+                .clipShape(.rect(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.ariLine.opacity(0.7), lineWidth: 1))
+            VStack(alignment: .leading, spacing: 3) { words() }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.ariTertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

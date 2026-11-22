@@ -123,6 +123,87 @@ public enum TripReading {
         )
     }
 
+    /// The trip's Next card: the first to-do left, with the stop, leg, stay or place it books, when
+    /// and where that is, and where to book it.
+    public struct Next: Sendable, Equatable {
+        public let todo: Trip.Todo
+        /// What it books, as named in the trip, such as "The Duomo".
+        public let title: String?
+        /// "Fri 6 Nov · 16:30 · The Duomo · €25".
+        public let detail: String?
+        /// Where to book it, when Kumo found the page.
+        public let booking: URL?
+        /// How a leg goes, for its glyph.
+        public let mode: TravelMode?
+        /// What a place is, for its glyph.
+        public let category: PlaceCategory?
+        /// Whether it happens at a time that could move: a stop or a leg.
+        public let isTimed: Bool
+    }
+
+    /// What's next on the trip, or `nil` once the to-do list is done.
+    public static func next(_ trip: Trip, state: MotionState, locale: Locale = .current) -> Next? {
+        guard let todo = left(trip, state: state).first else { return nil }
+        func joined(_ parts: [String?]) -> String? {
+            let shown = parts.compactMap(\.self).filter { !$0.isEmpty }
+            return shown.isEmpty ? nil : shown.joined(separator: " · ")
+        }
+        let stops = trip.days.flatMap { day in day.stops.map { (day: day, stop: $0) } }
+        for id in todo.about {
+            if let (day, stop) = stops.first(where: { $0.stop.id == id }) {
+                let place = place(of: stop, in: trip)
+                return Next(
+                    todo: todo, title: stop.title,
+                    detail: joined([
+                        when(day.date, locale: locale), stop.time,
+                        place.map(\.name) == stop.title ? nil : place?.name, place?.price,
+                    ]),
+                    booking: stop.booking?.url ?? place?.booking?.url, mode: nil,
+                    category: place?.category, isTimed: true)
+            }
+            if let leg = trip.travel.first(where: { $0.id == id }) {
+                let route = [leg.from, leg.to].compactMap(\.self).joined(separator: " → ")
+                return Next(
+                    todo: todo, title: leg.title,
+                    detail: joined([
+                        leg.depart.map { when($0, locale: locale) }, route,
+                        minutes(from: leg.depart, to: leg.arrive).map(duration),
+                    ]),
+                    booking: leg.booking?.url, mode: leg.mode, category: nil, isTimed: true)
+            }
+            if let stay = trip.stays.first(where: { $0.id == id }) {
+                return Next(
+                    todo: todo, title: stay.name,
+                    detail: joined([
+                        stay.name, stay.checkIn.map { "in \(when($0, locale: locale))" },
+                    ]),
+                    booking: stay.booking?.url, mode: nil, category: nil, isTimed: false)
+            }
+            if let place = trip.places.first(where: { $0.id == id }) {
+                return Next(
+                    todo: todo, title: place.name,
+                    detail: joined([place.name, place.hours, place.price]),
+                    booking: place.booking?.url, mode: nil, category: place.category,
+                    isTimed: false)
+            }
+        }
+        return Next(
+            todo: todo, title: nil, detail: nil, booking: nil, mode: nil, category: nil,
+            isTimed: false)
+    }
+
+    /// The minutes between two local times, such as a train's departure and arrival.
+    private static func minutes(from start: String?, to end: String?) -> Int? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        guard let start = start.flatMap(formatter.date), let end = end.flatMap(formatter.date),
+            end > start
+        else { return nil }
+        return Int(end.timeIntervalSince(start) / 60)
+    }
+
     /// The count in words: "3 to do", or "All done" once nothing's left.
     public static func leftText(_ count: Int) -> String {
         count == 0 ? "All done" : "\(count) to do"

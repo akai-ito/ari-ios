@@ -49,7 +49,12 @@ extension LibraryView {
     static var startingPath: NavigationPath {
         var path = NavigationPath()
         #if DEBUG
-            if let shelf = DebugScript.shelf { path.append(ShelfRoute(shelf: shelf)) }
+            // The Made shelf is its own screen, not a shelf of pages the server keeps.
+            switch DebugScript.shelf {
+            case "made"?: path.append(MadeShelfRoute())
+            case let shelf?: path.append(ShelfRoute(shelf: shelf))
+            case nil: break
+            }
             if let page = DebugScript.page { path.append(page) }
         #endif
         return path
