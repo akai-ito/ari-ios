@@ -132,7 +132,7 @@ struct ShowingShapeTests {
     func actionCards() throws {
         let markdown = """
             ```ari:event
-            {"title":"Dinner with Rohan","start":"2026-11-27T19:30:00+00:00","end":"2026-11-27T21:30:00+00:00","place":"Saffron Lane"}
+            {"title":"Dinner with Theo","start":"2026-11-27T19:30:00+00:00","end":"2026-11-27T21:30:00+00:00","place":"Saffron Lane"}
             ```
 
             ```ari:desk
@@ -161,7 +161,7 @@ struct ShowingShapeTests {
             Issue.record("the blocks didn't read as action cards")
             return
         }
-        #expect(event.title == "Dinner with Rohan" && !event.onCalendar && !event.allDay)
+        #expect(event.title == "Dinner with Theo" && !event.onCalendar && !event.allDay)
         #expect(
             event.end == event.start.addingTimeInterval(2 * 3600),
             "\(event.start) \(String(describing: event.end))")
