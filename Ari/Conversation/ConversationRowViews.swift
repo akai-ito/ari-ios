@@ -20,13 +20,23 @@ extension ConversationView {
         return rows
     }
 
+    /// Whether a row is a trail, which the hands' rail carries on from.
+    static func isTrail(_ row: Row) -> Bool {
+        if case .trail = row.kind { true } else { false }
+    }
+
     @ViewBuilder
     func rowView(_ row: Row, in conversation: Conversation) -> some View {
         switch row.kind {
         case .day(let date):
             DayLabel(date: date)
         case .thread(let thread, let underAnchor):
-            ThreadLine(thread: thread, isUnderAnchor: underAnchor) {
+            // While Kumo browses in it, its line says what Kumo's doing.
+            let live = hands?.line(in: thread.id)
+            ThreadLine(
+                thread: thread, isUnderAnchor: underAnchor, detail: live?.detail,
+                live: live != nil
+            ) {
                 openedThread = OpenedThread(id: thread.id)
             }
         case .startedHere(let thread):

@@ -62,6 +62,7 @@ struct MainView: View {
         }
         .environment(memory)
         .environment(model.uploads)
+        .environment(model.hands)
         .environment(\.hidesYou, youTab.isHidden)
         .environment(motions)
         .environment(made)
@@ -211,6 +212,16 @@ struct MainView: View {
         .onChange(of: model.opening != nil || model.openingThread != nil, initial: true) {
             _, opens in
             if opens { place = .chat }
+        }
+        // Kumo needs your hand: straight into the takeover, in a window above everything.
+        .onChange(of: model.openingTakeover, initial: true) { _, opens in
+            guard opens, let hands = model.hands else { return }
+            model.openingTakeover = false
+            Task { await hands.takeOver() }
+        }
+        .onChange(of: model.hands?.showsTakeover ?? false, initial: true) {
+            guard let hands = model.hands else { return }
+            TakeoverWindow.shared.follow(hands, session: session)
         }
         #if DEBUG
             .task {

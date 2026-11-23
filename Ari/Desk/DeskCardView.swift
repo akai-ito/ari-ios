@@ -30,6 +30,9 @@ struct DeskCardView: View {
                 card: card, context: context, presentation: presentation, answer: answer)
         case .offer:
             OfferCardView(card: card, context: context, presentation: presentation, answer: answer)
+        case .commit:
+            CommitCardView(
+                card: card, context: context, presentation: presentation, answer: answer)
         default:
             UnknownCardView(card: card, presentation: presentation)
         }

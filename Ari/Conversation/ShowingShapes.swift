@@ -415,6 +415,7 @@ struct DeskItemCard: View {
     let item: ReplyShape.DeskItem
 
     @Environment(\.deskItems) private var desk
+    @Environment(Hands.self) private var hands: Hands?
 
     var body: some View {
         switch desk.card(item.card) {
@@ -424,12 +425,23 @@ struct DeskItemCard: View {
             }
             .disabled(desk.answer == nil)
         case .settled:
-            Label("Settled on your Desk", systemImage: "checkmark")
-                .font(.footnote)
-                .foregroundStyle(.ariTertiary)
+            // A one-tap card you pressed keeps its still, and says what you did.
+            if let card = hands?.commits[item.card],
+                let state = hands?.state(of: item.card, on: nil)
+            {
+                CommitCardView(card: card, state: state) { _ in }
+            } else {
+                settled
+            }
         case .loading:
             ShapePlaceholder()
         }
+    }
+
+    private var settled: some View {
+        Label("Settled on your Desk", systemImage: "checkmark")
+            .font(.footnote)
+            .foregroundStyle(.ariTertiary)
     }
 
     /// The card's corner: a draft lives in your Drafts; anything else is on the Desk too.

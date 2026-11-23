@@ -30,6 +30,9 @@ final class NotificationService: UNNotificationServiceExtension {
         content.threadIdentifier =
             notification.thread.map { "thread \($0.rawValue)" } ?? "conversation"
         if let title = notification.threadTitle { content.subtitle = title }
+        // Kumo needing your hand: what for and where as the title, the thread's name under it, and
+        // a tap opens straight on the page.
+        if let takeover = notification.takeover { content.title = takeover.title }
         var info = content.userInfo
         info["kind"] = notification.kind.rawValue
         info["message"] = notification.message?.rawValue

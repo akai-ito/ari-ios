@@ -27,6 +27,11 @@ final class AppModel {
     var openingPosition: Int?
     /// A side thread to open, from a tapped notification about it.
     var openingThread: ThreadID?
+    /// Whether to open straight into a takeover, from a tapped notification that Kumo needs your
+    /// hand.
+    var openingTakeover = false
+    /// Kumo's hands on the web, following the session's browser.
+    private(set) var hands: Hands?
     /// Whether you're reading the chat here: Ari in front, on the Chat tab. Its notifications then
     /// show no banner.
     private(set) var isLooking = false
@@ -65,6 +70,7 @@ final class AppModel {
         if let token = try? self.tokens.token(for: saved.address) {
             session = Self.session(at: saved.address, token: token)
             makeUploads(at: saved.address, token: token)
+            attachHands()
         }
     }
 
@@ -84,6 +90,7 @@ final class AppModel {
         session?.close()
         session = Self.session(at: connection.address, token: connection.token)
         makeUploads(at: connection.address, token: connection.token)
+        attachHands()
         session?.start()
         registerDevice()
         whereabouts.reset()
@@ -201,6 +208,18 @@ final class AppModel {
         group.address = nil
         session?.close()
         session = nil
+        hands = nil
+    }
+
+    /// Kumo's hands for the session, fed from its stream.
+    private func attachHands() {
+        guard let session, let client = client() else {
+            hands = nil
+            return
+        }
+        let hands = Hands(backend: client)
+        session.hands = hands
+        self.hands = hands
     }
 
     // MARK: - Notifications
