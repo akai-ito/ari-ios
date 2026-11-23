@@ -86,7 +86,15 @@ struct ConversationView: View {
 
     var body: some View {
         screen
-            .filesInChat(session: session)
+            .filesInChat(session: session, place: place)
+            // A Desk card or a name card here answers, or asks, in this conversation: in a thread,
+            // what Kumo says back comes there.
+            .transformEnvironment(\.deskItems) { items in
+                items.answer = { [session, place] card, answer in
+                    try await session.answer(card, answer, in: place)
+                }
+            }
+            .environment(\.askKumo) { [session, place] in session.send($0, in: place) }
             // The pinned line, compact lines and the trail open what's in motion over the chat.
             .environment(
                 \.motionOpener,

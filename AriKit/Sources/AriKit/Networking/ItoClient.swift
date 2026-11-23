@@ -75,12 +75,13 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     /// `POST /v0/desk/cards/{id}/answer`. The card comes back `working` while the box acts on it,
     /// and leaves the Desk once it's done.
-    public func answer(_ card: CardID, _ answer: CardAnswer) async throws(RequestError)
-        -> CardResult
+    public func answer(_ card: CardID, _ answer: CardAnswer, thread: ThreadID? = nil)
+        async throws(RequestError) -> CardResult
     {
-        try await call(
+        let path = "/v0/desk/cards/\(Self.segment(card.rawValue))/answer"
+        return try await call(
             HTTPRequest(
-                .post, "/v0/desk/cards/\(Self.segment(card.rawValue))/answer",
+                .post, thread.map { Self.path(path, ["thread": $0.rawValue]) } ?? path,
                 body: try Self.json(answer)))
     }
 

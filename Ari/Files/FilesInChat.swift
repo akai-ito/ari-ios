@@ -10,15 +10,20 @@ struct FilesActions: Equatable {
     /// own: equal to the main chat's, SwiftUI kept the main chat's actions in the thread, so its
     /// Transcript fold opened the sheet behind the thread, where it couldn't show.
     var conversation: UUID?
+    /// Where the cards are: the main chat (`nil`), or the thread a tap goes back into.
+    var place: ThreadID?
     var openTranscript: (AttachmentID, Double?) -> Void = { _, _ in }
 
     static func == (a: FilesActions, b: FilesActions) -> Bool {
-        a.session === b.session && a.conversation == b.conversation
+        a.session === b.session && a.conversation == b.conversation && a.place == b.place
     }
 
-    /// Sends a tap's message, as if you'd typed its words.
+    /// The conversation the cards are in, for what you've already tapped on them.
+    var shownConversation: Conversation? { session?.conversation(in: place) }
+
+    /// Sends a tap's message, as if you'd typed its words, into the conversation the card is in.
     func send(_ tap: YourTap, saying words: String) {
-        session?.send(tap.message(saying: words))
+        session?.send(tap, saying: words, in: place)
     }
 }
 
@@ -34,15 +39,16 @@ struct TranscriptOpening: Identifiable, Equatable {
 }
 
 extension View {
-    /// Files, recordings and Kumo's proposed changes in the chat: a moment Kumo quotes opens the
-    /// transcript there, and a tap goes as your message.
-    func filesInChat(session: Session) -> some View {
-        modifier(FilesInChat(session: session))
+    /// Files, recordings and Kumo's proposed changes in the chat or a thread (`place`): a moment
+    /// Kumo quotes opens the transcript there, and a tap goes as your message, into the same place.
+    func filesInChat(session: Session, place: ThreadID?) -> some View {
+        modifier(FilesInChat(session: session, place: place))
     }
 }
 
 private struct FilesInChat: ViewModifier {
     let session: Session
+    let place: ThreadID?
 
     @State private var transcript: TranscriptOpening?
     @State private var conversation = UUID()
@@ -54,7 +60,8 @@ private struct FilesInChat: ViewModifier {
         content
             .environment(
                 \.filesActions,
-                FilesActions(session: session, conversation: conversation) { recording, at in
+                FilesActions(session: session, conversation: conversation, place: place) {
+                    recording, at in
                     transcript = TranscriptOpening(recording: recording, at: at)
                 }
             )

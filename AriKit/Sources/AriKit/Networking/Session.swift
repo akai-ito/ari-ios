@@ -311,6 +311,15 @@ public final class Session {
         return id
     }
 
+    /// You tapped a button on one of Kumo's cards, such as a proposed change or Use in draft: your
+    /// message, its words and then a block saying exactly what you tapped, goes into the
+    /// conversation the card is in, the main chat (`nil`) or its thread, so Kumo acts and answers
+    /// there, however long after the card came.
+    @discardableResult
+    public func send(_ tap: YourTap, saying words: String, in place: ThreadID?) -> MessageID? {
+        send(tap.message(saying: words), in: place)
+    }
+
     /// What your reply quotes: a line of the message, as the server writes it.
     private func quote(of message: MessageID, in thread: ThreadID) -> Quote? {
         guard let entry = threadConversations[thread]?[message] else { return nil }
@@ -648,9 +657,14 @@ public final class Session {
     // MARK: - The Desk
 
     /// You answered a card: with one of its options, the times you ticked, or words. It shows the
-    /// box at work on it until the Desk says it's done.
-    public func answer(_ card: CardID, _ answer: CardAnswer) async throws(RequestError) {
-        let result = try await client.answer(card, answer)
+    /// box at work on it until the Desk says it's done. Answered on its card in a thread (`place`),
+    /// anything Kumo says about it goes there.
+    public func answer(_ card: CardID, _ answer: CardAnswer, in place: ThreadID? = nil)
+        async throws(RequestError)
+    {
+        // A thread you're starting here has no name on the server yet, so it can't be named.
+        let thread = resolved(place).flatMap { drafts[$0] == nil ? $0 : nil }
+        let result = try await client.answer(card, answer, thread: thread)
         desk = desk?.replacing(card: result.card)
     }
 

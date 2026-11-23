@@ -14,7 +14,8 @@ struct ProposalsView: View {
     @AppStorage("skippedProposals") private var skippedText = ""
 
     var body: some View {
-        let conversation = actions.session?.conversation
+        // Your taps on them are in the same conversation as the card: a thread's, in a thread.
+        let conversation = actions.shownConversation
         let decisions = message.flatMap { conversation?.decisions(on: $0) } ?? [:]
         let done = proposals.items.count { decisions[$0.id]?.choice == .accept }
         VStack(alignment: .leading, spacing: 0) {

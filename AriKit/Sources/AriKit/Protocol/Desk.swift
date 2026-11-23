@@ -89,6 +89,19 @@ public struct Desk: Sendable, Equatable, Decodable {
         with(plans: plans.filter { $0.id != plan })
     }
 
+    /// What else in Coming up shares some of an item's time, such as a call Kumo is holding under
+    /// a walk it planned, soonest first. All-day items overlap nothing.
+    public func overlapping(_ item: CalendarItem) -> [CalendarItem] {
+        guard let start = item.start.instant, let end = item.end.instant else { return [] }
+        let others: [(start: Date, item: CalendarItem)] = comingUp.compactMap { other in
+            guard other.id != item.id, let otherStart = other.start.instant,
+                let otherEnd = other.end.instant, otherStart < end, start < otherEnd
+            else { return nil }
+            return (otherStart, other)
+        }
+        return others.sorted { $0.start < $1.start }.map(\.item)
+    }
+
     enum CodingKeys: String, CodingKey {
         case line, ambient, plans, waiting, handled
         case comingUp = "coming_up"
@@ -486,12 +499,14 @@ public struct CalendarItem: Sendable, Equatable, Decodable, Identifiable {
     public let status: CalendarStatus?
     /// Only on Kumo's guesses at your day: what Kumo thinks you'll be doing, and why.
     public let guess: Guess?
+    /// Only on Kumo's blocks it put over something else on purpose: why, and how you'll settle it.
+    public let overlap: Overlap?
 
     public init(
         id: CalendarItemID, uid: String, title: String, start: When, end: When,
         allDay: Bool = false, location: String? = nil, calendar: CalendarName,
         leaveAt: Timestamp? = nil, motion: MotionID? = nil, status: CalendarStatus? = nil,
-        guess: Guess? = nil
+        guess: Guess? = nil, overlap: Overlap? = nil
     ) {
         self.id = id
         self.uid = uid
@@ -505,10 +520,11 @@ public struct CalendarItem: Sendable, Equatable, Decodable, Identifiable {
         self.motion = motion
         self.status = status
         self.guess = guess
+        self.overlap = overlap
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, uid, title, start, end, location, calendar, motion, status, guess
+        case id, uid, title, start, end, location, calendar, motion, status, guess, overlap
         case allDay = "all_day"
         case leaveAt = "leave_at"
     }
@@ -524,6 +540,17 @@ public struct Guess: Sendable, Equatable, Decodable {
     public init(activity: Activity, why: String) {
         self.activity = activity
         self.why = why
+    }
+}
+
+/// Why one of Kumo's blocks overlaps something on purpose, such as a soft plan beside a call that's
+/// only held, and how you'll settle it. Each keeps its own status: a hold stays a hold.
+public struct Overlap: Sendable, Equatable, Decodable {
+    /// In a line, such as "Both stand until Dana confirms the call; the walk gives way if it's on."
+    public let reason: String
+
+    public init(reason: String) {
+        self.reason = reason
     }
 }
 
