@@ -115,6 +115,16 @@ enum DayReading {
         max(1, Int((item.end.date.timeIntervalSince(item.start.date) / 86_400).rounded()))
     }
 
+    /// Items by name, for a line: "Call with Dana", "Call and Lunch", or "Call and 2 more".
+    static func names(_ items: [CalendarItem]) -> String {
+        switch items.count {
+        case 0: ""
+        case 1: items[0].title
+        case 2: "\(items[0].title) and \(items[1].title)"
+        default: "\(items[0].title) and \(items.count - 1) more"
+        }
+    }
+
     /// The kinds of time Not right? offers.
     static let corrections: [Activity] = [.working, .building, .people, .chilling]
 

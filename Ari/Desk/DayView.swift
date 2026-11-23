@@ -179,6 +179,7 @@ struct DayView: View {
                     .foregroundStyle(.ariTertiary)
                     .layoutPriority(1)
                 tag("planned")
+                overlapTag(item)
             case .guess(let item):
                 Text(item.title)
                     .font(.subheadline)
@@ -195,6 +196,7 @@ struct DayView: View {
                     .padding(.leading, 7)
                     .layoutPriority(1)
                 tag("guess")
+                overlapTag(item)
             case .checkIn(let plan):
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "bell")
@@ -213,6 +215,35 @@ struct DayView: View {
 
     private func tag(_ text: String) -> some View {
         Text("  ·  \(text)").font(.footnote).foregroundStyle(.ariTertiary).lineLimit(1)
+    }
+
+    /// What else shares one of Kumo's blocks' time, such as the call it's holding under a walk.
+    private func overlapping(_ item: CalendarItem) -> [CalendarItem] {
+        session.desk?.overlapping(item) ?? []
+    }
+
+    /// "overlaps Call with Dana", beside the block's own tag, in the dusk of a thing to settle.
+    @ViewBuilder
+    private func overlapTag(_ item: CalendarItem) -> some View {
+        let others = overlapping(item)
+        if !others.isEmpty {
+            Text("  ·  overlaps \(DayReading.names(others))")
+                .font(.footnote)
+                .foregroundStyle(.ariDusk)
+                .lineLimit(1)
+        }
+    }
+
+    /// Unfolded: what it overlaps, and why Kumo meant it to, when it did.
+    @ViewBuilder
+    private func overlapWords(_ item: CalendarItem) -> some View {
+        let others = overlapping(item)
+        if !others.isEmpty {
+            let names = DayReading.names(others)
+            quiet(
+                item.overlap.map { "Overlaps \(names) on purpose: \($0.reason)" }
+                    ?? "Overlaps \(names).")
+        }
     }
 
     /// Where it is, or when to leave for it.
@@ -246,6 +277,7 @@ struct DayView: View {
             EmptyView()
         case .guess(let item):
             if let why = item.guess?.why { quiet(why) }
+            overlapWords(item)
             if sending.isSending {
                 DeskWorkingLine(text: "Telling \(LeadName.current)…")
             } else if correcting == entry.id {
@@ -261,6 +293,7 @@ struct DayView: View {
             }
         case .block(let item):
             quiet(blockWords(item))
+            overlapWords(item)
             if sending.key == entry.id {
                 DeskWorkingLine(text: "Removing it…")
             } else {
