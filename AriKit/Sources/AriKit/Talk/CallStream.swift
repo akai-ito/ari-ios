@@ -93,6 +93,12 @@ public protocol WebSocketChannel: Sendable {
     /// The next message; throws once the socket closes, with how.
     func receive() async throws -> WebSocketMessage
     func close(code: Int)
+    /// Pings the server and returns once it answers; throws when it can't.
+    func ping() async throws
+}
+
+extension WebSocketChannel {
+    public func ping() async throws {}
 }
 
 public enum WebSocketMessage: Sendable, Equatable {
@@ -277,6 +283,14 @@ public final class URLSessionWebSocketChannel: WebSocketChannel, @unchecked Send
             }
             let code = task.closeCode.rawValue
             throw code == 0 ? error : WebSocketClosed(code: code)
+        }
+    }
+
+    public func ping() async throws {
+        try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, any Error>) in
+            task.sendPing { error in
+                if let error { done.resume(throwing: error) } else { done.resume() }
+            }
         }
     }
 

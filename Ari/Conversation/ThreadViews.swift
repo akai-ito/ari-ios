@@ -46,6 +46,8 @@ struct ThreadLine: View {
     let isUnderAnchor: Bool
     /// What it says in place of its replies, such as how its recording is getting on.
     var detail: String?
+    /// Whether Kumo's hands are at work in it: its ring becomes the rail's live dot.
+    var live = false
     let open: () -> Void
 
     var body: some View {
@@ -76,13 +78,20 @@ struct ThreadLine: View {
 
     private var quiet: some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
-            if thread.isOpen { OpenRing() }
+            if live {
+                LiveDot().alignmentGuide(.firstTextBaseline) { $0[.bottom] }
+            } else if thread.isOpen {
+                OpenRing()
+            }
             if !isUnderAnchor {
                 Text(thread.shownTitle).foregroundStyle(
                     thread.isOpen ? Color.ariText : .ariSecondary)
                 Text("·").foregroundStyle(.ariTertiary)
             }
-            Text(replies).foregroundStyle(isUnderAnchor ? Color.ariSecondary : .ariTertiary)
+            Text(replies)
+                .foregroundStyle(
+                    live || isUnderAnchor ? Color.ariSecondary : .ariTertiary
+                )
                 .monospacedDigit()
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
@@ -118,6 +127,19 @@ struct ThreadLine: View {
         let state = thread.isOpen ? "open thread" : "thread, done"
         let news = thread.news.map { ", new: \($0.text)" } ?? ""
         return "\(thread.shownTitle), \(state), \(replies)\(news)"
+    }
+}
+
+/// The rail's live dot, in bone, with a soft halo: Kumo's hands at work in a thread.
+struct LiveDot: View {
+    var size: CGFloat = 7
+
+    var body: some View {
+        Circle()
+            .fill(Color.ariBone)
+            .frame(width: size, height: size)
+            .background(Circle().fill(Color.ariBone.opacity(0.18)).padding(-3))
+            .accessibilityHidden(true)
     }
 }
 

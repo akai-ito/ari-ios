@@ -83,6 +83,8 @@ struct ConversationView: View {
     @Environment(Voices.self) var voices: Voices?
     /// Recordings going up, for a thread's header and their cards.
     @Environment(BigUploads.self) var bigUploads: BigUploads?
+    /// Kumo's hands on the web: a task's live line in its thread, and in its thread line here.
+    @Environment(Hands.self) var hands: Hands?
 
     var body: some View {
         screen
@@ -181,6 +183,16 @@ struct ConversationView: View {
                         .padding(.horizontal, 20)
                         .frame(maxWidth: .infinity)
                         .id(row.id)
+                }
+                // Kumo's hands at work here: the times it needed you, its live line, a card.
+                if lastShown == nil {
+                    HandsTail(
+                        session: session, place: place,
+                        followsTrail: shown.last.map(Self.isTrail) ?? false
+                    )
+                    .frame(maxWidth: Rhythm.column, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity)
                 }
                 // The end, exactly: what following and the pill scroll to.
                 Color.clear.frame(maxWidth: .infinity).frame(height: 1).id(Self.end)
@@ -289,6 +301,7 @@ struct ConversationView: View {
             .environment(talk)
             .environment(voices)
             .environment(bigUploads)
+            .environment(hands)
         }
         .sheet(item: $moving) { request in
             moveSheet(request)

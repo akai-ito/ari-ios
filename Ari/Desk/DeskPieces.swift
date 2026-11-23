@@ -178,6 +178,7 @@ enum CardLook {
         case .times: "Times"
         case .question: "Question"
         case .offer: "Offer"
+        case .commit: "Ready for your tap"
         default: "Waiting"
         }
     }
@@ -189,6 +190,7 @@ enum CardLook {
         case .times: "clock"
         case .question: "questionmark"
         case .offer: "plus.circle"
+        case .commit: "hand.tap"
         default: "circle.dashed"
         }
     }

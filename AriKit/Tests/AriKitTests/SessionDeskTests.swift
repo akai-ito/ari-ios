@@ -116,6 +116,92 @@ struct SessionDeskTests {
         try await inMain.value
     }
 
+    @Test("a one-tap card answers in its task's thread, wherever you tap it, and stays drawn")
+    func commitCardThread() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        let desk = #"{"coming_up":[],"waiting":[\#(Self.commit("k_9", thread: "h_table"))]}"#
+        try await bench.open(with: Self.snapshot("e_10", desk: desk))
+        let session = bench.session
+        let hands = Hands(backend: FakeHands())
+        session.hands = hands
+        #expect(session.desk?.waiting.first?.commit?.summary == "2 people · Sat 19:30 · no deposit")
+        #expect(hands.state(of: "k_9", on: session.desk) == .ready)
+
+        // Tapped on the Desk, with no place: still its thread.
+        let booking = Task { try await session.answer("k_9", CardAnswer(option: "Book"), in: nil) }
+        let request = try await bench.nextRequest()
+        #expect(request.path == "/v0/desk/cards/k_9/answer?thread=h_table")
+        #expect(
+            try request.body.map { try JSONValue(data: $0) }
+                == JSONValue(json: #"{"option":"Book"}"#))
+        try await bench.server.answer(
+            202, json: #"{"card":\#(Self.commit("k_9", thread: "h_table", working: true))}"#)
+        try await booking.value
+        #expect(hands.state(of: "k_9", on: session.desk) == .booking)
+
+        // Off the Desk: drawn from what Ari kept, as you pressed it.
+        try await bench.push(
+            #"{"id":"e_11","type":"desk.changed","at":"2026-11-23T16:46:00.000Z","desk":{"coming_up":[],"waiting":[]}}"#
+        )
+        if case .pressed = hands.state(of: "k_9", on: session.desk) {
+        } else {
+            Issue.record("a pressed card stays drawn as pressed")
+        }
+        #expect(hands.commits["k_9"]?.commit?.site == "Tablewise")
+    }
+
+    @Test("Change… on a one-tap card goes to its thread too, and presses nothing")
+    func commitCardChange() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        let desk = #"{"coming_up":[],"waiting":[\#(Self.commit("k_9", thread: "h_table"))]}"#
+        try await bench.open(with: Self.snapshot("e_10", desk: desk))
+        let session = bench.session
+        let hands = Hands(backend: FakeHands())
+        session.hands = hands
+        let changing = Task {
+            try await session.answer("k_9", CardAnswer(text: "Earlier if they can"), in: nil)
+        }
+        #expect(try await bench.nextRequest().path == "/v0/desk/cards/k_9/answer?thread=h_table")
+        try await bench.server.answer(
+            202, json: #"{"card":\#(Self.commit("k_9", thread: "h_table", working: true))}"#)
+        try await changing.value
+        #expect(hands.pressed.isEmpty)
+    }
+
+    @Test("the browser follows the stream: its line, a hand back, and a snapshot without it")
+    func browserChanged() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        try await bench.open(
+            with: Self.snapshot(
+                "e_10",
+                browser:
+                    #"{"state":"browsing","line":"On Tablewise: choosing Sat 19:30 · step 6","thread":"h_table","site":"Tablewise","doing":"choosing Sat 19:30","step":6}"#
+            ))
+        let session = bench.session
+        #expect(session.browser.state == .browsing)
+        let hands = Hands(backend: FakeHands())
+        session.hands = hands
+        #expect(hands.line(in: "h_table")?.text == "On Tablewise · choosing Sat 19:30 · step 6")
+
+        try await bench.push(
+            #"{"id":"e_11","type":"browser.changed","at":"2026-11-23T17:20:00.000Z","browser":{"state":"yours","thread":"h_table","site":"Tablewise","need":{"kind":"login","why":"Log in, then hand back"},"lease":{"until":"2026-11-23T17:30:00.000Z"}}}"#
+        )
+        #expect(hands.line(in: "h_table")?.kind == .yours)
+        try await bench.push(
+            #"{"id":"e_12","type":"browser.changed","at":"2026-11-23T17:21:00.000Z","browser":{"state":"browsing","thread":"h_table","site":"Tablewise","doing":"filling in the checkout","step":7}}"#
+        )
+        #expect(hands.handoffs(in: "h_table").map(\.asked) == ["Needed you to log in"])
+        #expect(hands.line(in: "h_table")?.detail == "Back on it · step 7")
+        #expect(session.conversation.cursor == "e_12")
+
+        // The browser's changes are compacted: none in a snapshot means idle.
+        try await bench.push(Self.snapshot("e_20"))
+        #expect(session.browser == .idle && hands.line(in: "h_table") == nil)
+    }
+
     @Test("moving and cancelling Kumo's plans show at once; today's work is a request")
     func plans() async throws {
         let bench = try Bench()
@@ -415,11 +501,12 @@ struct SessionDeskTests {
 
     private static func snapshot(
         _ id: String, messages: [String] = [], desk: String = #"{"coming_up":[],"waiting":[]}"#,
-        onboarding: String? = nil
+        onboarding: String? = nil, browser: String? = nil
     ) -> String {
         let onboarding = onboarding.map { #","onboarding":\#($0)"# } ?? ""
+        let browser = browser.map { #","browser":\#($0)"# } ?? ""
         return
-            #"{"id":"\#(id)","type":"snapshot","at":"2026-11-10T08:00:00.000Z","reason":"no_cursor","messages":[\#(messages.joined(separator: ","))],"has_more":false,"steps":[],"asks":[],"calls":[],"threads":[],"turn":null,"next":[],"desk":\#(desk)\#(onboarding)}"#
+            #"{"id":"\#(id)","type":"snapshot","at":"2026-11-10T08:00:00.000Z","reason":"no_cursor","messages":[\#(messages.joined(separator: ","))],"has_more":false,"steps":[],"asks":[],"calls":[],"threads":[],"turn":null,"next":[],"desk":\#(desk)\#(onboarding)\#(browser)}"#
     }
 
     private static func message(_ id: String, _ text: String, _ position: Int) -> String {
@@ -441,6 +528,12 @@ struct SessionDeskTests {
 
     private static func plan(_ id: String, at: String) -> String {
         #"{"id":"\#(id)","at":"\#(at)","what":"Ask how the run went","why":"You wanted to talk it through.","by":"kumo","source":{"kind":"chat","title":"Chat"},"set_at":"2026-11-10T09:00:00.000Z"}"#
+    }
+
+    private static func commit(_ id: String, thread: String, working: Bool = false) -> String {
+        let state = working ? #","state":"working","answer":{"option":"Book"}"# : ""
+        return
+            #"{"id":"\#(id)","kind":"commit","at":"2026-11-23T16:45:00.000Z","title":"Kiln","options":[{"label":"Change…"},{"label":"Book","acts":true}],"allows_text":true\#(state),"commit":{"site":"Tablewise","url":"https://www.tablewise.example/kiln/confirm","button":"Book now","summary":"2 people · Sat 19:30 · no deposit","details":[{"label":"Table","value":"Window counter"}],"screenshot":"a_shot","thread":"\#(thread)"}}"#
     }
 
     private static func question(_ id: String, working: Bool = false) -> String {

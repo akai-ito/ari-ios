@@ -55,8 +55,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let done = Handler(completionHandler)
+        // Kumo needing your hand always shows: it's waiting on you.
+        let needsYou =
+            notification.request.content.userInfo["kind"] as? String
+            == NotificationKind.takeover.rawValue
         Task { @MainActor in
-            done.call(model.isLooking ? [] : [.banner, .sound, .list])
+            done.call(model.isLooking && !needsYou ? [] : [.banner, .sound, .list])
         }
     }
 
@@ -75,9 +79,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             options: info["options"] as? [String] ?? [])
         let message = (info["message"] as? String).map(MessageID.init(rawValue:))
         let thread = (info["thread"] as? String).map(ThreadID.init(rawValue:))
+        let takeover = info["kind"] as? String == NotificationKind.takeover.rawValue
         let done = Handler(completionHandler)
         Task { @MainActor in
-            if let answer {
+            if takeover {
+                // Straight into the takeover, over the task's thread, where you land after.
+                if let thread { model.openingThread = thread }
+                model.openingTakeover = true
+            } else if let answer {
                 // An ask in a thread waits there, so the answer goes there too.
                 await model.answer(fromNotification: answer, in: thread)
             } else if let thread {
