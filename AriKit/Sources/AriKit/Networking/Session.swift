@@ -56,6 +56,15 @@ public final class Session {
     @ObservationIgnored public weak var motions: Motions?
     /// The pages Kumo made, kept current from the stream.
     @ObservationIgnored public weak var made: MadePages?
+    /// Kumo's browser, as the snapshot and `browser.changed` last said.
+    public private(set) var browser = Browser.idle
+    /// Kumo's hands, which follow the browser from the same stream.
+    @ObservationIgnored public weak var hands: Hands? {
+        didSet {
+            hands?.follow(browser)
+            hands?.follow(desk: desk)
+        }
+    }
 
     public enum Link: Equatable, Sendable {
         /// The first attempt since ``start()``.
@@ -662,10 +671,19 @@ public final class Session {
     public func answer(_ card: CardID, _ answer: CardAnswer, in place: ThreadID? = nil)
         async throws(RequestError)
     {
+        let waiting = desk?.waiting.first { $0.id == card }
+        // A one-tap card answers in the thread its task lives in, wherever you tapped it: Kumo
+        // tells you there how pressing went.
+        let place = waiting?.commit?.thread ?? place
         // A thread you're starting here has no name on the server yet, so it can't be named.
         let thread = resolved(place).flatMap { drafts[$0] == nil ? $0 : nil }
         let result = try await client.answer(card, answer, thread: thread)
         desk = desk?.replacing(card: result.card)
+        if let waiting, waiting.kind == .commit, let option = answer.option,
+            waiting.options.contains(where: { $0.label == option && $0.acts })
+        {
+            hands?.pressing(waiting)
+        }
     }
 
     /// You answered one of Kumo's guesses at your day: it shows as yours at once, no longer a
@@ -883,6 +901,10 @@ public final class Session {
         switch event.payload {
         case .snapshot(let snapshot):
             desk = snapshot.desk
+            hands?.follow(desk: snapshot.desk)
+            // The browser's changes are compacted: no browser in the snapshot means it's idle.
+            browser = snapshot.browser ?? .idle
+            hands?.follow(browser)
             onboarding = snapshot.onboarding
             problems = snapshot.problems ?? []
             wantsSnapshot = false
@@ -892,6 +914,10 @@ public final class Session {
             problems = changed.problems
         case .deskChanged(let changed):
             desk = changed.desk
+            hands?.follow(desk: changed.desk)
+        case .browserChanged(let changed):
+            browser = changed.browser
+            hands?.follow(changed.browser)
         case .recordingChanged(let changed):
             recordings[changed.recording.attachment] = changed.recording
         case .onboardingChanged(let changed):

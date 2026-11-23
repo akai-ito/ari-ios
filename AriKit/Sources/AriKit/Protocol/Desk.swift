@@ -268,6 +268,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
     public let times: TimesCard?
     public let question: QuestionCard?
     public let offer: OfferCard?
+    public let commit: CommitCard?
 
     public init(
         id: CardID, kind: CardKind, motion: MotionID? = nil, at: Timestamp,
@@ -275,7 +276,7 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         allowsText: Bool = false,
         state: CardState? = nil, answer: CardAnswer? = nil, draft: DraftCard? = nil,
         invite: InviteCard? = nil, times: TimesCard? = nil, question: QuestionCard? = nil,
-        offer: OfferCard? = nil
+        offer: OfferCard? = nil, commit: CommitCard? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -292,11 +293,12 @@ public struct DeskCard: Sendable, Equatable, Decodable, Identifiable {
         self.times = times
         self.question = question
         self.offer = offer
+        self.commit = commit
     }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, motion, at, title, options, state, answer, draft, invite, times, question
-        case offer
+        case offer, commit
         case allowsText = "allows_text"
         case changedAt = "changed_at"
     }
@@ -325,7 +327,9 @@ public struct CardKind: OpenValue {
     public static let question = CardKind(rawValue: "question")
     /// A capability Kumo offers to switch on. You always confirm.
     public static let offer = CardKind(rawValue: "offer")
-    public static let known = [draft, invite, times, question, offer]
+    /// A free booking or form Kumo has ready on a site, for your one tap.
+    public static let commit = CardKind(rawValue: "commit")
+    public static let known = [draft, invite, times, question, offer, commit]
 }
 
 /// A reply Kumo wrote into your Drafts folder. Kumo never sends it: you open it in Mail and send it

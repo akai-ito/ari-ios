@@ -14,7 +14,9 @@ public struct NotificationKind: OpenValue {
     public static let ask = NotificationKind(rawValue: "ask")
     /// Kumo posted outside a turn.
     public static let post = NotificationKind(rawValue: "post")
-    public static let known = [reply, failed, ask, post]
+    /// Kumo's browser needs your hand: a tap opens straight into a takeover.
+    public static let takeover = NotificationKind(rawValue: "takeover")
+    public static let known = [reply, failed, ask, post, takeover]
 }
 
 /// What a notification shows, once the notification service extension has decrypted it.
@@ -31,6 +33,18 @@ public struct PushNotification: Sendable, Equatable, Decodable {
     public var thread: ThreadID?
     /// The thread's name, for the notification's subtitle.
     public var threadTitle: String?
+    /// `takeover`: what Kumo needs your hand for, and on which site.
+    public var takeover: Takeover?
+
+    public struct Takeover: Sendable, Equatable, Decodable {
+        public var need: BrowserNeedKind
+        public var site: String?
+
+        public init(need: BrowserNeedKind, site: String? = nil) {
+            self.need = need
+            self.site = site
+        }
+    }
 
     public struct AskSummary: Sendable, Equatable, Decodable {
         public var id: AskID
@@ -51,8 +65,25 @@ public struct PushNotification: Sendable, Equatable, Decodable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case kind, text, turn, message, ask, thread
+        case kind, text, turn, message, ask, thread, takeover
         case threadTitle = "thread_title"
+    }
+}
+
+extension PushNotification.Takeover {
+    /// The notification's title: what Kumo needs, and where, such as "Kumo needs you to log into
+    /// Railway". The thread's name goes under it, and Kumo's words below.
+    public var title: String {
+        let lead = LeadName.current
+        let on = site.map { " on \($0)" } ?? ""
+        return switch need.shown {
+        case .login:
+            site.map { "\(lead) needs you to log into \($0)" } ?? "\(lead) needs you to log in"
+        case .code: "\(lead) needs a code from you" + (site.map { " for \($0)" } ?? "")
+        case .captcha: "\(lead) needs you past a check" + on
+        case .payment: "\(lead) needs you to press Pay" + on
+        default: "\(lead) needs your hand" + on
+        }
     }
 }
 

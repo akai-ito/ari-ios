@@ -46,6 +46,7 @@ public struct Event: Sendable, Equatable, Decodable {
         case onboardingChanged(OnboardingChanged)
         case problemsChanged(ProblemsChanged)
         case recordingChanged(RecordingChanged)
+        case browserChanged(BrowserChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -60,6 +61,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
         "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
         "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
+        "browser.changed",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -109,6 +111,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "onboarding.changed": .onboardingChanged(try OnboardingChanged(from: decoder))
             case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))
             case "recording.changed": .recordingChanged(try RecordingChanged(from: decoder))
+            case "browser.changed": .browserChanged(try BrowserChanged(from: decoder))
             default: .unknown
             }
     }
@@ -143,10 +146,12 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let onboarding: Onboarding?
     /// What's wrong on the server, while anything is.
     public let problems: [ServerProblem]?
+    /// Kumo's browser, while it's doing something; absent while it's idle.
+    public let browser: Browser?
 
     enum CodingKeys: String, CodingKey {
         case at, reason, messages, steps, asks, calls, threads, turn, next, desk, onboarding
-        case problems
+        case problems, browser
         case hasMore = "has_more"
     }
 }

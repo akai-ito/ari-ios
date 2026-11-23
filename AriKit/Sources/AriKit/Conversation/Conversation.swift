@@ -296,7 +296,7 @@ extension Conversation {
         case .madeCreated, .madeChanged, .madeState, .madeRemoved:
             break
         // The Desk, getting started, the server's problems and recordings are the session's.
-        case .deskChanged, .onboardingChanged, .problemsChanged, .recordingChanged:
+        case .deskChanged, .onboardingChanged, .problemsChanged, .recordingChanged, .browserChanged:
             break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.
