@@ -87,6 +87,35 @@ struct SessionDeskTests {
         #expect(session.desk?.waiting.first?.state == .working)
     }
 
+    @Test("a card answered in a thread names the thread, so Kumo says what follows there")
+    func answerCardInThread() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        let desk =
+            #"{"coming_up":[],"waiting":[\#(Self.question("k_1")),\#(Self.question("k_2"))]}"#
+        try await bench.open(with: Self.snapshot("e_10", desk: desk))
+        let session = bench.session
+
+        let inThread = Task {
+            try await session.answer("k_1", CardAnswer(option: "Right"), in: "h_0001_12800")
+        }
+        let threaded = try await bench.nextRequest()
+        #expect(threaded.path == "/v0/desk/cards/k_1/answer?thread=h_0001_12800")
+        #expect(
+            try threaded.body.map { try JSONValue(data: $0) }
+                == JSONValue(json: #"{"option":"Right"}"#))
+        try await bench.server.answer(
+            202, json: #"{"card":\#(Self.question("k_1", working: true))}"#)
+        try await inThread.value
+
+        // In the main chat, or on the Desk, it names none.
+        let inMain = Task { try await session.answer("k_2", CardAnswer(option: "Right"), in: nil) }
+        #expect(try await bench.nextRequest().path == "/v0/desk/cards/k_2/answer")
+        try await bench.server.answer(
+            202, json: #"{"card":\#(Self.question("k_2", working: true))}"#)
+        try await inMain.value
+    }
+
     @Test("moving and cancelling Kumo's plans show at once; today's work is a request")
     func plans() async throws {
         let bench = try Bench()
