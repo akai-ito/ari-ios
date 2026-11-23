@@ -144,9 +144,9 @@ struct HandsTests {
         #expect(hands.showsTakeover)
         #expect(hands.takeover?.phase == .holding)
         #expect(hands.takeover?.need == Self.login)
-        hands.send(.text("divy@home.example"))
+        hands.send(.text("maya@home.example"))
         try await Task.sleep(for: .milliseconds(60))
-        #expect(socket.sent == [.text(BrowserInput.text("divy@home.example").json)])
+        #expect(socket.sent == [.text(BrowserInput.text("maya@home.example").json)])
 
         // Leave it with me: the screen goes, the page stays yours.
         hands.leave()
@@ -278,8 +278,8 @@ struct HandsTests {
     @Test("typing, deleting, pasting and fixing a letter mid-word each send what the page needs")
     func typing() {
         #expect(TypedEdit.inputs(from: "", to: "d") == [.text("d")])
-        #expect(TypedEdit.inputs(from: "div", to: "divy@home.example") == [.text("y@home.example")])
-        #expect(TypedEdit.inputs(from: "divy", to: "di") == [.key(.backspace), .key(.backspace)])
+        #expect(TypedEdit.inputs(from: "may", to: "maya@home.example") == [.text("a@home.example")])
+        #expect(TypedEdit.inputs(from: "maya", to: "ma") == [.key(.backspace), .key(.backspace)])
         // A whole field replaced, as autofill does.
         #expect(
             TypedEdit.inputs(from: "dvy", to: "sam")
@@ -299,8 +299,8 @@ struct HandsTests {
         var empty = FieldMirror(field: FocusedField(kind: .email, length: 0))
         let typed = empty.change(to: "d")
         #expect(typed == [.fill("d")])
-        let filled = empty.change(to: "divy@home.example")
-        #expect(filled == [.fill("divy@home.example")])
+        let filled = empty.change(to: "maya@home.example")
+        #expect(filled == [.fill("maya@home.example")])
         let cleared = empty.change(to: "")
         #expect(cleared == [.fill("")])
         let nothing = empty.deleteWhenEmpty()
