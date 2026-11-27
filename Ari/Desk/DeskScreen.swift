@@ -32,7 +32,10 @@ struct DeskScreen: View {
         .background { DayLight().ignoresSafeArea() }
         .overlay(alignment: .top) {
             Group {
-                if let ambient = session.desk?.ambient {
+                // Offline, the note that this is the copy Ari kept takes the weather's place.
+                if offline.isOffline {
+                    OfflineLine(capsule: true)
+                } else if let ambient = session.desk?.ambient {
                     AmbientLine(ambient: ambient)
                 } else if offersWeather {
                     WeatherOffer(allow: model.whereabouts.ask, decline: model.declineWeather)
@@ -145,7 +148,6 @@ struct DeskScreen: View {
                 .accessibilityHint("Shows what's wrong, and how to fix it")
                 .transition(.opacity)
             }
-            OfflineLine()
         }
         .frame(maxWidth: 320)
     }

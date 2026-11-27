@@ -52,7 +52,11 @@ struct CardShell<Content: View>: View {
     let kind: CardKind
     var context: String?
     let presentation: CardPresentation
+    /// Whether it has anything to answer, which waits while offline.
+    var answers = true
     @ViewBuilder let content: Content
+
+    @Environment(\.offline) private var offline
 
     var body: some View {
         switch presentation {
@@ -72,14 +76,29 @@ struct CardShell<Content: View>: View {
                     }
                 }
                 content
+                waiting
             }
             .deskCard()
         case .inline:
             HStack(alignment: .top, spacing: 12) {
                 CardSymbol(kind: kind)
-                VStack(alignment: .leading, spacing: 10) { content }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 10) {
+                    content
+                    waiting
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
+
+    /// Offline, under its dimmed buttons: why they wait.
+    @ViewBuilder
+    private var waiting: some View {
+        if answers, offline.isOffline {
+            Text("Back online to act on this")
+                .font(.caption)
+                .foregroundStyle(.ariTertiary)
+                .transition(.opacity)
         }
     }
 }
@@ -105,7 +124,7 @@ struct UnknownCardView: View {
     var presentation = CardPresentation.card
 
     var body: some View {
-        CardShell(kind: card.kind, presentation: presentation) {
+        CardShell(kind: card.kind, presentation: presentation, answers: false) {
             Text(card.title)
                 .font(.subheadline)
                 .foregroundStyle(.ariSecondary)

@@ -7,13 +7,16 @@ enum StatusText: Equatable {
     case status(String, detail: String?)
     /// Something about the connection or the turn, in Ari's grey: "Reconnecting", "Stopped".
     case quiet(String)
+    /// What's on screen is the copy Ari kept: "Offline · updated 14:02", after a struck-through
+    /// cloud.
+    case offline(String)
 
     /// Everything, for VoiceOver.
     var spoken: String {
         switch self {
         case .status(let label, let detail):
             [label, detail].compactMap(\.self).joined(separator: ", ")
-        case .quiet(let text): text
+        case .quiet(let text), .offline(let text): text
         }
     }
 }
@@ -137,6 +140,9 @@ struct StatusLine: View {
             )
         case .quiet(let text):
             return Text(text).foregroundStyle(.ariTertiary)
+        case .offline(let text):
+            return Text("\(Image(systemName: OfflineLine.symbol))  \(text)")
+                .foregroundStyle(.ariTertiary)
         }
     }
 }

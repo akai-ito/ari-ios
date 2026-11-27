@@ -24,18 +24,37 @@ extension EnvironmentValues {
     @Entry var offline = Offline()
 }
 
-/// The quiet note under what's on screen while it's the copy Ari kept, in the grey of the chat's
-/// "Reconnecting": "Offline · updated 14:02". Nothing while online.
+/// The quiet note that what's on screen is the copy Ari kept, with a struck-through cloud, in the
+/// grey of the chat's "Reconnecting": "Offline · updated 14:02". On the Desk it's a small capsule
+/// where the weather goes. Nothing while online.
 struct OfflineLine: View {
+    /// In a capsule, as at the top of the Desk.
+    var capsule = false
+
     @Environment(\.offline) private var offline
+
+    /// The struck-through cloud beside the words.
+    static let symbol = "icloud.slash"
 
     var body: some View {
         if offline.isOffline {
-            Text(offline.words)
-                .font(.subheadline)
-                .foregroundStyle(.ariTertiary)
-                .lineLimit(1)
-                .transition(.opacity)
+            HStack(spacing: 6) {
+                Image(systemName: Self.symbol).accessibilityHidden(true)
+                Text(offline.words)
+            }
+            .font(capsule ? .caption : .subheadline)
+            .foregroundStyle(.ariTertiary)
+            .lineLimit(1)
+            .padding(.horizontal, capsule ? 12 : 0)
+            .padding(.vertical, capsule ? 6 : 0)
+            .background {
+                if capsule {
+                    Capsule().fill(Color.ariSurface)
+                        .overlay(Capsule().strokeBorder(Color.ariLine, lineWidth: 0.7))
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .transition(.opacity)
         }
     }
 }

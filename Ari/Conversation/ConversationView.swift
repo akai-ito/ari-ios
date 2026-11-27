@@ -559,9 +559,8 @@ struct ConversationView: View {
 
     func liveStatus(revealing: Bool) -> StatusText? {
         if header.linkDown {
-            return .quiet(
-                session.isOffline
-                    ? OfflineNote.words(updatedAt: session.updatedAt) : "Reconnecting")
+            return session.isOffline
+                ? .offline(OfflineNote.words(updatedAt: session.updatedAt)) : .quiet("Reconnecting")
         }
         let conversation = self.conversation
         if let turn = conversation.turn {
