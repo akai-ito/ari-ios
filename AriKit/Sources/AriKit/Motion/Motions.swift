@@ -3,7 +3,8 @@ import Observation
 
 /// What's in motion: the things Ari keeps going for you, for the In motion tab, the pinned line and
 /// the compact lines under replies. The session hands it every motion event; it fetches a thing's
-/// content again when it changes. A refresh that fails keeps what was shown.
+/// content again when it changes. A refresh that fails keeps what was shown, and what was shown
+/// last time shows at once, from the copy kept on the device.
 @MainActor
 @Observable
 public final class Motions {
@@ -35,6 +36,13 @@ public final class Motions {
         self.defaults = defaults
         let saved = defaults.dictionary(forKey: Self.dismissedKey) as? [String: Int] ?? [:]
         dismissed = Dictionary(uniqueKeysWithValues: saved.map { (MotionID($0.key), $0.value) })
+        if let kept: MotionList = client.kept(ItoClient.Kept.motions) {
+            all = Self.ordered(kept.motions)
+            load = .loaded
+            for motion in going {
+                details[motion.id] = client.kept(ItoClient.Kept.motion(motion.id))
+            }
+        }
     }
 
     public var going: [Motion] { all.filter { $0.status != .done } }
@@ -73,6 +81,8 @@ public final class Motions {
     /// Fetches a thing's content, ticks and what changed, and keeps them.
     @discardableResult
     public func detail(_ id: MotionID) async throws(RequestError) -> MotionDetail {
+        // What was kept last time shows at once, until the server's answer replaces it.
+        if details[id] == nil { details[id] = client.kept(ItoClient.Kept.motion(id)) }
         let fetched = try await client.motion(id)
         // Two changes close together fetch twice: an older answer arriving last never wins.
         if let kept = details[id], kept.motion.version > fetched.motion.version { return kept }

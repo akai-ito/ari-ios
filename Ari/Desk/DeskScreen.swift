@@ -13,6 +13,7 @@ struct DeskScreen: View {
     @State private var showsDay = false
     /// What's wrong on the server, opened from "Something's wrong ›" to see how to fix it.
     @State private var showsProblems = false
+    @Environment(\.offline) private var offline
 
     var body: some View {
         TimelineView(.everyMinute) { context in
@@ -51,6 +52,7 @@ struct DeskScreen: View {
         .animation(.smooth(duration: 0.5), value: session.desk?.line)
         .animation(.smooth(duration: 0.35), value: session.problems)
         .animation(.smooth(duration: 0.35), value: waiting)
+        .animation(.smooth(duration: 0.35), value: offline)
         #if DEBUG
             .task {
                 try? await Task.sleep(for: .seconds(1))
@@ -143,6 +145,7 @@ struct DeskScreen: View {
                 .accessibilityHint("Shows what's wrong, and how to fix it")
                 .transition(.opacity)
             }
+            OfflineLine()
         }
         .frame(maxWidth: 320)
     }

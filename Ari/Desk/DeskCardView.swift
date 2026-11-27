@@ -17,7 +17,15 @@ struct DeskCardView: View {
     var presentation = CardPresentation.card
     let answer: (CardAnswer) async throws -> Void
 
+    @Environment(\.offline) private var offline
+
     var body: some View {
+        // Offline, its answers wait for the server: dimmed, never shown as sent.
+        kind.disabled(offline.isOffline)
+    }
+
+    @ViewBuilder
+    private var kind: some View {
         switch card.kind {
         case .draft:
             DraftCardView(card: card, context: context, presentation: presentation, answer: answer)

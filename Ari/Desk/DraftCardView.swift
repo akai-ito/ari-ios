@@ -13,6 +13,7 @@ struct DraftCardView: View {
     let answer: (CardAnswer) async throws -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sending = DeskSending()
     @State private var changing = false
@@ -162,6 +163,7 @@ struct DraftCardView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .opacity(isEnabled || sending.key == option.label ? 1 : 0.45)
             .accessibilityHint("Asks first, then deletes it from your Drafts")
             .accessibilityValue(sending.key == option.label ? "Sending" : "")
         }

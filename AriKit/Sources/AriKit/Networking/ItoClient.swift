@@ -7,11 +7,17 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     /// `nil` only for discovery, which is open.
     public let token: Token?
     let transport: any Transport
+    /// Where the answers worth reading without a connection are kept as they arrive; with none,
+    /// nothing is kept.
+    public let copies: LocalCopy?
 
-    public init(address: ServerAddress, token: Token?, transport: any Transport) {
+    public init(
+        address: ServerAddress, token: Token?, transport: any Transport, copies: LocalCopy? = nil
+    ) {
         self.address = address
         self.token = token
         self.transport = transport
+        self.copies = copies
     }
 
     public var description: String { "ItoClient(\(address), token \(token?.lastFour ?? "none"))" }
@@ -70,7 +76,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     /// `GET /v0/desk`: Kumo's line and plans, the weather, what's coming up and what's waiting on
     /// you.
     public func desk() async throws(RequestError) -> Desk {
-        try await call(HTTPRequest(.get, "/v0/desk"))
+        try await call(HTTPRequest(.get, Kept.desk), keeping: true)
     }
 
     /// `POST /v0/desk/cards/{id}/answer`. The card comes back `working` while the box acts on it,
@@ -102,7 +108,8 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     /// cleared, with the areas it's learning.
     public func work(day: String? = nil) async throws(RequestError) -> KumoWork {
         try await call(
-            HTTPRequest(.get, day.map { Self.path("/v0/work", ["day": $0]) } ?? "/v0/work"))
+            HTTPRequest(.get, day.map { Self.path("/v0/work", ["day": $0]) } ?? "/v0/work"),
+            keeping: true)
     }
 
     /// `POST /v0/done/{entry}/wrong`: "That was wrong". Kumo undoes it where it can, keeps a
@@ -121,7 +128,7 @@ public struct ItoClient: Sendable, CustomStringConvertible {
     public func done(before entry: DoneID?, limit: Int) async throws(RequestError) -> DonePage {
         var query = ["limit": String(limit)]
         query["before"] = entry?.rawValue
-        return try await call(HTTPRequest(.get, Self.path("/v0/done", query)))
+        return try await call(HTTPRequest(.get, Self.path("/v0/done", query)), keeping: true)
     }
 
     /// `POST /v0/done/{entry}/undo`: takes back one thing Kumo did. The answer is the entry, marked
@@ -312,12 +319,12 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     /// `GET /v0/memory/in-mind`: Portrait, Now and How to help you, in full.
     public func inMind() async throws(RequestError) -> MemoryPages {
-        try await call(HTTPRequest(.get, "/v0/memory/in-mind"))
+        try await call(HTTPRequest(.get, Kept.inMind), keeping: true)
     }
 
     /// `GET /v0/memory/shelves`: each shelf and how many pages it holds.
     public func shelves() async throws(RequestError) -> ShelfList {
-        try await call(HTTPRequest(.get, "/v0/memory/shelves"))
+        try await call(HTTPRequest(.get, Kept.shelves), keeping: true)
     }
 
     /// `GET /v0/memory/recent`: what Ari changed lately, newest first, with its notes.
@@ -327,35 +334,35 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     /// `GET /v0/memory/chapters`: the chapters of your life Kumo noticed, those still going first.
     public func chapters() async throws(RequestError) -> ChapterList {
-        try await call(HTTPRequest(.get, "/v0/memory/chapters"))
+        try await call(HTTPRequest(.get, Kept.chapters), keeping: true)
     }
 
     /// `GET /v0/memory/learnt`: what Kumo learnt about you lately, newest first.
     public func learnt() async throws(RequestError) -> LearntLines {
-        try await call(HTTPRequest(.get, "/v0/memory/learnt"))
+        try await call(HTTPRequest(.get, Kept.learnt), keeping: true)
     }
 
     /// `GET /v0/memory/pages?shelf=…`: the pages on a shelf.
     public func pages(on shelf: String) async throws(RequestError) -> PageList {
-        try await call(HTTPRequest(.get, Self.path("/v0/memory/pages", ["shelf": shelf])))
+        try await call(HTTPRequest(.get, Kept.pages(on: shelf)), keeping: true)
     }
 
     /// `GET /v0/memory/page?address=…`: one page, its Markdown without front matter. A day of the
     /// journal is a page too, such as `memory:journal/2026-10-25`.
     public func page(_ address: PageAddress) async throws(RequestError) -> MemoryPage {
-        try await call(
-            HTTPRequest(.get, Self.path("/v0/memory/page", ["address": address.rawValue])))
+        try await call(HTTPRequest(.get, Kept.page(address)), keeping: true)
     }
 
     /// `GET /v0/memory/media/{media}`: a photo a page keeps, by its name in `photos`. Its bytes
     /// never change.
     public func memoryPhoto(_ name: String) async throws(RequestError) -> Data {
-        try await raw(HTTPRequest(.get, "/v0/memory/media/\(Self.segment(name))"))
+        try await raw(HTTPRequest(.get, Kept.photo(name)), keeping: true)
     }
 
     /// `GET /v0/memory/changes/{change}`: what one update did to a page.
     public func change(_ change: String) async throws(RequestError) -> PageChange {
-        try await call(HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"))
+        try await call(
+            HTTPRequest(.get, "/v0/memory/changes/\(Self.segment(change))"), keeping: true)
     }
 
     /// `GET /v0/memory/backup`: where memory is backed up, and how that's going.
@@ -378,12 +385,12 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     /// `GET /v0/motion`: everything going on, then what's done, each newest first.
     public func motions() async throws(RequestError) -> MotionList {
-        try await call(HTTPRequest(.get, "/v0/motion"))
+        try await call(HTTPRequest(.get, Kept.motions), keeping: true)
     }
 
     /// `GET /v0/motion/{id}`: one thing, with its content, your ticks and what changed.
     public func motion(_ id: MotionID) async throws(RequestError) -> MotionDetail {
-        try await call(HTTPRequest(.get, "/v0/motion/\(Self.segment(id.rawValue))"))
+        try await call(HTTPRequest(.get, Kept.motion(id)), keeping: true)
     }
 
     /// `PATCH /v0/motion/{id}/state`: ticks or unticks an item in one of a thing's lists. Every
@@ -417,12 +424,12 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     /// `GET /v0/made`: the Made shelf, most recently changed first.
     public func madePages() async throws(RequestError) -> MadeList {
-        try await call(HTTPRequest(.get, "/v0/made"))
+        try await call(HTTPRequest(.get, Kept.made), keeping: true)
     }
 
     /// `GET /v0/made/{id}`: one page, with its content, your ticks and what changed.
     public func madePage(_ id: MadeID) async throws(RequestError) -> MadeDetail {
-        try await call(HTTPRequest(.get, "/v0/made/\(Self.segment(id.rawValue))"))
+        try await call(HTTPRequest(.get, Kept.made(id)), keeping: true)
     }
 
     /// `PATCH /v0/made/{id}/state`: ticks an item off at a time, or takes the tick back with
@@ -564,30 +571,59 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     // MARK: - Plumbing, which the routes in other files share
 
+    /// - Parameter keeping: For something worth reading without a connection: its answer is kept
+    ///   on the device, and when the server can't be reached, the answer kept last time stands in.
     func call<Answer: Decodable>(
-        _ request: HTTPRequest, authorized: Bool = true, contentType: String = "application/json"
+        _ request: HTTPRequest, authorized: Bool = true, contentType: String = "application/json",
+        keeping: Bool = false
     ) async throws(RequestError) -> Answer {
-        var request = authorized ? authorize(request) : request
-        if request.body != nil { request.headers["Content-Type"] = contentType }
-        let response: HTTPResponse
-        do {
-            response = try await transport.send(request, to: address.url)
+        let body: Data
+        do throws(RequestError) {
+            body = try await fetch(request, authorized: authorized, contentType: contentType)
         } catch {
-            throw RequestError(error)
+            guard keeping, error.isTemporary, let kept: Answer = kept(request.path) else {
+                throw error
+            }
+            return kept
         }
-        try Self.checkVersion(response.headers)
-        guard (200..<300).contains(response.status) else { throw Self.refusal(response) }
+        let answer: Answer
         do {
-            return try JSONDecoder().decode(Answer.self, from: response.body)
+            answer = try JSONDecoder().decode(Answer.self, from: body)
         } catch {
             throw .unreadable(String(describing: error))
         }
+        if keeping { copies?.keep(body, as: request.path) }
+        return answer
     }
 
     /// A request whose answer is bytes, not JSON.
-    func raw(_ request: HTTPRequest) async throws(RequestError) -> Data {
-        var request = authorize(request)
-        if request.body != nil { request.headers["Content-Type"] = "application/json" }
+    ///
+    /// - Parameter keeping: As for ``call(_:authorized:contentType:keeping:)``.
+    func raw(_ request: HTTPRequest, keeping: Bool = false) async throws(RequestError) -> Data {
+        do throws(RequestError) {
+            let body = try await fetch(request, authorized: true, contentType: "application/json")
+            if keeping { copies?.keep(body, as: request.path) }
+            return body
+        } catch {
+            guard keeping, error.isTemporary, let kept = copies?.data(request.path) else {
+                throw error
+            }
+            return kept
+        }
+    }
+
+    /// The answer kept from the last time `path` was read, if there is one: what to show at once,
+    /// before asking again.
+    func kept<Answer: Decodable>(_ path: String) -> Answer? {
+        copies?.value(Answer.self, path)
+    }
+
+    /// The body of a request's answer, once the server has accepted it.
+    private func fetch(_ request: HTTPRequest, authorized: Bool, contentType: String)
+        async throws(RequestError) -> Data
+    {
+        var request = authorized ? authorize(request) : request
+        if request.body != nil { request.headers["Content-Type"] = contentType }
         let response: HTTPResponse
         do {
             response = try await transport.send(request, to: address.url)
@@ -656,6 +692,40 @@ public struct ItoClient: Sendable, CustomStringConvertible {
 
     static func segment(_ id: String) -> String {
         id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? id
+    }
+}
+
+extension ItoClient {
+    /// The paths of the answers Ari keeps a copy of and shows at once, before asking again.
+    enum Kept {
+        static let desk = "/v0/desk"
+        static let motions = "/v0/motion"
+        static let made = "/v0/made"
+        static let files = "/v0/files"
+        static let inMind = "/v0/memory/in-mind"
+        static let shelves = "/v0/memory/shelves"
+        static let chapters = "/v0/memory/chapters"
+        static let learnt = "/v0/memory/learnt"
+
+        static func motion(_ id: MotionID) -> String {
+            "/v0/motion/\(ItoClient.segment(id.rawValue))"
+        }
+
+        static func made(_ id: MadeID) -> String {
+            "/v0/made/\(ItoClient.segment(id.rawValue))"
+        }
+
+        static func pages(on shelf: String) -> String {
+            ItoClient.path("/v0/memory/pages", ["shelf": shelf])
+        }
+
+        static func page(_ address: PageAddress) -> String {
+            ItoClient.path("/v0/memory/page", ["address": address.rawValue])
+        }
+
+        static func photo(_ name: String) -> String {
+            "/v0/memory/media/\(ItoClient.segment(name))"
+        }
     }
 }
 

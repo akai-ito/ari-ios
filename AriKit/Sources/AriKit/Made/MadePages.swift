@@ -3,7 +3,8 @@ import Observation
 
 /// The pages Kumo made, for the Made shelf, their cards in the chat and the page itself. The
 /// session hands it every made event; it fetches a page's content again when Kumo changes it. A
-/// refresh that fails keeps what was shown.
+/// refresh that fails keeps what was shown, and what was shown last time shows at once, from the
+/// copy kept on the device.
 @MainActor
 @Observable
 public final class MadePages {
@@ -30,6 +31,11 @@ public final class MadePages {
 
     public init(client: ItoClient) {
         self.client = client
+        if let kept: MadeList = client.kept(ItoClient.Kept.made) {
+            all = Self.ordered(kept.made)
+            load = .loaded
+        }
+        if let kept: FileList = client.kept(ItoClient.Kept.files) { documents = kept.files }
     }
 
     /// How many things the shelf holds: the pages and the documents.
@@ -63,6 +69,8 @@ public final class MadePages {
     /// Fetches a page's content, ticks and what changed, and keeps them.
     @discardableResult
     public func detail(_ id: MadeID) async throws(RequestError) -> MadeDetail {
+        // What was kept last time shows at once, until the server's answer replaces it.
+        if details[id] == nil { details[id] = client.kept(ItoClient.Kept.made(id)) }
         do {
             let fetched = try await client.madePage(id)
             // Two changes close together fetch twice: an older answer arriving last never wins.
@@ -71,7 +79,10 @@ public final class MadePages {
             forgotten.remove(id)
             return fetched
         } catch {
-            if error.status == 404 { forgotten.insert(id) }
+            if error.status == 404 {
+                forgotten.insert(id)
+                details[id] = nil
+            }
             throw error
         }
     }

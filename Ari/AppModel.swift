@@ -77,6 +77,10 @@ final class AppModel {
     /// The connect screen reached a server that accepted the token.
     func connected(_ connection: Connection) {
         pairing = nil
+        // Another server: what Ari kept of the last one goes.
+        if let previous = address, previous != connection.address {
+            forgetCopy(of: previous, session: session)
+        }
         try? tokens.save(connection.token, for: connection.address)
         Saved(address: connection.address, server: connection.server).save(to: defaults)
         group.address = connection.address
@@ -184,7 +188,9 @@ final class AppModel {
     /// Settings' capabilities.
     func client() -> ItoClient? {
         guard let address, let token = try? tokens.token(for: address) else { return nil }
-        return ItoClient(address: address, token: token, transport: URLSessionTransport())
+        return ItoClient(
+            address: address, token: token, transport: URLSessionTransport(),
+            copies: try? LocalCopy.applicationSupport(for: address))
     }
 
     /// Asks the server who it is again, so Settings shows what it runs now rather than what it ran
@@ -204,6 +210,7 @@ final class AppModel {
         if let address {
             forgetDevice(at: address)
             try? tokens.delete(for: address)
+            forgetCopy(of: address, session: session)
         }
         group.address = nil
         session?.close()
@@ -320,12 +327,26 @@ final class AppModel {
         return text[key.upperBound...].prefix(80).contains("development") ? .sandbox : .production
     }()
 
+    /// You left the server at `address`, or the token stopped working: the copy Ari kept to read
+    /// offline goes, photos and all, once the session has written its last.
+    private func forgetCopy(of address: ServerAddress, session: Session?) {
+        let copies = try? LocalCopy.applicationSupport(for: address)
+        Task {
+            await session?.forgetCopy()
+            copies?.clear()
+            AttachmentCache.forThisApp().clear()
+        }
+    }
+
     private static func session(at address: ServerAddress, token: Token) -> Session {
         let outbox =
             (try? OutboxStore.applicationSupport(for: address))
             ?? OutboxStore(
                 directory: FileManager.default.temporaryDirectory.appending(path: "Outbox"))
-        return Session(address: address, token: token, outbox: outbox, cache: .forThisApp())
+        // What you've read, kept to show at once on the next launch and without a connection.
+        return Session(
+            address: address, token: token, outbox: outbox, cache: .forThisApp(),
+            copies: try? LocalCopy.applicationSupport(for: address))
     }
 
     private struct Saved: Codable {

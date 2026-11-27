@@ -64,6 +64,9 @@ struct MainView: View {
         .environment(model.uploads)
         .environment(model.hands)
         .environment(\.hidesYou, youTab.isHidden)
+        // Offline, what's on screen is the copy Ari kept: a quiet note says so, and what the server
+        // must answer at once waits.
+        .environment(\.offline, Offline(session))
         .environment(motions)
         .environment(made)
         // A Desk item in the chat is the Desk's own card, as it is now.

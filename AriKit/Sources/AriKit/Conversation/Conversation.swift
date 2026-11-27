@@ -65,6 +65,9 @@ public struct Conversation: Sendable, Equatable {
     public private(set) var retriedTurns: Set<TurnID> = [] {
         didSet { changes.count &+= 1 }
     }
+    /// Whether it's the copy kept on the device, shown until the server says how it is now: its
+    /// snapshot for the main chat, or a thread's page.
+    public private(set) var isCopy = false
 
     /// Goes up with every change to what the conversation shows, so a view can tell cheaply whether
     /// anything changed. It isn't part of equality: two conversations holding the same things are
@@ -317,16 +320,21 @@ extension Conversation {
         // are still on their way, and one it confirmed after taking the snapshot is placed by its
         // `message.accepted`, which follows.
         let waiting = entries[serverCount...].filter { !included.contains($0.id) }
-        entries = snapshot.messages.map(Entry.init) + waiting
-        serverCount = snapshot.messages.count
+        // Back from the copy kept on the device: what it held before the snapshot's first message
+        // stays above it, so the history you may be reading doesn't vanish as the server returns.
+        let earlier = isCopy ? kept(before: snapshot) : Kept()
+        entries = earlier.entries + snapshot.messages.map(Entry.init) + waiting
+        serverCount = earlier.entries.count + snapshot.messages.count
         positions = [:]
         reindex(from: 0)
-        replaceSteps(with: snapshot.steps)
-        replaceAsks(with: snapshot.asks)
-        replaceCalls(with: place == nil ? snapshot.calls : [])
-        threads = Dictionary(snapshot.threads.map { ($0.id, $0) }) { _, latest in latest }
+        replaceSteps(with: earlier.steps + snapshot.steps)
+        replaceAsks(with: earlier.asks + snapshot.asks)
+        replaceCalls(with: place == nil ? earlier.calls + snapshot.calls : [])
+        let named = Dictionary(snapshot.threads.map { ($0.id, $0) }) { _, latest in latest }
+        threads = earlier.entries.isEmpty ? named : threads.merging(named) { _, latest in latest }
 
-        hasEarlierMessages = snapshot.hasMore
+        hasEarlierMessages = earlier.entries.isEmpty ? snapshot.hasMore : hasEarlierMessages
+        isCopy = false
         turn = snapshot.turn.map {
             Turn(
                 id: $0.id, inputs: $0.inputs, retryOf: $0.retryOf, status: $0.status,
@@ -640,6 +648,7 @@ extension Conversation {
         threads[page.thread.id] = page.thread
         anchor = page.anchor
         hasEarlierMessages = page.hasMore
+        isCopy = false
         turn = page.turn.map {
             Turn(id: $0.id, inputs: $0.inputs, retryOf: $0.retryOf, status: $0.status)
         }
@@ -686,6 +695,99 @@ extension Conversation {
             replaceCalls(with: calls.filter { $0.position > first || $0.isOn })
         }
         hasEarlierMessages = true
+    }
+}
+
+// MARK: - The copy kept on the device
+
+extension Conversation {
+    /// A conversation as Ari keeps it on the device, to show at once the next time it opens, with or
+    /// without a connection: what the server has said, as the server says it. Your messages still on
+    /// their way are the outbox's, and a turn still running is the server's to say again.
+    public struct Copy: Sendable, Equatable, Codable {
+        public var place: ThreadID?
+        public var messages: [Message]
+        public var steps: [Step]
+        public var asks: [Ask]
+        public var calls: [Call]
+        public var threads: [SideThread]
+        public var anchor: Message?
+        public var hasMore: Bool
+    }
+
+    /// What to keep: the latest `limit` messages the server has, with the steps, asks and calls
+    /// from the first of them on, and every thread it knows.
+    public func copy(keeping limit: Int = 200) -> Copy {
+        let kept = entries[max(0, serverCount - limit)..<serverCount]
+        let first = kept.first?.position ?? .min
+        return Copy(
+            place: place,
+            messages: kept.compactMap { $0.message(in: place) },
+            steps: steps.filter { $0.position > first },
+            asks: asks.filter { $0.position > first },
+            calls: calls.filter { $0.position > first },
+            threads: threads.values.sorted {
+                ($0.position, $0.id.rawValue) < ($1.position, $1.id.rawValue)
+            },
+            anchor: anchor,
+            hasMore: hasEarlierMessages || kept.count < serverCount)
+    }
+
+    /// The conversation as it was kept, shown until the server says how it is now. It has no cursor,
+    /// so the stream starts again from a snapshot, and no running turn.
+    public init(copy: Copy) {
+        self.init(place: copy.place)
+        entries = copy.messages.map(Entry.init)
+        serverCount = entries.count
+        reindex(from: 0)
+        replaceSteps(with: copy.steps)
+        replaceAsks(with: copy.asks)
+        replaceCalls(with: copy.calls)
+        threads = Dictionary(copy.threads.map { ($0.id, $0) }) { _, latest in latest }
+        anchor = copy.anchor
+        hasEarlierMessages = copy.hasMore
+        isCopy = true
+    }
+
+    /// What the copy held before a snapshot's first message: everything, if the copy reaches it.
+    private struct Kept {
+        var entries: [Entry] = []
+        var steps: [Step] = []
+        var asks: [Ask] = []
+        var calls: [Call] = []
+    }
+
+    private func kept(before snapshot: Snapshot) -> Kept {
+        guard let first = snapshot.messages.first, let index = positions[first.id],
+            index < serverCount, index > 0, let position = first.position
+        else { return Kept() }
+        let steps = Set(snapshot.steps.map(\.id))
+        let asks = Set(snapshot.asks.map(\.id))
+        let calls = Set(snapshot.calls.map(\.id))
+        let included = Set(snapshot.messages.map(\.id))
+        return Kept(
+            entries: entries[..<index].filter { !included.contains($0.id) },
+            steps: self.steps.filter { $0.position < position && !steps.contains($0.id) },
+            asks: self.asks.filter { $0.position < position && !asks.contains($0.id) },
+            calls: self.calls.filter { $0.position < position && !calls.contains($0.id) })
+    }
+}
+
+extension Conversation.Entry {
+    /// The message as the server sent it, for the copy kept on the device; `nil` for one only on
+    /// this device.
+    fileprivate func message(in place: ThreadID?) -> Message? {
+        guard let at else { return nil }
+        var message = Message(
+            id: id, role: role, kind: kind, turn: turn, text: text, at: at, position: position,
+            endedAt: endedAt, outcome: outcome, error: error)
+        message.answers = answers
+        message.attachments = attachments.isEmpty ? nil : attachments
+        message.spoken = spoken
+        message.urgent = urgent ? true : nil
+        message.thread = place
+        message.quotes = quotes
+        return message
     }
 }
 

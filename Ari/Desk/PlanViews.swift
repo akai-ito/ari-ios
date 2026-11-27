@@ -111,6 +111,7 @@ struct PlanEditor: View {
     let session: Session
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.offline) private var offline
     @State private var what: String
     @State private var at: Date
     @State private var oneOff = false
@@ -150,7 +151,7 @@ struct PlanEditor: View {
                 .foregroundStyle(.ariSecondary)
                 Section {
                     Button("Cancel this plan", role: .destructive) { confirmsCancel = true }
-                        .disabled(cancelling || saving)
+                        .disabled(cancelling || saving || offline.isOffline)
                 }
                 .listRowBackground(Color.ariSurface)
             }
@@ -166,7 +167,7 @@ struct PlanEditor: View {
                         ProgressView()
                     } else {
                         Button("Save") { Task { await save() } }
-                            .disabled(change == nil || trimmed.isEmpty)
+                            .disabled(change == nil || trimmed.isEmpty || offline.isOffline)
                     }
                 }
             }

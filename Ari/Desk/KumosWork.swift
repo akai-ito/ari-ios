@@ -294,6 +294,7 @@ struct KumosWorkView: View {
                 .foregroundStyle(.ariBone)
                 .buttonStyle(.plain)
                 .disabled(undoing != nil)
+                .waitsForConnection()
                 .accessibilityLabel("Undo: \(entry.text)")
         }
     }
@@ -305,6 +306,7 @@ struct KumosWorkView: View {
         }
         .foregroundStyle(.ariSecondary)
         .buttonStyle(.plain)
+        .waitsForConnection()
         .accessibilityLabel("That was wrong: \(entry.text)")
     }
 

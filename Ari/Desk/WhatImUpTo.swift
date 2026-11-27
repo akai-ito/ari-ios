@@ -16,6 +16,7 @@ struct WhatImUpTo: View {
     @State private var editing: WakeUp?
     @State private var path: [Route] = []
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.offline) private var offline
 
     enum Route: Hashable {
         case card(CardID)
@@ -29,6 +30,7 @@ struct WhatImUpTo: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 30) {
                         header
+                        OfflineLine()
                         if !waiting.isEmpty { needsYou }
                         plans
                         done
@@ -157,6 +159,7 @@ struct WhatImUpTo: View {
                                 {
                                     Task { try? await session.cancel(plan.id) }
                                 }
+                                .disabled(offline.isOffline)
                             }
                     }
                 }

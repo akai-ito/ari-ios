@@ -13,6 +13,7 @@ struct LibraryHome: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
+                OfflineLine()
                 switch memory.load {
                 case .failed(let error):
                     Text("Couldn't reach your server: \(error.plainWords)")
