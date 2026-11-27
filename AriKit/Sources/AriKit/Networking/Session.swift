@@ -905,6 +905,7 @@ public final class Session {
             // The browser's changes are compacted: no browser in the snapshot means it's idle.
             browser = snapshot.browser ?? .idle
             hands?.follow(browser)
+            for step in snapshot.steps { hands?.follow(step: step) }
             onboarding = snapshot.onboarding
             problems = snapshot.problems ?? []
             wantsSnapshot = false
@@ -918,6 +919,9 @@ public final class Session {
         case .browserChanged(let changed):
             browser = changed.browser
             hands?.follow(changed.browser)
+        case .stepStarted(let changed), .stepUpdated(let changed), .stepEnded(let changed):
+            // How a one-tap card settled, as the trail says.
+            hands?.follow(step: changed.step)
         case .recordingChanged(let changed):
             recordings[changed.recording.attachment] = changed.recording
         case .onboardingChanged(let changed):

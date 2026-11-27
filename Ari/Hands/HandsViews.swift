@@ -2,8 +2,8 @@ import AriKit
 import SwiftUI
 import UIKit
 
-/// The end of a conversation while Kumo's hands are busy in it: the times it needed you, its live
-/// line, and a one-tap card waiting that no reply of Kumo's holds yet.
+/// The end of a conversation while Kumo's hands are busy in it: its live line, and a one-tap card
+/// waiting that no reply of Kumo's holds yet. The times it needed you are in the trail.
 struct HandsTail: View {
     let session: Session
     /// The thread, or `nil` for the main chat.
@@ -17,23 +17,13 @@ struct HandsTail: View {
 
     var body: some View {
         if let hands {
-            let handoffs = hands.handoffs(in: place)
             let line = hands.line(in: place)
             let card = waitingCard(hands)
-            if !handoffs.isEmpty || line != nil || card != nil {
+            if line != nil || card != nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(handoffs.enumerated()), id: \.element.id) { index, handoff in
-                        RailRow(
-                            dot: .done, starts: index == 0 && !followsTrail,
-                            continues: index < handoffs.count - 1 || line != nil
-                        ) {
-                            HandoffRow(handoff: handoff)
-                        }
-                    }
                     if let line {
                         RailRow(
-                            dot: .live, breathing: true,
-                            starts: handoffs.isEmpty && !followsTrail, continues: false
+                            dot: .live, breathing: true, starts: !followsTrail, continues: false
                         ) {
                             LiveBrowseLine(line: line, hands: hands) { open(line, hands) }
                         }
@@ -81,23 +71,22 @@ struct HandsTail: View {
     }
 }
 
-/// A time Kumo needed you: what for, then how the page came back, and when.
-struct HandoffRow: View {
+/// Under a hand-off in the trail: how the page came back, and when.
+struct HandoffAnswer: View {
     let handoff: Handoff
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(handoff.asked)
-                .font(.footnote)
-                .foregroundStyle(.ariSecondary)
+        if let answered = handoff.answered {
             HStack(spacing: 5) {
                 Image(systemName: "hand.point.up.left")
-                Text("\(handoff.answered) · \(handoff.at.formatted(DeskTime.time))")
+                Text(
+                    [answered, handoff.at?.formatted(DeskTime.time)].compactMap(\.self)
+                        .joined(separator: " · "))
             }
             .font(.caption)
             .foregroundStyle(.ariTertiary)
+            .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
     }
 }
 

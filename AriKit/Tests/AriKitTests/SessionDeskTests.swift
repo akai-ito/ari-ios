@@ -193,7 +193,6 @@ struct SessionDeskTests {
         try await bench.push(
             #"{"id":"e_12","type":"browser.changed","at":"2026-11-23T17:21:00.000Z","browser":{"state":"browsing","thread":"h_table","site":"Tablewise","doing":"filling in the checkout","step":7}}"#
         )
-        #expect(hands.handoffs(in: "h_table").map(\.asked) == ["Needed you to log in"])
         #expect(hands.line(in: "h_table")?.detail == "Back on it · step 7")
         #expect(session.conversation.cursor == "e_12")
 

@@ -7,8 +7,9 @@ import SwiftUI
 /// desktop: no frame, no zoom, no cursor.
 struct TakeoverScreen: View {
     let hands: Hands
-    /// For Stop the task, which tells Kumo in the task's thread.
     let session: Session?
+
+    @Environment(\.keyboardShown) private var keyboard
 
     var body: some View {
         let takeover = hands.takeover
@@ -17,12 +18,14 @@ struct TakeoverScreen: View {
                 title: Self.title(takeover?.need), site: site,
                 secure: url?.hasPrefix("https") ?? true,
                 slow: hands.stream?.isDegraded ?? false,
+                reconnecting: hands.stream?.isReconnecting ?? false,
                 stop: stop, reload: { hands.send(.navigate(.reload)) }, leave: hands.leave)
             ZStack {
                 if let stream = hands.stream {
                     PageSurface(
                         stream: stream, need: takeover?.need?.kind,
-                        live: takeover?.acceptsInput ?? false, send: hands.send)
+                        live: takeover?.acceptsInput ?? false, keyboard: keyboard,
+                        send: hands.send)
                 }
                 TakeoverCover(
                     takeover: takeover, picture: hands.stream?.picture != nil,
@@ -66,12 +69,10 @@ struct TakeoverScreen: View {
         }
     }
 
-    /// Stop the task: Kumo hears it in the task's thread, then gets the page back to read it.
+    /// Stop the task: nothing more of it is done, and the page stays as it is. The task's trail
+    /// says you stopped it; Kumo isn't woken to carry on.
     private func stop() {
-        let place = hands.takeover?.thread ?? hands.browser.thread
-        let site = hands.browser.site.map { " on \($0)" } ?? ""
-        _ = session?.send("Stop the task\(site). Leave the page as it is.", in: place)
-        Task { await hands.handBack() }
+        Task { await hands.stopTask() }
     }
 }
 
@@ -82,6 +83,8 @@ struct TakeoverHeader: View {
     let site: String
     var secure = true
     var slow = false
+    /// The picture isn't live: the connection dropped, or the page couldn't be shown.
+    var reconnecting = false
     let stop: () -> Void
     let reload: () -> Void
     let leave: () -> Void
@@ -99,7 +102,13 @@ struct TakeoverHeader: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 Group {
-                    if slow {
+                    if reconnecting {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Reconnecting…")
+                        }
+                        .foregroundStyle(.ariBone)
+                    } else if slow {
                         HStack(spacing: 5) {
                             Image(systemName: "wifi.exclamationmark")
                             Text("Slow connection · taps may lag")

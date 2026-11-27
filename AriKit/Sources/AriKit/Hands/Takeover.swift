@@ -106,6 +106,11 @@ public struct Takeover: Sendable, Equatable {
         problem = message
     }
 
+    /// Stop the task didn't reach the server: you still hold the page.
+    public mutating func couldNotStop(_ message: String) {
+        problem = message
+    }
+
     private mutating func keep(_ browser: Browser) {
         if let need = browser.need { self.need = need }
         if let thread = browser.thread { self.thread = thread }

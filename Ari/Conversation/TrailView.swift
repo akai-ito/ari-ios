@@ -222,6 +222,9 @@ private struct StepLineView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+            if let step = line.steps.last, let handoff = Handoff(step: step) {
+                HandoffAnswer(handoff: handoff)
+            }
             if line.isRunning, !isOpen, let items = line.steps.first?.items {
                 PlanChecklist(items: items)
             }
