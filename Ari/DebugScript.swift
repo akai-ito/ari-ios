@@ -30,6 +30,10 @@ import SwiftUI
             return (address, token)
         }
 
+        /// `ARI_SKETCH` opens a still of Milestone 9's follow-through from samples, without a
+        /// server, such as `m9-desk-a-moon` (see FollowThroughSketch).
+        static let followThroughSketch = environment["ARI_SKETCH"].flatMap(
+            FollowThroughSketch.init(rawValue:))
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensThreads = environment["ARI_THREADS"] != nil
