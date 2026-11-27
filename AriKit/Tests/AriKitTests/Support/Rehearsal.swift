@@ -222,6 +222,8 @@ final class Rehearsal {
         case .correct(let entry):
             let text = request.body?["text"]?.string
             Task { _ = try? await session.correct(entry, text: text) }
+        case .undo(let entry):
+            Task { _ = try? await session.undo(entry) }
         case .wakeUps:
             Task { try? await session.refreshPlans() }
         case .changeWakeUp(let plan):

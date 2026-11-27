@@ -150,6 +150,16 @@ struct ProtocolDecodingTests {
                     #expect(detail.made.id == id && !detail.content.sections.isEmpty, "\(place)")
                 case .madeState:
                     _ = try body.decode(MadeStateBody.self)
+                case .dream, .dreamNow, .dreamTime:
+                    #expect(try !body.decode(DreamState.self).time.isEmpty, "\(place)")
+                case .seeDream(let dream):
+                    let seen = try body.decode(DreamResult.self).dream
+                    #expect(seen.id == dream && !seen.isNew, "\(place)")
+                case .understanding:
+                    _ = try body.decode(Understanding.self)
+                case .answerQuestion(let question), .notNowQuestion(let question):
+                    #expect(
+                        try body.decode(QuestionResult.self).question.id == question, "\(place)")
                 case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
@@ -242,6 +252,12 @@ struct ProtocolDecodingTests {
             case .correct:
                 let words = try body.decode(CorrectDone.self).text
                 #expect(try JSONValue(encoding: CorrectDone(text: words)) == body, "\(place)")
+            case .dreamTime:
+                let time = try body.decode(DreamTime.self).time
+                #expect(try JSONValue(encoding: DreamTime(time: time)) == body, "\(place)")
+            case .answerQuestion:
+                #expect(
+                    try JSONValue(encoding: body.decode(QuestionReply.self)) == body, "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -318,6 +334,8 @@ extension Event.Payload {
         case .recordingChanged: "recording.changed"
         case .browserChanged: "browser.changed"
         case .problemsChanged: "problems.changed"
+        case .dreamFinished: "dream.finished"
+        case .questionChanged: "question.changed"
         case .unknown: nil
         }
     }

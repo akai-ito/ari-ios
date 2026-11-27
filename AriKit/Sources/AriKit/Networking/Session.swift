@@ -56,6 +56,10 @@ public final class Session {
     @ObservationIgnored public weak var motions: Motions?
     /// The pages Kumo made, kept current from the stream.
     @ObservationIgnored public weak var made: MadePages?
+    /// Kumo's dream, for the moon and the sun on the Desk, kept current from the stream.
+    @ObservationIgnored public weak var dreams: Dreams?
+    /// Understanding you, kept current from the stream.
+    @ObservationIgnored public weak var understanding: UnderstandingYou?
     /// Kumo's browser, as the snapshot and `browser.changed` last said.
     public private(set) var browser = Browser.idle
     /// Kumo's hands, which follow the browser from the same stream.
@@ -898,6 +902,8 @@ public final class Session {
         for key in opening.keys { opening[key]?.append(event) }
         motions?.apply(event)
         made?.apply(event)
+        dreams?.apply(event)
+        understanding?.apply(event)
         switch event.payload {
         case .snapshot(let snapshot):
             desk = snapshot.desk

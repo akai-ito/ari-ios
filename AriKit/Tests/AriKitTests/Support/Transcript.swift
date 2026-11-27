@@ -334,6 +334,13 @@ enum Route: Equatable {
     case madePages
     case madePage(MadeID)
     case madeState(MadeID)
+    case dream
+    case dreamNow
+    case dreamTime
+    case seeDream(DreamID)
+    case understanding
+    case answerQuestion(QuestionID)
+    case notNowQuestion(QuestionID)
     case other
 
     init(method: String, path: String) {
@@ -452,6 +459,19 @@ enum Route: Equatable {
             self = .madePage(MadeID(parts[2]))
         case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "made" && parts[3] == "state":
             self = .madeState(MadeID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "dream"]: self = .dream
+        case ("POST", 2) where parts == ["v0", "dream"]: self = .dreamNow
+        case ("PUT", 3) where parts == ["v0", "dream", "time"]: self = .dreamTime
+        case ("POST", 4) where parts[0] == "v0" && parts[1] == "dreams" && parts[3] == "seen":
+            self = .seeDream(DreamID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "understanding"]: self = .understanding
+        case ("POST", 5)
+        where parts[0] == "v0" && parts[1] == "understanding" && parts[2] == "questions":
+            switch parts[4] {
+            case "answer": self = .answerQuestion(QuestionID(parts[3]))
+            case "not-now": self = .notNowQuestion(QuestionID(parts[3]))
+            default: self = .other
+            }
         default: self = .other
         }
     }
@@ -468,6 +488,10 @@ enum Route: Equatable {
             .memoryPage, .memoryChange, .models,
             .chooseModel, .voices, .chooseVoice, .forgetVoiceprint, .speech,
             .callStream, .motions, .motion, .motionState, .madePages, .madePage, .madeState:
+            true
+        // The Desk's dream and Understanding you have stores of their own, beside the session.
+        case .dream, .dreamNow, .dreamTime, .seeDream, .understanding, .answerQuestion,
+            .notNowQuestion:
             true
         default: false
         }

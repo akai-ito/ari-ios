@@ -20,6 +20,9 @@ struct SessionTranscriptTests {
                 // Its last request pages back from a message the phone still holds, to show a
                 // history page carries ticks: the store plays it, but a session never would.
                 "59-a-plan-you-can-tick",
+                // Copied from ito-core's unmerged branch: after starting a thread the app opens it
+                // (GET /v0/threads/{id}), which these don't have yet. The store plays them.
+                "95-one-plan-across-threads", "96-today-so-far",
             ].contains($0.name)
         })
     func plays(_ transcript: Transcript) async throws {
