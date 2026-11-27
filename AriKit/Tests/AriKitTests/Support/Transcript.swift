@@ -334,6 +334,12 @@ enum Route: Equatable {
     case madePages
     case madePage(MadeID)
     case madeState(MadeID)
+    /// Full access, from Settings (protocol 0.20).
+    case access
+    case giveFullAccess
+    case endFullAccess
+    /// A share from the share sheet (protocol 0.20).
+    case share
     case other
 
     init(method: String, path: String) {
@@ -452,6 +458,10 @@ enum Route: Equatable {
             self = .madePage(MadeID(parts[2]))
         case ("PATCH", 4) where parts[0] == "v0" && parts[1] == "made" && parts[3] == "state":
             self = .madeState(MadeID(parts[2]))
+        case ("GET", 2) where parts == ["v0", "access"]: self = .access
+        case ("POST", 3) where parts == ["v0", "access", "full"]: self = .giveFullAccess
+        case ("DELETE", 3) where parts == ["v0", "access", "full"]: self = .endFullAccess
+        case ("POST", 2) where parts == ["v0", "shares"]: self = .share
         default: self = .other
         }
     }
@@ -467,7 +477,8 @@ enum Route: Equatable {
             .memoryShelves, .memoryPages, .memoryRecent, .memoryChapters, .memoryLearnt,
             .memoryPage, .memoryChange, .models,
             .chooseModel, .voices, .chooseVoice, .forgetVoiceprint, .speech,
-            .callStream, .motions, .motion, .motionState, .madePages, .madePage, .madeState:
+            .callStream, .motions, .motion, .motionState, .madePages, .madePage, .madeState,
+            .access, .giveFullAccess, .endFullAccess, .share:
             true
         default: false
         }

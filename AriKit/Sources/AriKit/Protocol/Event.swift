@@ -47,6 +47,8 @@ public struct Event: Sendable, Equatable, Decodable {
         case problemsChanged(ProblemsChanged)
         case recordingChanged(RecordingChanged)
         case browserChanged(BrowserChanged)
+        /// Full access turned on or off. Protocol 0.20, ahead of the pinned spec.
+        case accessChanged(AccessChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -63,6 +65,10 @@ public struct Event: Sendable, Equatable, Decodable {
         "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
         "browser.changed",
     ]
+
+    /// Types the next protocol adds, which Ari decodes already: they join ``knownTypes`` when the
+    /// pin moves to the spec that lists them (protocol 0.20).
+    public static let typesAheadOfPin = ["access.changed"]
 
     private enum EnvelopeKeys: String, CodingKey {
         case id, type
@@ -112,6 +118,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))
             case "recording.changed": .recordingChanged(try RecordingChanged(from: decoder))
             case "browser.changed": .browserChanged(try BrowserChanged(from: decoder))
+            case "access.changed": .accessChanged(try AccessChanged(from: decoder))
             default: .unknown
             }
     }
@@ -148,10 +155,12 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let problems: [ServerProblem]?
     /// Kumo's browser, while it's doing something; absent while it's idle.
     public let browser: Browser?
+    /// How Kumo runs, while it has full access; absent while it's in its sandbox.
+    public let access: Access?
 
     enum CodingKeys: String, CodingKey {
         case at, reason, messages, steps, asks, calls, threads, turn, next, desk, onboarding
-        case problems, browser
+        case problems, browser, access
         case hasMore = "has_more"
     }
 }

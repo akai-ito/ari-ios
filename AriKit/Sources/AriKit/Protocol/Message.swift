@@ -37,6 +37,9 @@ public struct Message: Hashable, Sendable, Codable {
     public var thread: ThreadID?
     /// Your messages only: inside a thread, the message you replied to.
     public var quotes: Quote?
+    /// Your messages only: on something you shared from the share sheet, the link and text you
+    /// shared besides your note.
+    public var share: Shared?
 
     public init(
         id: MessageID, role: Role, kind: MessageKind? = nil, turn: TurnID? = nil, text: String,
@@ -57,7 +60,7 @@ public struct Message: Hashable, Sendable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, role, kind, turn, text, at, position, outcome, error, answers, attachments,
-            spoken, done, urgent, thread, quotes
+            spoken, done, urgent, thread, quotes, share
         case endedAt = "ended_at"
     }
 }

@@ -83,6 +83,8 @@ enum SettingsRoute: Hashable {
 /// Places in Settings' own list to scroll to.
 enum SettingsAnchor: Hashable {
     case memory
+    /// Dreaming, with Full access below it.
+    case dreaming
 }
 
 /// A capability's row: its symbol, title and summary (or why it needs you), and its state.

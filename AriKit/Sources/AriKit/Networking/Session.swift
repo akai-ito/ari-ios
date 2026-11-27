@@ -58,6 +58,9 @@ public final class Session {
     @ObservationIgnored public weak var made: MadePages?
     /// Kumo's browser, as the snapshot and `browser.changed` last said.
     public private(set) var browser = Browser.idle
+    /// How Kumo runs on the server, as the snapshot and `access.changed` last said, or as you just
+    /// set it here: the main chat shows a marker while it's full.
+    public internal(set) var access = Access.sandboxed
     /// Kumo's hands, which follow the browser from the same stream.
     @ObservationIgnored public weak var hands: Hands? {
         didSet {
@@ -907,11 +910,15 @@ public final class Session {
             hands?.follow(browser)
             onboarding = snapshot.onboarding
             problems = snapshot.problems ?? []
+            // The snapshot carries access only while it's full.
+            access = snapshot.access ?? .sandboxed
             wantsSnapshot = false
             // Recordings' changes are compacted, so a snapshot means asking again.
             refreshRecordings()
         case .problemsChanged(let changed):
             problems = changed.problems
+        case .accessChanged(let changed):
+            access = changed.access
         case .deskChanged(let changed):
             desk = changed.desk
             hands?.follow(desk: changed.desk)
