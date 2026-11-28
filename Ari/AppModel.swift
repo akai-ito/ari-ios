@@ -40,8 +40,15 @@ final class AppModel {
     var pairing: PairingLink?
 
     @ObservationIgnored let notifications = NotificationStore.forThisApp()
+    /// Where you go, as a trail for the box, once you allow Always and Precise Location. Made at
+    /// launch, so a visit that relaunches Ito in the background is heard.
+    let places: PlacesCollector
     /// Where the phone roughly is, for the box: its time zone, and its town once you allow it.
-    let whereabouts = WhereaboutsReporter()
+    let whereabouts: WhereaboutsReporter
+    /// Your past places, from where and when your photos were taken.
+    let photoSeeding = PhotoSeeding()
+    /// Whether to show places' first-run ask: once, until you've answered it.
+    private(set) var asksPlaces = false
     /// Whether you closed the Desk's offer to show the weather, so it doesn't come back.
     private(set) var declinedWeather = false
     @ObservationIgnored private var pushToken: String?
@@ -53,9 +60,22 @@ final class AppModel {
     /// Shared with the extensions: on the iPhone, the share extension reads the address and token.
     @ObservationIgnored private let group = AppGroup.forThisApp()
 
+    /// iOS carries the trail to the box in this background session, one for the app's whole life.
+    @ObservationIgnored private let trailCarrier: BackgroundTrailCarrier
+
     init(tokens: (any TokenStore)? = nil, defaults: UserDefaults = .standard) {
-        self.tokens = tokens ?? group.tokens
+        let appGroup = AppGroup.forThisApp()
+        self.tokens = tokens ?? appGroup.tokens
         self.defaults = defaults
+        trailCarrier = BackgroundTrailCarrier(identifier: appGroup.identifier + ".places")
+        let queue =
+            (try? TrailQueue.applicationSupport())
+            ?? TrailQueue(
+                directory: FileManager.default.temporaryDirectory.appending(path: "Trail"))
+        let uploads = TrailUploads(queue: queue, carrier: trailCarrier, defaults: defaults)
+        trailCarrier.uploads = uploads
+        places = PlacesCollector(uploads: uploads, log: try? LiveLog.applicationSupport())
+        whereabouts = WhereaboutsReporter(places: places)
         declinedWeather = defaults.bool(forKey: "declinedWeather")
         let notifications = notifications
         whereabouts.report = { [weak self] place in
@@ -85,6 +105,8 @@ final class AppModel {
             session = Self.session(at: saved.address, token: token)
             makeUploads(at: saved.address, token: token)
             attachHands()
+            places.uploads.client = ItoClient(
+                address: saved.address, token: token, transport: URLSessionTransport())
         }
     }
 
@@ -112,6 +134,81 @@ final class AppModel {
         session?.start()
         registerDevice()
         whereabouts.reset()
+        places.uploads.client = ItoClient(
+            address: connection.address, token: connection.token, transport: URLSessionTransport())
+        Task { await places.uploads.send() }
+    }
+
+    // MARK: - Places
+
+    /// Once connected, places' first-run ask shows, once, unless places are already on.
+    func offerPlaces() {
+        #if DEBUG
+            if DebugScript.asksPlaces {
+                asksPlaces = true
+                return
+            }
+            if DeskStills.server != nil { return }
+        #endif
+        guard !defaults.bool(forKey: "placesOffered"), !places.access.isEnough else { return }
+        asksPlaces = true
+    }
+
+    /// You answered places' first-run ask, either way: Settings › Places can ask again.
+    func answeredPlaces() {
+        asksPlaces = false
+        defaults.set(true, forKey: "placesOffered")
+    }
+
+    /// Ito is in front: what the trail has waiting goes, and a photo seeding cut short carries on.
+    func sendTrail() {
+        Task { await places.uploads.send() }
+        photoSeeding.resumeIfStopped(with: places.uploads.client)
+    }
+
+    func seedFromPhotos() {
+        photoSeeding.start(with: places.uploads.client)
+    }
+
+    /// Deletes days of places, here and on the box. What's waiting on the phone goes first, so it
+    /// never leaves; the box is asked next. The answer is a line for Settings when the box couldn't
+    /// be reached.
+    func forgetPlaces(from: Date, to: Date) async -> String? {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: from)
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: to)) ?? to
+        try? places.uploads.queue.remove(from: start, to: end)
+        places.uploads.added()
+        let first = Self.day(from)
+        let last = Self.day(to)
+        return await forgetOnBox(first == last ? .day(first) : .range(from: first, to: last))
+    }
+
+    func forgetPlaces(_ forget: ForgetLocation) async -> String? {
+        if forget == .everything {
+            places.uploads.queue.removeAll()
+            places.uploads.added()
+        }
+        return await forgetOnBox(forget)
+    }
+
+    private func forgetOnBox(_ forget: ForgetLocation) async -> String? {
+        guard let client = places.uploads.client else {
+            return "Deleted what was waiting on this phone. Connect to your box to delete it there."
+        }
+        do throws(RequestError) {
+            try await client.forgetLocation(forget)
+            return "Deleted."
+        } catch {
+            return
+                "Deleted what was waiting on this phone, but your box didn't answer: \(error.plainWords). Try again to delete it there."
+        }
+    }
+
+    /// A local day as the box reads it: `2026-11-28`.
+    private static func day(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     /// You closed the Desk's offer to show the weather: it doesn't come back. Settings can still
@@ -201,6 +298,10 @@ final class AppModel {
     /// iOS woke Ari because a background upload has news: Ari's own, or one the share extension
     /// started. `done` goes back to iOS once it's all handled.
     func handleUploadEvents(_ identifier: String, done: @escaping () -> Void) {
+        if identifier == trailCarrier.identifier {
+            trailCarrier.whenEventsAreHandled(done)
+            return
+        }
         guard uploads != nil else { return done() }
         if identifier == carrier.identifier {
             carrier.whenEventsAreHandled(done)
@@ -254,6 +355,8 @@ final class AppModel {
         session?.close()
         session = nil
         hands = nil
+        // The trail waits on the phone for whichever box comes next.
+        places.uploads.client = nil
     }
 
     /// Kumo's hands for the session, fed from its stream.

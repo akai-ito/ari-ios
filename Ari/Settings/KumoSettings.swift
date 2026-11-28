@@ -35,9 +35,9 @@ struct KumoSettings: View {
                 .foregroundStyle(.ariText)
             switch model.whereabouts.permission {
             case .notAsked:
-                Button("Allow rough location", action: model.whereabouts.ask)
+                Button("Allow location", action: model.whereabouts.ask)
             case .refused:
-                Button("Rough location in iOS Settings…") {
+                Button("Location in iOS Settings…") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
@@ -49,9 +49,9 @@ struct KumoSettings: View {
             Text(name)
         } footer: {
             Text(
-                "Your phone tells \(name) its time zone, and its town when you allow rough location, "
+                "Your phone tells \(name) its time zone, and its town when you allow location, "
                     + "for the weather on your Desk and so \(name) follows you when you travel. "
-                    + "Nothing more precise leaves it.")
+                    + "Only Places, when you turn them on, sends more.")
         }
         .listRowBackground(Color.ariSurface)
     }

@@ -58,9 +58,14 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Ito listens on a call, or when you answer Kumo aloud, and sends your voice to your server."
         # Opening an event from Coming up in Apple's own event view.
         INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "Ito opens the events on your Desk in Calendar's own view, so you can see and edit them."
-        # Rough location, only while Ito is in use: the weather on the Desk, and Kumo following you
-        # when you travel. Nothing more precise than about 10 km leaves the phone.
-        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Ito sends your box just your town, for the weather on your Desk and so Kumo follows you when you travel."
+        # Location: the town for the weather on the Desk, with While Using; and Places, the trail
+        # kept on your box, which needs Always with Precise on (asked in the app, step by step).
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Ito tells your box your town, for the weather on your Desk, and keeps your places and trail there once you turn Places on."
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: "Ito keeps your places and trail on your own server."
+        # Seeding past places: each photo's date and place, read from its metadata, never the image.
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Ito reads when and where your photos were taken, never the photos themselves, so your places and trips start before today. Your box keeps it."
+        # "Contact card" on a person's page opens the phone's own card for them.
+        INFOPLIST_KEY_NSContactsUsageDescription: "Ito finds the person you're looking at in your contacts, to open their card."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
@@ -85,10 +90,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER).pair
             CFBundleURLSchemes: [ito]
-        # A call with Ari carries on locked and in your pocket.
-        UIBackgroundModes: [audio, voip]
-        # Location is asked for as approximate; precise stays off unless you turn it on.
-        NSLocationDefaultAccuracyReduced: true
+        # A call with Ari carries on locked and in your pocket; places' live GPS carries on while
+        # you're moving with Ito closed.
+        UIBackgroundModes: [audio, voip, location]
         # Siri answers to Kumo as well as Ito: "Ask Kumo".
         INAlternativeAppNames:
           - INAlternativeAppName: Kumo
