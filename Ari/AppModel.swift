@@ -61,6 +61,20 @@ final class AppModel {
         whereabouts.report = { [weak self] place in
             self?.session?.report(place, device: notifications.deviceID)
         }
+        #if DEBUG
+            // The Desk's stills: a server of samples in place of yours.
+            if let still = DeskStills.server {
+                address = DeskStills.address
+                declinedWeather = true
+                LeadName.remember("Kumo")
+                session = Session(
+                    address: DeskStills.address, token: DeskStills.token,
+                    outbox: OutboxStore(
+                        directory: FileManager.default.temporaryDirectory.appending(path: "Stills")),
+                    transport: still)
+                return
+            }
+        #endif
         guard let saved = Saved.load(from: defaults) else { return }
         group.address = saved.address
         address = saved.address
@@ -183,6 +197,12 @@ final class AppModel {
     /// A client for the server Ari is connected to, for calls outside the conversation, such as
     /// Settings' capabilities.
     func client() -> ItoClient? {
+        #if DEBUG
+            if let still = DeskStills.server {
+                return ItoClient(
+                    address: DeskStills.address, token: DeskStills.token, transport: still)
+            }
+        #endif
         guard let address, let token = try? tokens.token(for: address) else { return nil }
         return ItoClient(address: address, token: token, transport: URLSessionTransport())
     }

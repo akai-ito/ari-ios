@@ -26,6 +26,21 @@ enum PlanWords {
         return "\(days(repeating.days)) at \(repeating.time)"
     }
 
+    /// "Tuesdays", "Every day", "Weeknights" or "Mon, Thu": how a repeat comes back, in short.
+    static func repeats(_ repeating: Repeat) -> String {
+        let set = Set(repeating.days)
+        let evening = (Int(repeating.time.prefix(2)) ?? 0) >= 18
+        if set == Set(Weekday.known) { return evening ? "Every night" : "Every day" }
+        if set == Set(Weekday.weekdays) { return evening ? "Weeknights" : "Weekdays" }
+        if set == Set(Weekday.weekend) { return "Weekends" }
+        let days = Weekday.known.filter(set.contains)
+        if days.count == 1, let index = Weekday.known.firstIndex(of: days[0]) {
+            // The calendar's names start on Sunday; the protocol's days start on Monday.
+            return Calendar.current.weekdaySymbols[(index + 1) % 7] + "s"
+        }
+        return days.map(name).joined(separator: ", ")
+    }
+
     static func days(_ days: [Weekday]) -> String {
         let set = Set(days)
         if set == Set(Weekday.known) { return "Every day" }
