@@ -143,14 +143,14 @@ extension ItoClient {
     /// `GET /v0/files`: every file Kumo showed you, newest change first, each with its versions,
     /// for the Made shelf.
     public func files() async throws(RequestError) -> [ShownFile] {
-        let result: FileList = try await call(HTTPRequest(.get, "/v0/files"))
+        let result: FileList = try await call(HTTPRequest(.get, Kept.files), keeping: true)
         return result.files
     }
 
     /// `GET /v0/files/{file}`: what an `ari:file` card needs, every version.
     public func file(_ file: FileID) async throws(RequestError) -> ShownFile {
         let result: FileResult = try await call(
-            HTTPRequest(.get, "/v0/files/\(Self.segment(file.rawValue))"))
+            HTTPRequest(.get, "/v0/files/\(Self.segment(file.rawValue))"), keeping: true)
         return result.file
     }
 }

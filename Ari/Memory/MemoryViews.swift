@@ -128,10 +128,12 @@ struct PageView: View {
         // Again once there's a server to ask, when the page opened first.
         .task(id: memory != nil) {
             guard let memory else { return }
+            // The page as it was kept the last time it opened shows at once, while it's asked for.
+            if page == nil { page = memory.keptPage(address) }
             do throws(RequestError) {
                 page = try await memory.page(address)
             } catch {
-                problem = "Couldn't load this page: \(error.plainWords)"
+                if page == nil { problem = "Couldn't load this page: \(error.plainWords)" }
             }
         }
     }

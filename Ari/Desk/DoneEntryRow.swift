@@ -81,6 +81,7 @@ struct DoneEntryRow: View {
         }
         .font(.footnote)
         .buttonStyle(.plain)
+        .waitsForConnection()
     }
 
     private func performUndo() async {

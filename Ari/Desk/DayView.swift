@@ -34,6 +34,7 @@ struct DayView: View {
             TimelineView(.everyMinute) { context in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
+                        OfflineLine()
                         Picker("Show", selection: $onlyMine) {
                             Text("Everything").tag(false)
                             Text("Only mine").tag(true)
@@ -335,6 +336,7 @@ struct DayView: View {
         HStack(spacing: 18) { buttons() }
             .font(.footnote)
             .buttonStyle(.plain)
+            .waitsForConnection()
     }
 
     /// "Kumo planned 14:00 to 16:00", or "held" for a time it's keeping free.

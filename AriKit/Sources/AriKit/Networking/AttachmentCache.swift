@@ -1,8 +1,8 @@
 import Foundation
 
 /// Photos' and files' bytes kept on this device, by attachment id. An attachment's bytes never
-/// change on the server, so whatever is kept here stays right; the system may clear the folder
-/// when space runs low, and they're fetched again.
+/// change on the server, so whatever is kept here stays right, and what you've seen shows without a
+/// connection; the system may clear the folder when space runs low, and they're fetched again.
 public struct AttachmentCache: Sendable {
     public let directory: URL
 
@@ -23,7 +23,22 @@ public struct AttachmentCache: Sendable {
 
     public func keep(_ bytes: Data, for attachment: AttachmentID) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? bytes.write(to: file(for: attachment), options: .atomic)
+        try? bytes.write(to: file(for: attachment), options: Self.writing)
+    }
+
+    /// Forgets every attachment kept, as when you leave the server.
+    public func clear() {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    /// Your photos and files are personal: readable only once the phone has been unlocked since
+    /// it started.
+    private static var writing: Data.WritingOptions {
+        #if os(iOS)
+            [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        #else
+            [.atomic]
+        #endif
     }
 
     private func file(for attachment: AttachmentID) -> URL {

@@ -30,8 +30,8 @@ app's earlier name.
 memory pages, in the iOS Simulator.</sub></p>
 
 > [!NOTE]
-> You build the app yourself in Xcode for now; TestFlight comes later. Still to come: opening
-> instantly from an on-device cache, a light mode and an iPad layout.
+> You build the app yourself in Xcode for now; TestFlight comes later. Still to come: a light mode
+> and an iPad layout.
 
 ## What's in it
 
@@ -100,6 +100,13 @@ memory pages, in the iOS Simulator.</sub></p>
   applied, reconnects with backoff the moment the network returns, and treats 45 seconds without
   even a ping as a lost connection. A reply whose pieces don't line up asks for a fresh snapshot
   rather than showing wrong text.
+- **Readable offline.** What you've loaded (the chat and its threads, the Desk, In motion, the
+  Library and the pages Kumo made, with their photos) is kept on the device and shows at once when
+  Ari opens, with or without a connection, marked "Offline · updated 14:02" while it's the copy.
+  When the server is back, its snapshot replaces the copy in place. What the server must answer at
+  once, such as a card's answer or Undo, waits while offline; messages queue as ever. The copy is
+  readable only once the phone has been unlocked, stays out of backups, and goes when you leave the
+  server.
 - **Never lose a message.** Each message is saved on the device before it's sent, then sent in
   order, with the same id until the server has it, even across a restart. Stop, Try again, calls
   and the rest each have a lane of their own, so none waits behind a send or a reconnect.

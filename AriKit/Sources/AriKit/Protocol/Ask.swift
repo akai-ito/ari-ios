@@ -1,7 +1,7 @@
 /// Something the agent asked you. Asking ends the agent's turn, and the ask waits as long as it
 /// takes: the next message you send answers it, whether you tap an option, type your own answer, or
 /// write about something else. At most one ask waits at a time.
-public struct Ask: Hashable, Sendable, Decodable, Identifiable {
+public struct Ask: Hashable, Sendable, Codable, Identifiable {
     public var id: AskID
     /// The turn that asked.
     public var turn: TurnID
@@ -29,7 +29,7 @@ public struct Ask: Hashable, Sendable, Decodable, Identifiable {
     public var thread: ThreadID?
 
     /// A suggested answer. Tapping it sends its label as your message.
-    public struct Option: Hashable, Sendable, Decodable {
+    public struct Option: Hashable, Sendable, Codable {
         public var label: String
         public var description: String?
         /// Approvals only: this option goes ahead with the action, such as "Book it".

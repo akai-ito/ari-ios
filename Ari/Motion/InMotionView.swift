@@ -21,6 +21,7 @@ struct InMotionView: View {
                     if let motions, !motions.all.isEmpty {
                         let sections = InMotionReading.sections(motions.going)
                         VStack(alignment: .leading, spacing: 34) {
+                            OfflineLine()
                             ForEach(Array(sections.enumerated()), id: \.element.id) {
                                 index, section in
                                 SectionView(
