@@ -793,7 +793,7 @@ public final class Session {
         try await client.undo(entry)
     }
 
-    /// Asks for all of Kumo's plans again, such as when What I'm up to opens.
+    /// Asks for all of Kumo's plans again, such as when the Plans page opens.
     public func refreshPlans() async throws(RequestError) {
         let plans = try await client.wakeUps()
         desk = desk?.replacing(plans: plans)
