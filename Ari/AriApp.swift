@@ -11,7 +11,13 @@ struct AriApp: App {
         WindowGroup {
             Group {
                 #if DEBUG
-                    if DebugScript.showsMoods { KumoMoods() } else { app }
+                    if let sketch = DebugScript.lifeSketch {
+                        LifeRoot(sketch: sketch)
+                    } else if DebugScript.showsMoods {
+                        KumoMoods()
+                    } else {
+                        app
+                    }
                 #else
                     app
                 #endif

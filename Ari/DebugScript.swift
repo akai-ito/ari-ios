@@ -32,6 +32,9 @@ import SwiftUI
             return (address, token)
         }
 
+        /// `ARI_SKETCH` opens a still of Milestone 10's life and places round from made-up samples,
+        /// without a server, such as `s1-day` (see LifeSketch).
+        static let lifeSketch = environment["ARI_SKETCH"].flatMap(LifeSketch.init(rawValue:))
         static let opensTrail = environment["ARI_OPEN_TRAIL"] != nil
         static let opensSettings = !(environment["ARI_SETTINGS"] ?? "").isEmpty
         static let opensThreads = environment["ARI_THREADS"] != nil
