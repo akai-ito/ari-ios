@@ -1937,8 +1937,8 @@ const scenarios: readonly (() => Transcript)[] = [
       title: "Ari updates what it knows",
       summary:
         "You tell Ari things have moved on with Alex. Ari reads the page, rewrites the present and moves the " +
-        "old state to Earlier, adds to today's journal, and says so. Tapping the update shows the page " +
-        "before and after.",
+        "old state to Earlier, keeps a note for tonight's journal, and says so. Tapping the update shows the " +
+        "page before and after.",
       guarantees: ["G14", "G22"],
     });
     const seededAt = "2026-10-26T19:00:00.000Z";
@@ -1974,14 +1974,9 @@ const scenarios: readonly (() => Transcript)[] = [
       change,
     );
     transcript.wait(400);
-    agentCalls(transcript, "journal", {
-      text: "Things with Alex are going really well: they're seeing a lot of each other.",
-      gist: "Things going really well with Alex",
-      note: "Going well with Alex",
-    });
-    memoryStep(transcript, "journaled", [{ address: "memory:journal/2026-10-26", title: "26 October 2026" }], {
-      title: "Adding to today's journal",
-      endedTitle: "Added to today's journal",
+    agentCalls(transcript, "note_day", {
+      text: "Things with Alex are going really well: we're seeing a lot of each other.",
+      yours: true,
     });
     transcript.wait(300);
     writeWhole(transcript, "That's lovely to hear. I've updated Alex's page, so taking it slow is now history.");
@@ -2767,10 +2762,10 @@ const scenarios: readonly (() => Transcript)[] = [
       scenario: 57,
       title: "What Ari learnt lately",
       summary:
-        "You tell Ari about a trip. Ari starts a page for it and adds to today's journal, each with a line on " +
-        "what the page is now and a note on what changed. The Library leads with those notes, lists journal " +
-        "days by their headlines, lists people with the circle Ari keeps for each, and shows the trip's " +
-        "linked page by its name.",
+        "You tell Ari about a trip. Ari starts a page for it, with a line on what the page is now and a note on " +
+        "what changed, and keeps a note for tonight's journal. The Library leads with those notes, lists journal " +
+        "days by their headlines, lists people with the circle Ari keeps for each, and shows the trip's linked " +
+        "page by its name.",
       guarantees: ["G22"],
     });
     const seededAt = "2026-10-27T18:00:00.000Z";
@@ -2801,7 +2796,6 @@ const scenarios: readonly (() => Transcript)[] = [
       links: [mira.address],
       markdown: "Florence with Mira, 6 to 9 November. Nothing booked yet (as of 27 Oct).\n",
     };
-    const today = { address: "memory:journal/2026-10-27", title: "27 October 2026" };
     transcript.begin(seededAt);
     transcript.world("memory_holds", { pages: [mira, yesterday] });
     transcript.wait(10 * 60 * 1000);
@@ -2826,24 +2820,14 @@ const scenarios: readonly (() => Transcript)[] = [
       change,
     );
     transcript.wait(400);
-    agentCalls(transcript, "journal", {
-      text: "Divy and Mira are off to Florence together, 6 to 9 November.",
-      gist: "Florence planned with Mira",
-      note: "Florence with Mira",
-    });
-    memoryStep(transcript, "journaled", [today], {
-      title: "Adding to today's journal",
-      endedTitle: "Added to today's journal",
-    });
+    agentCalls(transcript, "note_day", { text: "Mira and I are off to Florence together, 6 to 9 November." });
     transcript.wait(300);
     writeWhole(transcript, "Florence with Mira, lovely! I've started a page for the trip.");
     transcript.endTurn("completed");
     transcript.wait(5000);
     const writtenAt = new Date(Date.parse(seededAt) + 10 * 60 * 1000 + 2000 + 700).toISOString();
-    const journaledAt = new Date(Date.parse(writtenAt) + 400).toISOString();
     memoryCall(transcript, "/v0/memory/recent", {
       changes: [
-        { change: transcript.change(), ...today, at: journaledAt, note: "Florence with Mira" },
         {
           change,
           address: florence.address,
@@ -2863,10 +2847,7 @@ const scenarios: readonly (() => Transcript)[] = [
     });
     transcript.wait(2000);
     memoryCall(transcript, "/v0/memory/pages?shelf=journal", {
-      pages: [
-        { ...today, gist: "Florence planned with Mira", changed_at: journaledAt },
-        { address: yesterday.address, title: yesterday.title, gist: yesterday.gist, changed_at: seededAt },
-      ],
+      pages: [{ address: yesterday.address, title: yesterday.title, gist: yesterday.gist, changed_at: seededAt }],
     });
     transcript.wait(2000);
     memoryCall(transcript, "/v0/memory/pages?shelf=people", {
@@ -5239,8 +5220,8 @@ const scenarios: readonly (() => Transcript)[] = [
     const dream = transcript.dreamId();
     const wrote = transcript.addDone({ text: "Wrote Thursday's journal", dream, undo: true });
     const movedDone = transcript.addDone({ text: moved, dream, undo: true });
-    const setText = `Set “${saturday.what}” for Sat 28 Nov 07:00`;
-    const setDone = transcript.addDone({ text: setText, dream, undo: true });
+    const sessionText = `Set “${saturday.what}” for Sat 28 Nov 07:00`;
+    const sessionDone = transcript.addDone({ text: sessionText, dream, undo: true });
     const record = transcript.dreamFinished({
       id: dream,
       day: "2026-11-26",
@@ -5258,7 +5239,7 @@ const scenarios: readonly (() => Transcript)[] = [
         },
         { group: "planned", text: moved, wake_up: check.id, done: String(movedDone.id), undo: true },
         { group: "noticed", text: noticed },
-        { group: "planned", text: setText, wake_up: session.id, done: String(setDone.id), undo: true },
+        { group: "planned", text: sessionText, wake_up: session.id, done: String(sessionDone.id), undo: true },
       ],
     });
     transcript.time("2026-11-27T07:40:00.000Z");
@@ -5269,10 +5250,10 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.request("POST", `/v0/dreams/${dream}/seen`);
     transcript.response(200, { dream: seen });
     transcript.wait(6000);
-    transcript.request("POST", `/v0/done/${String(setDone.id)}/undo`);
+    transcript.request("POST", `/v0/done/${String(sessionDone.id)}/undo`);
     transcript.plans([later]);
     transcript.response(200, {
-      entry: { ...setDone, text: `Undone: ${setText}`, undo: false },
+      entry: { ...sessionDone, text: `Undone: ${sessionText}`, undo: false },
     });
     transcript.wait(1000);
     transcript.request("GET", "/v0/dream");
@@ -5282,7 +5263,7 @@ const scenarios: readonly (() => Transcript)[] = [
       latest: {
         ...seen,
         lines: seen.lines.map((line) =>
-          line.done === String(setDone.id) ? { ...line, undo: false, undone: true } : line,
+          line.done === String(sessionDone.id) ? { ...line, undo: false, undone: true } : line,
         ),
       },
     });

@@ -337,8 +337,8 @@ the dream.
 ### 35 · [Ari updates what it knows](transcripts/35-ari-updates-what-it-knows.jsonl)
 
 - Each page Ari writes shows as a `memory` step with `action: updated` and a `change` id; tapping
-  it fetches the page before and after. Additions to the journal show with `action: journaled`.
-  (G14, G22)
+  it fetches the page before and after. What happened in your day goes in a note for tonight's
+  journal, which the dream writes; the note shows nothing on the wire. (G14, G22)
 
 ### 36 · [Forget that](transcripts/36-forget-that.jsonl)
 
