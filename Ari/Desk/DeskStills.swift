@@ -237,7 +237,7 @@
                         "Message you at 23:45 with the next tray's number, and tick it off on your Health page when you say done.",
                     why:
                         "You're on tray 9 of 12. Quillfield Dental said to switch weekly, late, so each one settles overnight.",
-                    repeats: #"{"days":["\#(today)"],"time":"23:45"}"#))
+                    repeats: #"{"days":["\#(today)"],"time":"23:45","left":4}"#))
             all.append(
                 plan(
                     "basil", "Water the basil", at(9, day: 1),
@@ -259,7 +259,7 @@
                     "week", "Look back on the week with you", at(18, day: 3),
                     what: "Ask how the week went, and what to carry into next.",
                     why: "You asked for a short look back each Friday.",
-                    repeats: #"{"days":["fri"],"time":"18:00"}"#))
+                    repeats: #"{"days":["fri"],"time":"18:00","until":"\#(day(20))"}"#))
             return all
         }
 

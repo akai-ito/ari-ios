@@ -810,8 +810,18 @@ public final class Session {
         return changed
     }
 
-    /// You cancelled one of Kumo's plans. It leaves the Desk at once; Kumo doesn't set it again
-    /// unasked.
+    /// You skipped a repeating plan's next time. It shows at the time after at once, or leaves the
+    /// Desk when that was its last.
+    public func skip(_ plan: WakeUpID) async throws(RequestError) {
+        if let next = try await client.skipWakeUp(plan) {
+            desk = desk?.replacing(plan: next)
+        } else {
+            desk = desk?.removing(plan: plan)
+        }
+    }
+
+    /// You cancelled one of Kumo's plans, or stopped a repeating one. It leaves the Desk at once;
+    /// Kumo doesn't set it again unasked.
     public func cancel(_ plan: WakeUpID) async throws(RequestError) {
         do throws(RequestError) {
             try await client.cancelWakeUp(plan)

@@ -20,10 +20,17 @@ enum PlanWords {
         return date.formatted(DeskTime.weekdayDay)
     }
 
-    /// "Weekdays at 08:30", "Every day at 09:00", "Sat, Sun at 10:00", or "Once" for a one-off.
+    /// "Weekdays at 08:30", "Every day at 09:00", "Tuesdays at 23:45 · 4 left", or "Once" for a
+    /// one-off.
     static func repeats(_ plan: WakeUp) -> String {
         guard let repeating = plan.repeat else { return "Once" }
-        return "\(days(repeating.days)) at \(repeating.time)"
+        return ending("\(days(repeating.days)) at \(repeating.time)", repeating)
+    }
+
+    /// Words about a repeat, then how it ends when it does: "Tuesdays · 4 left", "Fridays 18:00 ·
+    /// until 22 Dec".
+    static func ending(_ words: String, _ repeating: Repeat) -> String {
+        [words, PlanReading.end(of: repeating)].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// "Tuesdays", "Every day", "Weeknights" or "Mon, Thu": how a repeat comes back, in short.

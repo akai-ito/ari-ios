@@ -462,7 +462,7 @@ struct PlanLine: View {
                             Image(systemName: "arrow.trianglehead.2.clockwise")
                                 .font(.caption2.weight(.semibold))
                                 .accessibilityHidden(true)
-                            Text(PlanWords.repeats(repeating))
+                            Text(PlanWords.ending(PlanWords.repeats(repeating), repeating))
                         }
                         .font(.footnote)
                         .foregroundStyle(.ariTertiary)

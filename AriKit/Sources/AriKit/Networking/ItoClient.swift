@@ -158,8 +158,17 @@ public struct ItoClient: Sendable, CustomStringConvertible {
         return answer.wakeUp
     }
 
-    /// `DELETE /v0/wakeups/{wake_up}`: cancels a wake-up. Kumo sees it's gone and doesn't set it
-    /// again unasked.
+    /// `POST /v0/wakeups/{wake_up}/skip`: skips a repeating wake-up's next time. The answer is the
+    /// wake-up at the time after, or `nil` when that was its last and it ended. A one-off is
+    /// refused: cancel it instead.
+    public func skipWakeUp(_ id: WakeUpID) async throws(RequestError) -> WakeUp? {
+        let answer: WakeUpSkipped = try await call(
+            HTTPRequest(.post, "/v0/wakeups/\(Self.segment(id.rawValue))/skip"))
+        return answer.wakeUp
+    }
+
+    /// `DELETE /v0/wakeups/{wake_up}`: cancels a wake-up, a repeating one with every time still to
+    /// come (Stop). Kumo sees it's gone and doesn't set it again unasked.
     public func cancelWakeUp(_ id: WakeUpID) async throws(RequestError) {
         try await callWithoutAnswer(
             HTTPRequest(.delete, "/v0/wakeups/\(Self.segment(id.rawValue))"))

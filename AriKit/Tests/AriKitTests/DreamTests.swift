@@ -382,16 +382,38 @@ struct DreamTests {
         #expect(aligner.shownTitle == "Aligner change" && basil.shownTitle == "Look at basil")
     }
 
-    @Test("a repeat's coming times, and skipping tonight's")
+    @Test("a repeat's coming times, as far as its end")
     func comingTimes() {
         let calendar = Self.london
         let aligner = plan("aligner", at(1, 23, 45), repeats: [.tuesday])
         let times = PlanReading.nextTimes(of: aligner, calendar: calendar)
         #expect(times == [at(1, 23, 45), at(8, 23, 45), at(15, 23, 45), at(22, 23, 45)])
-        #expect(PlanReading.afterSkipping(aligner, calendar: calendar) == at(8, 23, 45))
+        #expect(aligner.repeat.flatMap { PlanReading.end(of: $0, calendar: calendar) } == nil)
         let once = plan("once", at(1, 18))
         #expect(PlanReading.nextTimes(of: once, calendar: calendar) == [at(1, 18)])
-        #expect(PlanReading.afterSkipping(once, calendar: calendar) == nil)
+
+        func ending(left: Int? = nil, until: String? = nil) -> WakeUp {
+            WakeUp(
+                id: "w_end", at: Timestamp(at(1, 23, 45)), what: "Change the aligner", why: "",
+                repeat: Repeat(days: [.tuesday], time: "23:45", left: left, until: until),
+                source: WakeUpSource(kind: .chat, title: ""), setAt: Timestamp(at(1, 1)))
+        }
+        let twoLeft = ending(left: 2)
+        #expect(
+            PlanReading.nextTimes(of: twoLeft, calendar: calendar) == [
+                at(1, 23, 45), at(8, 23, 45),
+            ])
+        #expect(twoLeft.repeat.flatMap { PlanReading.end(of: $0, calendar: calendar) } == "2 left")
+        // Its last day counts.
+        let untilThe15th = ending(until: "2026-12-15")
+        #expect(
+            PlanReading.nextTimes(of: untilThe15th, calendar: calendar)
+                == [at(1, 23, 45), at(8, 23, 45), at(15, 23, 45)])
+        var british = calendar
+        british.locale = Locale(identifier: "en_GB")
+        #expect(
+            untilThe15th.repeat.flatMap { PlanReading.end(of: $0, calendar: british) }
+                == "until 15 Dec")
     }
 
     @Test("a plan from a server before titles shows what it's for; a title encodes in a change")

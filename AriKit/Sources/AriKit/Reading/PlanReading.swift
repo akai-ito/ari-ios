@@ -55,12 +55,17 @@ public enum PlanReading {
     }
 
     /// The next `count` times a plan comes due: its own next time, then, for a repeat, each day it
-    /// comes back at its time, on this phone's calendar. A one-off has only its own.
+    /// comes back at its time, on this phone's calendar, as far as its end. A one-off has only its
+    /// own.
     public static func nextTimes(of plan: WakeUp, count: Int = 4, calendar: Calendar = .current)
         -> [Date]
     {
         var times = [plan.at.date]
         guard let repeating = plan.repeat, !repeating.days.isEmpty else { return times }
+        let count = min(count, max(1, repeating.left ?? count))
+        let last = repeating.lastDay(in: calendar).flatMap {
+            calendar.date(byAdding: .day, value: 1, to: $0)
+        }
         var day = calendar.startOfDay(for: plan.at.date)
         // A fortnight is always enough to find the next of any day.
         var looked = 0
@@ -68,6 +73,7 @@ public enum PlanReading {
             looked += 1
             guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
             day = next
+            if let last, day >= last { break }
             guard repeating.days.contains(weekday(of: day, calendar: calendar)),
                 let time = self.time(repeating.time, on: day, calendar: calendar),
                 time > times[times.count - 1]
@@ -77,11 +83,15 @@ public enum PlanReading {
         return times
     }
 
-    /// When a repeat comes next after skipping its next time; `nil` for a one-off.
-    public static func afterSkipping(_ plan: WakeUp, calendar: Calendar = .current) -> Date? {
-        guard plan.repeat != nil else { return nil }
-        let times = nextTimes(of: plan, count: 2, calendar: calendar)
-        return times.count > 1 ? times[1] : nil
+    /// How a repeat ends, in short: "4 left", "1 left" or "until 22 Dec"; `nil` while it repeats
+    /// until stopped.
+    public static func end(of repeating: Repeat, calendar: Calendar = .current) -> String? {
+        if let left = repeating.left { return "\(left) left" }
+        guard let last = repeating.lastDay(in: calendar) else { return nil }
+        let day = last.formatted(
+            Date.FormatStyle(timeZone: calendar.timeZone).day().month(.abbreviated)
+                .locale(calendar.locale ?? .current))
+        return "until \(day)"
     }
 
     /// The protocol's day for a date: Monday first.

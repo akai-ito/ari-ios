@@ -92,9 +92,12 @@ struct PlansPage: View {
                         Text(plan.shownTitle).foregroundStyle(.ariText)
                         if let repeating = plan.repeat {
                             Text("·").foregroundStyle(.ariTertiary)
-                            Text("\(PlanWords.repeats(repeating)) \(repeating.time)")
-                                .foregroundStyle(.ariSecondary)
-                                .monospacedDigit()
+                            Text(
+                                PlanWords.ending(
+                                    "\(PlanWords.repeats(repeating)) \(repeating.time)", repeating)
+                            )
+                            .foregroundStyle(.ariSecondary)
+                            .monospacedDigit()
                         }
                         Spacer(minLength: 0)
                     }

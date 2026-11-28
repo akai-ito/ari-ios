@@ -238,18 +238,17 @@ struct PlanDetail: View {
             if plan.repeat != nil { comingUp }
             HStack(spacing: 10) {
                 DeskPill(title: "Move…") { editing = true }
-                if let next = PlanReading.afterSkipping(plan) {
+                if plan.repeat != nil {
+                    // One time only: it comes back at the time after, or ends if this was its last.
                     DeskPill(title: skipTitle, busy: sending.key == "skip") {
                         Task {
                             await sending.send("skip", failure: "Couldn't skip it") {
-                                try await session.change(plan.id, WakeUpChange(at: Timestamp(next)))
+                                try await session.skip(plan.id)
                             }
                         }
                     }
                 }
-                DeskPill(
-                    title: plan.repeat == nil ? "Cancel it" : "Stop it", busy: sending.key == "stop"
-                ) {
+                DeskPill(title: stopTitle, busy: sending.key == "stop") {
                     confirmsStop = true
                 }
             }
@@ -280,13 +279,22 @@ struct PlanDetail: View {
         }
     }
 
-    /// "Tuesdays at 23:45", or "Today at 18:45" for a one-off.
+    /// "Tuesdays at 23:45 · 4 left", or "Today at 18:45" for a one-off.
     private var when: String {
         if let repeating = plan.repeat {
-            return "\(PlanWords.repeats(repeating)) at \(repeating.time)"
+            return PlanWords.ending(
+                "\(PlanWords.repeats(repeating)) at \(repeating.time)", repeating)
         }
         let day = PlanWords.day(plan.at.date, now: DeskClock.now()) ?? "Today"
         return "\(day) at \(plan.at.date.formatted(DeskTime.time))"
+    }
+
+    /// "Cancel it" for a one-off; for a repeat, "Stop it", or "Stop all four" when it counts down.
+    private var stopTitle: String {
+        guard let repeating = plan.repeat else { return "Cancel it" }
+        guard let left = repeating.left, left > 1 else { return "Stop it" }
+        let words = ["two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
+        return "Stop all \(left <= 10 ? words[left - 2] : "\(left)")"
     }
 
     private var skipTitle: String {

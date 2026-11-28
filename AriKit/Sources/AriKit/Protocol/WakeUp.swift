@@ -90,15 +90,27 @@ public struct Weekday: OpenValue {
 }
 
 /// A wake-up that comes back: on these days, at this time in your time zone, wherever you are, such
-/// as weekdays at 09:00.
+/// as weekdays at 09:00, until it's stopped or, when it has an end, a number of times or up to a day.
 public struct Repeat: Sendable, Equatable, Codable {
     public let days: [Weekday]
     /// Such as `09:00`.
     public let time: String
+    /// How many more times it comes round, counting the next; it ends after the last. `nil` when
+    /// it repeats until stopped.
+    public let left: Int?
+    /// The last day it comes round, on your local clock, such as `2026-12-22`; it ends after that.
+    public let until: String?
 
-    public init(days: [Weekday], time: String) {
+    public init(days: [Weekday], time: String, left: Int? = nil, until: String? = nil) {
         self.days = days
         self.time = time
+        self.left = left
+        self.until = until
+    }
+
+    /// The last day it comes round, at its start on `calendar`, when it has one.
+    public func lastDay(in calendar: Calendar = .current) -> Date? {
+        until.flatMap(LocalTime.init).map { $0.date(in: calendar) }
     }
 
     /// Whether it comes back every day of the week.
@@ -207,6 +219,16 @@ public struct WakeUpList: Sendable, Equatable, Decodable {
 }
 
 /// The answer to `PATCH /v0/wakeups/{wake_up}`: the wake-up as it is now.
+/// The answer to `POST /v0/wakeups/{wake_up}/skip`: the wake-up at its next time, or `nil` when
+/// the time skipped was its last and it's gone.
+public struct WakeUpSkipped: Sendable, Equatable, Decodable {
+    public let wakeUp: WakeUp?
+
+    enum CodingKeys: String, CodingKey {
+        case wakeUp = "wake_up"
+    }
+}
+
 public struct WakeUpResult: Sendable, Equatable, Decodable {
     public let wakeUp: WakeUp
 

@@ -103,6 +103,31 @@ struct SettingsTests {
         try await cancelling.value
     }
 
+    @Test("Skip skips one time of a repeat that counts down, and its last ends it")
+    func skipsARepeat() async throws {
+        let server = ScriptedServer()
+        let skipping = Task { [client = try client(server)] in
+            try await client.skipWakeUp("w_2")
+        }
+        let sent = try await request(from: server)
+        #expect(sent.method == .post && sent.path == "/v0/wakeups/w_2/skip" && sent.body == nil)
+        try await server.answer(
+            200,
+            json: #"""
+                { "wake_up": { "id": "w_2", "at": "2026-12-08T23:45:00.000Z", "title": "Aligner change",
+                  "what": "Say which tray is next", "why": "Tray 9 of 12.", "by": "kumo",
+                  "repeat": { "days": ["tue"], "time": "23:45", "left": 3 },
+                  "source": { "kind": "chat", "title": "Chat" }, "set_at": "2026-11-10T19:00:00.000Z" } }
+                """#)
+        let next = try #require(try await skipping.value)
+        #expect(next.repeat?.left == 3 && next.repeat?.until == nil)
+
+        let last = Task { [client = try client(server)] in try await client.skipWakeUp("w_2") }
+        _ = try await request(from: server)
+        try await server.answer(200, json: "{}")
+        #expect(try await last.value == nil)
+    }
+
     @Test("a refusal keeps the server's reason")
     func refuses() async throws {
         let server = ScriptedServer()
