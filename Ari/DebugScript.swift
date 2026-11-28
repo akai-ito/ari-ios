@@ -18,7 +18,9 @@ import SwiftUI
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code, and
     /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), `ARI_TALK`
     /// starts a call, `ARI_MADE` opens a page Kumo made (its id; with `ARI_MADE_END` at its foot),
-    /// and `ARI_NAME` opens a name's card (such as `memory:people/alex`).
+    /// `ARI_NAME` opens a name's card (such as `memory:people/alex`), and `ARI_OFFLINE` takes the
+    /// network away that many seconds after launch (`0` for none from the start), to see Ari read
+    /// from its copy.
     enum DebugScript {
         static let environment = ProcessInfo.processInfo.environment
 
@@ -55,6 +57,27 @@ import SwiftUI
         static let made = environment["ARI_MADE"].map(MadeID.init(rawValue:))
         static let opensMadeAtEnd = environment["ARI_MADE_END"] != nil
         static let name = environment["ARI_NAME"].flatMap(URL.init(string:)).flatMap(NameLink.init)
+        static let offlineAfter = environment["ARI_OFFLINE"].flatMap(Double.init)
+
+        /// A network that goes away `after` seconds, as airplane mode would.
+        struct LosingNetwork: NetworkPath {
+            let after: Double
+
+            func updates() -> AsyncStream<Bool> {
+                AsyncStream { continuation in
+                    guard after > 0 else {
+                        continuation.yield(false)
+                        return
+                    }
+                    continuation.yield(true)
+                    let losing = Task {
+                        try? await Task.sleep(for: .seconds(after))
+                        continuation.yield(false)
+                    }
+                    continuation.onTermination = { _ in losing.cancel() }
+                }
+            }
+        }
 
         /// Where `ARI_SETTINGS` goes past the top of Settings.
         static var settingsPath: [SettingsRoute] {

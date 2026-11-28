@@ -381,10 +381,17 @@ final class AppModel {
             (try? OutboxStore.applicationSupport(for: address))
             ?? OutboxStore(
                 directory: FileManager.default.temporaryDirectory.appending(path: "Outbox"))
+        #if DEBUG
+            let network: any NetworkPath =
+                DebugScript.offlineAfter.map { DebugScript.LosingNetwork(after: $0) }
+                ?? SystemNetworkPath()
+        #else
+            let network = SystemNetworkPath()
+        #endif
         // What you've read, kept to show at once on the next launch and without a connection.
         return Session(
             address: address, token: token, outbox: outbox, cache: .forThisApp(),
-            copies: try? LocalCopy.applicationSupport(for: address))
+            copies: try? LocalCopy.applicationSupport(for: address), network: network)
     }
 
     private struct Saved: Codable {

@@ -152,7 +152,8 @@ once Chat is open, `ARI_PLACE` opens a tab (`chat`, `motion` or `library`), `ARI
 the Desk (`needs`, `sky`, `plans`, `know`, `question`, `weave`, `day`, `problems` or `wrong`), and
 `ARI_MOTION` opens a thing in motion. `ARI_STILL` (`morning`, `afternoon`, `evening`, `asleep`,
 `dreaming`, `dreamt` or `asked`) runs the Desk on made-up samples with no server, and `ARI_CLOCK`
-(such as `07:40`) sets the time it shows.
+(such as `07:40`) sets the time it shows. `ARI_OFFLINE` takes the network away that many seconds
+after launch, to see Ari read from its copy.
 [DebugScript.swift](Ari/DebugScript.swift) lists the rest. From `xcrun simctl launch`, prefix each
 with `SIMCTL_CHILD_`.
 
