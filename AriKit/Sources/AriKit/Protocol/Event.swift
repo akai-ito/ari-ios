@@ -47,8 +47,10 @@ public struct Event: Sendable, Equatable, Decodable {
         case problemsChanged(ProblemsChanged)
         case recordingChanged(RecordingChanged)
         case browserChanged(BrowserChanged)
-        /// Full access turned on or off. Protocol 0.20, ahead of the pinned spec.
+        /// Full access turned on or off.
         case accessChanged(AccessChanged)
+        case dreamFinished(DreamFinished)
+        case questionChanged(QuestionChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -63,12 +65,8 @@ public struct Event: Sendable, Equatable, Decodable {
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
         "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
         "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
-        "browser.changed",
+        "browser.changed", "dream.finished", "question.changed", "access.changed",
     ]
-
-    /// Types the next protocol adds, which Ari decodes already: they join ``knownTypes`` when the
-    /// pin moves to the spec that lists them (protocol 0.20).
-    public static let typesAheadOfPin = ["access.changed"]
 
     private enum EnvelopeKeys: String, CodingKey {
         case id, type
@@ -119,6 +117,8 @@ public struct Event: Sendable, Equatable, Decodable {
             case "recording.changed": .recordingChanged(try RecordingChanged(from: decoder))
             case "browser.changed": .browserChanged(try BrowserChanged(from: decoder))
             case "access.changed": .accessChanged(try AccessChanged(from: decoder))
+            case "dream.finished": .dreamFinished(try DreamFinished(from: decoder))
+            case "question.changed": .questionChanged(try QuestionChanged(from: decoder))
             default: .unknown
             }
     }

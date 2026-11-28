@@ -16,7 +16,10 @@ public struct WakeUp: Sendable, Equatable, Decodable, Identifiable {
     public let id: WakeUpID
     /// When it's next due, a concrete time Kumo worked out, such as the end of the event it's for.
     public let at: Timestamp
-    /// What it's for, in a line, such as "Ask how the Halcyon technical went".
+    /// What it is in a few plain words, as you'd say it, such as "Ask how the technical went": the
+    /// line Kumo's plans show. A server from before titles leaves it out; ``shownTitle`` falls back.
+    public let title: String?
+    /// What Kumo will do when it wakes, in its own words, shown with `why` when a plan is open.
     public let what: String
     /// Why, in Kumo's words: what it will have in mind when it wakes.
     public let why: String
@@ -32,12 +35,13 @@ public struct WakeUp: Sendable, Equatable, Decodable, Identifiable {
     public let setAt: Timestamp
 
     public init(
-        id: WakeUpID, at: Timestamp, what: String, why: String, repeat: Repeat? = nil,
-        by: WakeUpAuthor = .kumo, source: WakeUpSource, motion: MotionID? = nil,
-        setAt: Timestamp
+        id: WakeUpID, at: Timestamp, title: String? = nil, what: String, why: String,
+        repeat: Repeat? = nil, by: WakeUpAuthor = .kumo, source: WakeUpSource,
+        motion: MotionID? = nil, setAt: Timestamp
     ) {
         self.id = id
         self.at = at
+        self.title = title
         self.what = what
         self.why = why
         self.repeat = `repeat`
@@ -47,8 +51,11 @@ public struct WakeUp: Sendable, Equatable, Decodable, Identifiable {
         self.setAt = setAt
     }
 
+    /// Its line in Kumo's plans: its title, or what it's for from a server before titles.
+    public var shownTitle: String { title ?? what }
+
     enum CodingKeys: String, CodingKey {
-        case id, at, what, why, `repeat`, by, source, motion
+        case id, at, title, what, why, `repeat`, by, source, motion
         case setAt = "set_at"
     }
 }
@@ -156,14 +163,18 @@ public struct WakeUpChange: Sendable, Equatable, Encodable {
     public var at: Timestamp?
     /// How it comes back: a new repeat, `.some(nil)` to make it a one-off, or `nil` to keep it.
     public var `repeat`: Repeat??
+    /// Its title in Kumo's plans.
+    public var title: String?
     public var what: String?
     public var why: String?
 
     public init(
-        at: Timestamp? = nil, repeat: Repeat?? = nil, what: String? = nil, why: String? = nil
+        at: Timestamp? = nil, repeat: Repeat?? = nil, title: String? = nil, what: String? = nil,
+        why: String? = nil
     ) {
         self.at = at
         self.repeat = `repeat`
+        self.title = title
         self.what = what
         self.why = why
     }
@@ -176,12 +187,13 @@ public struct WakeUpChange: Sendable, Equatable, Encodable {
         case .some(.none): try container.encodeNil(forKey: .repeat)
         case .none: break
         }
+        try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(what, forKey: .what)
         try container.encodeIfPresent(why, forKey: .why)
     }
 
     enum CodingKeys: String, CodingKey {
-        case at, `repeat`, what, why
+        case at, `repeat`, title, what, why
     }
 }
 

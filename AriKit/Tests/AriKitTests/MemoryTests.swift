@@ -51,7 +51,8 @@ struct MemoryTests {
         let updated = try #require(steps.last { $0.memoryAction == .updated })
         #expect(updated.change != nil)
         #expect(updated.pages?.first?.address == "memory:people/alex")
-        #expect(steps.contains { $0.memoryAction == .journaled })
+        // The journal is the dream's to write now: what you say by day is kept as a note for it.
+        #expect(!steps.contains { $0.memoryAction == .journaled })
     }
 
     @Test("plays transcript 57: Ari's notes on what changed, the journal by headline, named links")
@@ -60,10 +61,10 @@ struct MemoryTests {
         let server = TranscriptServer(
             transcript, only: { [.memoryRecent, .memoryPages, .memoryPage].contains($0) })
         let recent = try await server.client.recentChanges()
-        #expect(recent.changes.first?.note == "Florence with Mira")
-        #expect(recent.changes.first?.title == "27 October 2026")
+        #expect(recent.changes.first?.note == "Florence with Mira, 6–9 Nov")
+        #expect(recent.changes.first?.title == "Florence trip")
         let journal = try await server.client.pages(on: "journal")
-        #expect(journal.pages.first?.gist == "Florence planned with Mira")
+        #expect(journal.pages.first?.title == "26 October 2026")
         let people = try await server.client.pages(on: "people")
         #expect(people.pages.first?.circle == "friends")
         let trip = try await server.client.page("memory:projects/florence-trip")

@@ -18,6 +18,10 @@ struct MainView: View {
     @State private var motions: Motions?
     /// The pages Kumo made, for their cards in the chat and the Made shelf.
     @State private var made: MadePages?
+    /// Kumo's dream, for the moon and the sun on the Desk and their page.
+    @State private var dreams: Dreams?
+    /// Understanding you, for Getting to know you.
+    @State private var understanding: UnderstandingYou?
     #if DEBUG
         /// A page or a name's card `ARI_MADE` or `ARI_NAME` opens.
         @State private var debugMade: MadeID?
@@ -81,6 +85,8 @@ struct MainView: View {
         .environment(\.offline, Offline(session))
         .environment(motions)
         .environment(made)
+        .environment(dreams)
+        .environment(understanding)
         // A Desk item in the chat is the Desk's own card, as it is now.
         .environment(
             \.deskItems,
@@ -104,6 +110,17 @@ struct MainView: View {
                 motions = made
             }
             await motions?.refresh()
+        }
+        .task {
+            if dreams == nil, let client = model.client() {
+                let dream = Dreams(client: client)
+                session.dreams = dream
+                dreams = dream
+                let questions = UnderstandingYou(client: client)
+                session.understanding = questions
+                understanding = questions
+            }
+            await dreams?.refresh()
         }
         .task {
             if made == nil, let client = model.client() {

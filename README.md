@@ -35,11 +35,16 @@ memory pages, in the iOS Simulator.</sub></p>
 
 ## What's in it
 
-- **The Desk.** Where the app opens. Kumo sits in its current mood, with what needs you beside it,
-  and today as a dotted line at the foot. Tapping Kumo opens what needs you (drafts to send from
-  Mail, invites, questions), Kumo's plans, everything it did today with an undo and "That was
-  wrong", and the areas it's learning about you. Tapping the day opens it as a list, with Kumo's
-  planned blocks and its guesses marked as guesses.
+- **The Desk.** Where the app opens. Kumo sits in its current mood, today as a dotted line at the
+  foot, and three cues in the scene. "2 for you" shows only while something waits on you (drafts to
+  send from Mail, invites, questions) and opens just that list. Over Kumo's shoulder hangs the moon
+  from the night's dream until you've seen it, then the sun, low and amber in the evening; either
+  opens one page: what the dream planned, tidied, noticed and saved for you, with its weave
+  replayed, then today's plans and what's done, each with its why, Undo and "That was wrong", and
+  Dream now. Kumo itself opens Getting to know you: the areas it's learning, and the few things it
+  would like you to explain, answered with a tap, your words or your voice. At night Kumo sleeps;
+  while it dreams its thoughts drift up as words, and a tap watches the day being woven. Tapping
+  the day opens it as a list, with Kumo's planned blocks and its guesses marked as guesses.
 - **Chat.** One conversation, streamed at a reading pace. Between your message and Kumo's answer,
   its trail shows what it did in plain words; tap a step for the specifics. Stop works at once.
   When Kumo needs your go-ahead or an answer, it asks on the trail and waits.
@@ -138,7 +143,10 @@ timeout.
 In debug builds, environment variables drive the app without typing, which is how the screenshots
 above were taken: `ARI_SERVER` and `ARI_TOKEN` fill in the connect screen, `ARI_SAY` sends a message
 once Chat is open, `ARI_PLACE` opens a tab (`chat`, `motion` or `library`), `ARI_DESK` opens part of
-the Desk (`upto`, `day`, `tracks`, `problems` or `wrong`), and `ARI_MOTION` opens a thing in motion.
+the Desk (`needs`, `sky`, `plans`, `know`, `question`, `weave`, `day`, `problems` or `wrong`), and
+`ARI_MOTION` opens a thing in motion. `ARI_STILL` (`morning`, `afternoon`, `evening`, `asleep`,
+`dreaming`, `dreamt` or `asked`) runs the Desk on made-up samples with no server, and `ARI_CLOCK`
+(such as `07:40`) sets the time it shows.
 [DebugScript.swift](Ari/DebugScript.swift) lists the rest. From `xcrun simctl launch`, prefix each
 with `SIMCTL_CHILD_`.
 

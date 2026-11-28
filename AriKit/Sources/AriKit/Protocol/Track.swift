@@ -60,8 +60,8 @@ public struct TrackStage: OpenValue {
     public var rung: Int { Self.known.firstIndex(of: self) ?? 0 }
 }
 
-/// One thing a track stands on: a time you confirmed Kumo got it right, corrected it, or Kumo moved
-/// it to another stage, with why.
+/// One thing a track stands on: a time you confirmed Kumo got it right, corrected it, answered one of
+/// its questions in Understanding you, or Kumo moved it to another stage, with why.
 public struct TrackEvidence: Sendable, Equatable, Decodable {
     public let at: Timestamp
     public let kind: Kind
@@ -71,15 +71,19 @@ public struct TrackEvidence: Sendable, Equatable, Decodable {
     public let stage: TrackStage?
     /// The call it was about, in Done.
     public let done: DoneID?
+    /// `answered` only: the question you answered.
+    public let question: QuestionID?
 
     public init(
-        at: Timestamp, kind: Kind, text: String, stage: TrackStage? = nil, done: DoneID? = nil
+        at: Timestamp, kind: Kind, text: String, stage: TrackStage? = nil, done: DoneID? = nil,
+        question: QuestionID? = nil
     ) {
         self.at = at
         self.kind = kind
         self.text = text
         self.stage = stage
         self.done = done
+        self.question = question
     }
 
     /// What happened. One Ari doesn't know shows its text alone.
@@ -90,6 +94,8 @@ public struct TrackEvidence: Sendable, Equatable, Decodable {
         public static let confirmed = Kind(rawValue: "confirmed")
         public static let corrected = Kind(rawValue: "corrected")
         public static let moved = Kind(rawValue: "moved")
-        public static let known = [confirmed, corrected, moved]
+        /// You answered one of its questions in Understanding you.
+        public static let answered = Kind(rawValue: "answered")
+        public static let known = [confirmed, corrected, moved, answered]
     }
 }

@@ -32,6 +32,8 @@ struct KumoFace: View {
     var size: CGFloat = 136
     /// Where it glances, in its own units (the pebble spans about ±18 by ±16).
     var glance: CGPoint?
+    /// Holds still, as on a page that's only being read.
+    var still = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -39,11 +41,12 @@ struct KumoFace: View {
         Color.clear
             .frame(width: size, height: size * 0.92)
             .overlay {
-                TimelineView(.animation(paused: reduceMotion)) { context in
+                TimelineView(.animation(paused: reduceMotion || still)) { context in
                     Canvas { canvas, area in
                         draw(
                             in: &canvas, area: area,
-                            t: reduceMotion ? 1 : context.date.timeIntervalSinceReferenceDate)
+                            t: reduceMotion || still
+                                ? 1 : context.date.timeIntervalSinceReferenceDate)
                     }
                 }
                 .frame(width: size * 1.9, height: size * 1.7)

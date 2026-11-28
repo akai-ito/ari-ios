@@ -157,6 +157,16 @@ struct ProtocolDecodingTests {
                 case .share:
                     let sent = try #require(request.body).decode(SendShare.self)
                     #expect(try body.decode(ShareAnswer.self).share.id == sent.id, "\(place)")
+                case .dream, .dreamNow, .dreamTime:
+                    #expect(try !body.decode(DreamState.self).time.isEmpty, "\(place)")
+                case .seeDream(let dream):
+                    let seen = try body.decode(DreamResult.self).dream
+                    #expect(seen.id == dream && !seen.isNew, "\(place)")
+                case .understanding:
+                    _ = try body.decode(Understanding.self)
+                case .answerQuestion(let question), .notNowQuestion(let question):
+                    #expect(
+                        try body.decode(QuestionResult.self).question.id == question, "\(place)")
                 case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
@@ -258,6 +268,12 @@ struct ProtocolDecodingTests {
                     id: share.id, url: share.url, text: share.text, note: share.note,
                     attachments: share.attachments ?? [])
                 #expect(try JSONValue(encoding: encoded) == body, "\(place)")
+            case .dreamTime:
+                let time = try body.decode(DreamTime.self).time
+                #expect(try JSONValue(encoding: DreamTime(time: time)) == body, "\(place)")
+            case .answerQuestion:
+                #expect(
+                    try JSONValue(encoding: body.decode(QuestionReply.self)) == body, "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -283,14 +299,14 @@ struct ProtocolDecodingTests {
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
     }
 
-    @Test("access.changed, from the protocol after the pin, decodes with its whole state")
+    @Test("access.changed decodes with its whole state")
     func accessChanged() throws {
         let event = try JSONValue(
             json:
                 #"{"id":"e_0100_00004","type":"access.changed","at":"2026-11-27T14:00:06.040Z","access":{"mode":"full","since":"2026-11-27T14:00:06.040Z"}}"#
         ).decode(Event.self)
         #expect(event.payload.type == "access.changed")
-        #expect(Event.typesAheadOfPin.contains("access.changed"))
+        #expect(Event.knownTypes.contains("access.changed"))
         guard case .accessChanged(let changed) = event.payload else {
             Issue.record("not access.changed")
             return
@@ -350,6 +366,8 @@ extension Event.Payload {
         case .browserChanged: "browser.changed"
         case .problemsChanged: "problems.changed"
         case .accessChanged: "access.changed"
+        case .dreamFinished: "dream.finished"
+        case .questionChanged: "question.changed"
         case .unknown: nil
         }
     }

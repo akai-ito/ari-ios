@@ -309,10 +309,10 @@ extension Conversation {
         // So do the pages Kumo made.
         case .madeCreated, .madeChanged, .madeState, .madeRemoved:
             break
-        // The Desk, getting started, the server's problems, recordings and Kumo's access are the
-        // session's.
+        // The Desk, getting started, the server's problems, recordings, Kumo's access, the dream and
+        // Understanding you are the session's.
         case .deskChanged, .onboardingChanged, .problemsChanged, .recordingChanged, .browserChanged,
-            .accessChanged:
+            .accessChanged, .dreamFinished, .questionChanged:
             break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.

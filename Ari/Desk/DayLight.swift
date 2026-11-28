@@ -8,7 +8,7 @@ struct DayLight: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 15, paused: reduceMotion)) { context in
-            let light = Self.light(Self.hour(of: context.date))
+            let light = Self.light(Self.hour(of: DeskClock.now(context.date)))
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             let drift = UnitPoint(
                 x: light.center.x + 0.03 * sin(t / 11), y: light.center.y + 0.02 * cos(t / 13))
