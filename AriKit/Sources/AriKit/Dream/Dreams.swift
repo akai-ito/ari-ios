@@ -23,6 +23,8 @@ public final class Dreams {
     public private(set) var asking = false
 
     @ObservationIgnored private let client: ItoClient
+    /// A read the stream asked for, while it's on its way: the stream asks once at a time.
+    @ObservationIgnored private var reading: Task<Void, Never>?
 
     public init(client: ItoClient) {
         self.client = client
@@ -97,19 +99,37 @@ public final class Dreams {
         return entries[done]
     }
 
-    /// Follows the stream: a dream finishing brings its record; a snapshot means asking again.
+    /// Follows the stream: each step of a dream under way, a dream finishing brings its record, and
+    /// a snapshot means asking again. A step for a dream Ari didn't know had started, such as the
+    /// night's, asks for the dream, which brings its steps so far.
     public func apply(_ event: Event) {
         switch event.payload {
         case .snapshot:
-            Task { await refresh() }
+            readAgain()
+        case .dreamProgress(let progress):
+            if let state, let dreaming = state.dreaming {
+                self.state = state.with(dreaming: .some(dreaming.adding(progress.step)))
+            } else if !asking {
+                // Dream now's answer brings the dream under way, with this step.
+                readAgain()
+            }
         case .dreamFinished(let finished):
             if let state {
                 self.state = state.with(dreaming: .some(nil), latest: .some(finished.dream))
             } else {
-                Task { await refresh() }
+                readAgain()
             }
         default:
             break
+        }
+    }
+
+    /// Asks for the dream again for the stream, unless a read is already on its way.
+    private func readAgain() {
+        guard reading == nil else { return }
+        reading = Task {
+            await refresh()
+            reading = nil
         }
     }
 }

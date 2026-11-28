@@ -41,6 +41,39 @@ public struct DreamTrigger: OpenValue {
     public static let known = [scheduled, manual]
 }
 
+/// What kind of step a dream under way is taking. One Ari doesn't know shows as gathering.
+public struct DreamStepGroup: OpenValue {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Reading back over the day.
+    public static let gathering = DreamStepGroup(rawValue: "gathering")
+    /// Tending memory.
+    public static let tidying = DreamStepGroup(rawValue: "tidying")
+    /// Tomorrow's blocks and wake-ups.
+    public static let planning = DreamStepGroup(rawValue: "planning")
+    /// Writing a day's journal entry.
+    public static let journal = DreamStepGroup(rawValue: "journal")
+    public static let known = [gathering, tidying, planning, journal]
+
+    /// The group to show it as: its own, or gathering for one Ari doesn't know.
+    public var shown: DreamStepGroup { isKnown ? self : .gathering }
+}
+
+/// One step of a dream under way, in a short line the server writes from what the dream is doing,
+/// such as "Tidying Leo" or "Writing Monday's journal".
+public struct DreamStep: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let group: DreamStepGroup
+    public let text: String
+
+    public init(at: Timestamp, group: DreamStepGroup, text: String) {
+        self.at = at
+        self.group = group
+        self.text = text
+    }
+}
+
 /// One short line of what a dream did, pointing at what it changed or is about.
 public struct DreamLine: Sendable, Equatable, Decodable {
     public let group: DreamGroup
@@ -186,14 +219,34 @@ public struct DreamState: Sendable, Equatable, Decodable {
         self.latest = latest
     }
 
-    /// A dream under way: since when, and what started it.
+    /// A dream under way: since when, what started it, and its latest steps.
     public struct Dreaming: Sendable, Equatable, Decodable {
         public let since: Timestamp
         public let trigger: DreamTrigger
+        /// Oldest first: up to the server's latest 20 when read, then each `dream.progress` after.
+        public let steps: [DreamStep]
 
-        public init(since: Timestamp, trigger: DreamTrigger) {
+        public init(since: Timestamp, trigger: DreamTrigger, steps: [DreamStep] = []) {
             self.since = since
             self.trigger = trigger
+            self.steps = steps
+        }
+
+        /// The same, a step further on. It keeps the latest 40.
+        public func adding(_ step: DreamStep) -> Dreaming {
+            Dreaming(since: since, trigger: trigger, steps: Array((steps + [step]).suffix(40)))
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case since, trigger, steps
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            since = try c.decode(Timestamp.self, forKey: .since)
+            trigger = try c.decode(DreamTrigger.self, forKey: .trigger)
+            // A server from before the dream's progress has no steps.
+            steps = try c.decodeIfPresent([DreamStep].self, forKey: .steps) ?? []
         }
     }
 
@@ -220,6 +273,12 @@ public struct DreamTime: Sendable, Equatable, Codable {
 /// The answer to `POST /v0/dreams/{dream}/seen`.
 public struct DreamResult: Sendable, Equatable, Decodable {
     public let dream: Dream
+}
+
+/// `dream.progress`: while Kumo dreams, it started a step. It never notifies.
+public struct DreamProgress: Sendable, Equatable, Decodable {
+    public let at: Timestamp
+    public let step: DreamStep
 }
 
 /// `dream.finished`: Kumo finished a dream and left its record. It never notifies.

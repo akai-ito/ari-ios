@@ -303,7 +303,18 @@
                 case "dreaming": state.0 ? #""latest":\#(yesterdaysDream)"# : #""latest":\#(dream)"#
                 default: #""latest":\#(dream)"#
                 }
-            let under = state.0 ? #","dreaming":{"since":"\#(at(4))","trigger":"scheduled"}"# : ""
+            // The server's lines for the dream's steps so far, as a dream under way has them.
+            let steps = [
+                ("gathering", "Reading back over the day"),
+                ("gathering", "Rereading “Halcyon prep”"),
+                ("tidying", "Tidying Leo"),
+            ]
+            .enumerated().map { index, step in
+                #"{"at":"\#(at(4, index))","group":"\#(step.0)","text":"\#(step.1)"}"#
+            }
+            let list = steps.joined(separator: ",")
+            let dreaming = #"{"since":"\#(at(4))","trigger":"scheduled","steps":[\#(list)]}"#
+            let under = state.0 ? #","dreaming":\#(dreaming)"# : ""
             return #"{"time":"04:00","next_at":"\#(at(4, day: 1))"\#(under),\#(latest)}"#
         }
 

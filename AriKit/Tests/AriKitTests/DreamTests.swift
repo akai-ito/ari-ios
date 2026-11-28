@@ -56,6 +56,23 @@ struct DreamTests {
 
         try await dreams.dreamNow()
         #expect(dreams.dreaming?.trigger == .manual)
+        // Its answer brings the step the dream is on; the stream brings each one after, and the
+        // live weave reaches as far as they have.
+        #expect(dreams.dreaming?.steps.map(\.text) == ["Reading back over the day"])
+        let progress = transcript.events.map(\.event).filter {
+            if case .dreamProgress = $0.payload { true } else { false }
+        }
+        let steps = progress.compactMap { event -> DreamStep? in
+            if case .dreamProgress(let progress) = event.payload { progress.step } else { nil }
+        }
+        try #require(steps.count == 3 && steps[1].group == .planning)
+        dreams.apply(progress[1])
+        #expect(dreams.dreaming?.steps == [steps[0], steps[1]])
+        let live = WeaveScene.make(
+            day: "Thursday", threads: [], mailRead: 0, dream: nil,
+            steps: dreams.dreaming?.steps ?? [])
+        #expect(live.latest == steps[1].text && live.stage == .tomorrow)
+        #expect(live.gathering == steps[0].text && live.tomorrow == [steps[1].text])
 
         let finished = transcript.events.map(\.event).filter {
             if case .dreamFinished = $0.payload { true } else { false }
@@ -307,6 +324,28 @@ struct DreamTests {
 
         let live = WeaveScene.make(day: "Thursday", threads: [], mailRead: 0, dream: nil)
         #expect(!live.isRecorded && live.pages.isEmpty && live.strands == ["Main chat"])
+        #expect(live.latest == nil && live.stage == .gathering)
+    }
+
+    @Test("live, the weave says the dream's steps and goes as far as they have")
+    func liveWeave() throws {
+        let at = Timestamp(at(1, 4))
+        func step(_ group: String, _ text: String) -> DreamStep {
+            DreamStep(at: at, group: DreamStepGroup(rawValue: group), text: text)
+        }
+        let steps = [
+            step("gathering", "Reading back over the day"),
+            step("journal", "Writing Thursday's journal"),
+            step("tidying", "Tidying Leo"), step("dusting", "Something new"),
+        ]
+        let live = WeaveScene.make(
+            day: "Thursday", threads: ["Halcyon prep"], mailRead: 2, dream: nil, steps: steps)
+        // A group Ari doesn't know counts as gathering, so the weave doesn't step back for it.
+        #expect(live.stage == .tying && live.latest == "Something new")
+        #expect(live.gathering == "Something new")
+        #expect(live.tying == ["Writing Thursday's journal", "Tidying Leo"])
+        #expect(live.tomorrow == ["Putting tomorrow in order."])
+        #expect(live.strands == ["Main chat", "Halcyon prep", "Mail · 2 you read"])
     }
 
     // MARK: Plans

@@ -312,7 +312,7 @@ extension Conversation {
         // The Desk, getting started, the server's problems, recordings, Kumo's access, the dream and
         // Understanding you are the session's.
         case .deskChanged, .onboardingChanged, .problemsChanged, .recordingChanged, .browserChanged,
-            .accessChanged, .dreamFinished, .questionChanged:
+            .accessChanged, .dreamFinished, .dreamProgress, .questionChanged:
             break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.

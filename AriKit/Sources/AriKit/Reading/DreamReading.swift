@@ -83,8 +83,8 @@ public enum DreamReading {
 
 /// What the weave draws, for one dream: the day's conversations coming in as strands, the pages
 /// Kumo tied them into, tomorrow's plans as knots on the strand it spins out, and a line for each
-/// moment. Built from what the app knows: the day's threads and mail while Kumo dreams, and the
-/// record once it's done.
+/// moment. Built from what the app knows: the day's threads and mail, the server's lines for each
+/// step while Kumo dreams, and the record once it's done.
 public struct WeaveScene: Equatable, Sendable {
     public struct Page: Equatable, Sendable {
         /// Such as "Leo".
@@ -124,10 +124,30 @@ public struct WeaveScene: Equatable, Sendable {
     public var tomorrow: [String]
     /// Whether it's from a dream's record, so the pages and plans are what it did.
     public var isRecorded: Bool
+    /// While Kumo dreams, the server's line for the step it's on, such as "Tidying Leo".
+    public var latest: String?
+    /// While Kumo dreams, how far its steps have got: gathering, tying (tidying and the journal)
+    /// or tomorrow (planning).
+    public var stage: Stage
+
+    public enum Stage: Int, Comparable, Sendable {
+        case gathering, tying, tomorrow
+
+        public static func < (a: Stage, b: Stage) -> Bool { a.rawValue < b.rawValue }
+
+        init(_ group: DreamStepGroup) {
+            switch group.shown {
+            case .tidying, .journal: self = .tying
+            case .planning: self = .tomorrow
+            default: self = .gathering
+            }
+        }
+    }
 
     public init(
         day: String, strands: [String], pages: [Page] = [], plans: [Knot] = [],
-        gathering: String, tying: [String], tomorrow: [String], isRecorded: Bool = false
+        gathering: String, tying: [String], tomorrow: [String], isRecorded: Bool = false,
+        latest: String? = nil, stage: Stage = .gathering
     ) {
         self.day = day
         self.strands = strands
@@ -137,6 +157,8 @@ public struct WeaveScene: Equatable, Sendable {
         self.tying = tying
         self.tomorrow = tomorrow
         self.isRecorded = isRecorded
+        self.latest = latest
+        self.stage = stage
     }
 
     /// A scene for a dream, or for one under way when `dream` is `nil`.
@@ -146,9 +168,10 @@ public struct WeaveScene: Equatable, Sendable {
     ///   - mailRead: How many emails you read or Kumo read for you that day.
     ///   - plans: Kumo's plans now, to find the times of the ones the dream set or moved.
     ///   - comingUp: What's on the calendar, for the items the dream planned.
+    ///   - steps: A dream under way's steps so far, oldest first.
     public static func make(
         day: String, threads: [String], mailRead: Int, dream: Dream?, plans: [WakeUp] = [],
-        comingUp: [CalendarItem] = []
+        comingUp: [CalendarItem] = [], steps: [DreamStep] = []
     ) -> WeaveScene {
         var strands: [String] = ["Main chat"]
         strands.append(contentsOf: threads.prefix(mailRead > 0 ? 4 : 5))
@@ -164,10 +187,17 @@ public struct WeaveScene: Equatable, Sendable {
         }
 
         guard let dream else {
+            // Live, the server's own lines: the weave reaches as far as its steps have.
+            let lines = { (stage: Stage) in
+                steps.filter { Stage($0.group) == stage }.map(\.text)
+            }
+            let tying = lines(.tying)
+            let tomorrow = lines(.tomorrow)
             return WeaveScene(
-                day: day, strands: strands, gathering: gathering,
-                tying: ["Sorting through \(day).", "Tying them into one."],
-                tomorrow: ["Putting tomorrow in order."])
+                day: day, strands: strands, gathering: lines(.gathering).last ?? gathering,
+                tying: tying.isEmpty ? ["Sorting through \(day).", "Tying them into one."] : tying,
+                tomorrow: tomorrow.isEmpty ? ["Putting tomorrow in order."] : tomorrow,
+                latest: steps.last?.text, stage: steps.map { Stage($0.group) }.max() ?? .gathering)
         }
 
         var seenPages = Set<String>()

@@ -50,6 +50,7 @@ public struct Event: Sendable, Equatable, Decodable {
         /// Full access turned on or off.
         case accessChanged(AccessChanged)
         case dreamFinished(DreamFinished)
+        case dreamProgress(DreamProgress)
         case questionChanged(QuestionChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
@@ -66,6 +67,7 @@ public struct Event: Sendable, Equatable, Decodable {
         "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
         "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
         "browser.changed", "dream.finished", "question.changed", "access.changed",
+        "dream.progress",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -118,6 +120,7 @@ public struct Event: Sendable, Equatable, Decodable {
             case "browser.changed": .browserChanged(try BrowserChanged(from: decoder))
             case "access.changed": .accessChanged(try AccessChanged(from: decoder))
             case "dream.finished": .dreamFinished(try DreamFinished(from: decoder))
+            case "dream.progress": .dreamProgress(try DreamProgress(from: decoder))
             case "question.changed": .questionChanged(try QuestionChanged(from: decoder))
             default: .unknown
             }

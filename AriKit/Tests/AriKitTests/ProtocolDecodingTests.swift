@@ -367,6 +367,7 @@ extension Event.Payload {
         case .problemsChanged: "problems.changed"
         case .accessChanged: "access.changed"
         case .dreamFinished: "dream.finished"
+        case .dreamProgress: "dream.progress"
         case .questionChanged: "question.changed"
         case .unknown: nil
         }

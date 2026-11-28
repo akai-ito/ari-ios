@@ -387,15 +387,22 @@ struct WeaveClock {
     /// Where the live weave had got to when the record came.
     var recordedFrom: Double = 1.9
 
-    /// Where the weave is at a moment.
-    func progress(at now: Date) -> Double {
+    /// Where the weave is at a moment. Live, it goes no further than the dream's steps have got
+    /// (`stage`), or, from a server that doesn't send them (`nil`), as far as tying.
+    func progress(at now: Date, stage: WeaveScene.Stage? = nil) -> Double {
         let elapsed = now.timeIntervalSince(started)
         switch mode {
         case .replay(let seconds):
             return min(3, max(0, elapsed / seconds * 3))
         case .live:
             // Gathering takes nine seconds, then it ties until the record comes.
-            let tying = min(1.9, elapsed / 9 * 1.3 + max(0, elapsed - 9) * 0.05)
+            let reach: Double =
+                switch stage {
+                case .gathering: 1
+                case .tying, nil: 1.9
+                case .tomorrow: 2
+                }
+            let tying = min(reach, elapsed / 9 * 1.3 + max(0, elapsed - 9) * 0.05)
             guard let recorded else { return tying }
             let after = now.timeIntervalSince(recorded)
             return min(3, recordedFrom + after / 6 * (3 - recordedFrom))
@@ -406,7 +413,9 @@ struct WeaveClock {
     func isDone(at now: Date) -> Bool { progress(at: now) >= 3 }
 
     /// The line for a moment: what it gathered, each thing it tied, then each plan for tomorrow.
+    /// Live, the step Kumo is on, as the server says it.
     static func caption(_ scene: WeaveScene, progress: Double, time: Double) -> String {
+        if !scene.isRecorded, let latest = scene.latest { return latest }
         if progress < 1.05 { return scene.gathering }
         let lines = progress < 2.05 ? scene.tying : scene.tomorrow
         guard !lines.isEmpty else { return scene.gathering }

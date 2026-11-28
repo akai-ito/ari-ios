@@ -45,11 +45,12 @@ enum WeaveSource {
     }
 
     static func scene(
-        for dream: Dream?, threads: [String], mail: Int, session: Session, now: Date
+        for dream: Dream?, threads: [String], mail: Int, session: Session, now: Date,
+        steps: [DreamStep] = []
     ) -> WeaveScene {
         WeaveScene.make(
             day: weekday(day(of: dream, now: now)), threads: threads, mailRead: mail, dream: dream,
-            plans: session.desk?.plans ?? [], comingUp: session.desk?.comingUp ?? [])
+            plans: session.desk?.plans ?? [], comingUp: session.desk?.comingUp ?? [], steps: steps)
     }
 }
 
@@ -88,6 +89,8 @@ struct WeaveScreen: View {
             }
         }
         .task {
+            // Opened mid-dream: the steps so far, from the server.
+            if dreams?.dreaming != nil { await dreams?.refresh() }
             // Opened just as the dream finished: straight through to its record.
             if record != nil, clock.recorded == nil {
                 clock.recordedFrom = 0
@@ -98,7 +101,7 @@ struct WeaveScreen: View {
         }
         .onChange(of: dreams?.dreaming == nil) { _, done in
             guard done, clock.recorded == nil else { return }
-            clock.recordedFrom = clock.progress(at: .now)
+            clock.recordedFrom = clock.progress(at: .now, stage: stage)
             clock.recorded = .now
         }
         // Once it has woven tomorrow, it stops drawing.
@@ -114,10 +117,16 @@ struct WeaveScreen: View {
     /// The dream's record, once it has finished.
     private var record: Dream? { dreams?.dreaming == nil ? dreams?.latest : nil }
 
+    /// How far the dream's steps have got, once the server has sent one.
+    private var stage: WeaveScene.Stage? {
+        let scene = scene
+        return scene.latest == nil ? nil : scene.stage
+    }
+
     private var scene: WeaveScene {
         WeaveSource.scene(
             for: record, threads: material.threads, mail: material.mail, session: session,
-            now: DeskClock.now())
+            now: DeskClock.now(), steps: dreams?.dreaming?.steps ?? [])
     }
 
     private var header: some View {
@@ -155,7 +164,7 @@ struct WeaveScreen: View {
     }
 
     private func moment(at date: Date) -> some View {
-        let progress = clock.progress(at: date)
+        let progress = clock.progress(at: date, stage: stage)
         let time = date.timeIntervalSince(clock.started)
         return content(progress: progress, time: time)
     }
