@@ -35,6 +35,23 @@
         case namingNext = "p-naming-next"
         case firstRun = "p-first-run"
         case firstRunAlways = "p-first-run-always"
+        // Round 2: Desk · Chat · Life, with Life by time and the lit map for longer stretches.
+        case r2Day = "r2-day"
+        case r2Week = "r2-week"
+        case r2Month = "r2-month"
+        case r2Year = "r2-year"
+        case r2Search = "r2-search"
+        case r2Places = "r2-places"
+        case r2Place = "r2-place"
+        case r2People = "r2-people"
+        case r2PeopleOrder = "r2-people-order"
+        case r2Orbits = "r2-people-orbits"
+        case r2Person = "r2-person"
+        case r2PersonCard = "r2-person-card"
+        case r2Linking = "r2-people-link"
+        case r2GoingOn = "r2-going-on"
+        case r2Made = "r2-made"
+        case r2DeskKnows = "r2-desk-knows"
     }
 
     struct LifeRoot: View {
@@ -106,6 +123,22 @@
                 case .namingNext: KnowYouPlaces(second: true)
                 case .firstRun: FirstRunLocation()
                 case .firstRunAlways: FirstRunAlways()
+                case .r2Day: LifeTabs { R2Day() }
+                case .r2Week: LifeTabs { R2Week() }
+                case .r2Month: LifeTabs { R2Month() }
+                case .r2Year: LifeTabs { R2Year() }
+                case .r2Search: LifeTabs { R2Search() }
+                case .r2Places: LifeTabs { R2Places() }
+                case .r2Place: LifeTabs { R2Place() }
+                case .r2People: LifeTabs { R2People() }
+                case .r2PeopleOrder: LifeTabs { R2PeopleOrder() }
+                case .r2Orbits: LifeTabs { R2Orbits() }
+                case .r2Person: LifeTabs { R2Person() }
+                case .r2PersonCard: LifeTabs { R2PersonCard() }
+                case .r2Linking: R2Linking()
+                case .r2GoingOn: LifeTabs { R2GoingOn() }
+                case .r2Made: LifeTabs { R2Made() }
+                case .r2DeskKnows: R2DeskKnows()
                 }
             }
             .tint(.ariText)
