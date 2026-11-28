@@ -158,7 +158,7 @@ struct SettingsTests {
         #expect(info.whereabouts?.area?.name == "Rome")
     }
 
-    // MARK: - Full access and the dream's time (protocol 0.20, ahead of the pin)
+    // MARK: - Full access and the dream's time (protocol 0.20)
 
     @Test("full access is read, turned on with a body that says it's meant, and turned off")
     func fullAccess() async throws {
@@ -195,48 +195,11 @@ struct SettingsTests {
         #expect(!access.isFull && access.mode.rawValue == "supervised")
     }
 
-    @Test("the dream's time and latest dream are read, and the time is set as HH:mm")
-    func dreamTime() async throws {
-        let server = ScriptedServer()
-        let client = try client(server)
-        let state = #"""
-            { "time": "04:00", "next_at": "2026-11-28T04:00:00.000Z",
-              "latest": { "id": "d_1", "day": "2026-11-26", "trigger": "scheduled",
-                "started_at": "2026-11-27T04:00:00.000Z", "ended_at": "2026-11-27T04:31:00.000Z",
-                "headline": "A quiet Wednesday", "lines": [{ "group": "planned", "text": "Moved the run" }],
-                "seen_at": "2026-11-27T07:40:00.000Z" } }
-            """#
-
-        let reading = Task { try await client.dreamSchedule() }
-        let read = try await request(from: server)
-        #expect(read.method == .get && read.path == "/v0/dream")
-        try await server.answer(200, json: state)
-        let schedule = try await reading.value
-        #expect(schedule.time == .standard && schedule.dreaming == nil)
-        #expect(schedule.latest?.trigger == .scheduled)
-        #expect(schedule.latest?.endedAt == Timestamp("2026-11-27T04:31:00.000Z"))
-
-        let setting = Task { try await client.changeDreamTime(to: try #require(.init("03:30"))) }
-        let set = try await request(from: server)
-        #expect(set.method == .put && set.path == "/v0/dream/time")
-        #expect(try json(set) == JSONValue(json: #"{ "time": "03:30" }"#))
-        try await server.answer(
-            200, json: state.replacingOccurrences(of: "04:00\"", with: "03:30\""))
-        #expect(try await setting.value.time.description == "03:30")
-    }
-
-    @Test("a dream under way decodes, and a dream time must be a real time of day")
-    func dreaming() throws {
-        let schedule = try JSONDecoder().decode(
-            DreamSchedule.self,
-            from: Data(
-                #"""
-                { "time": "23:45", "next_at": "2026-11-28T23:45:00.000Z",
-                  "dreaming": { "since": "2026-11-27T14:20:00.000Z", "trigger": "manual" } }
-                """#.utf8))
-        #expect(schedule.dreaming?.trigger == .manual && schedule.latest == nil)
-        #expect(DreamSchedule.Time("24:00") == nil && DreamSchedule.Time("4:00") == nil)
-        #expect(DreamSchedule.Time(hour: 7, minute: 5)?.description == "07:05")
+    @Test("a dream time must be a real time of day, written HH:mm")
+    func dreamTimeOfDay() {
+        #expect(DreamTimeOfDay("24:00") == nil && DreamTimeOfDay("4:00") == nil)
+        #expect(DreamTimeOfDay("03:30") == DreamTimeOfDay(hour: 3, minute: 30))
+        #expect(DreamTimeOfDay(hour: 7, minute: 5)?.description == "07:05")
     }
 
     @Test("Last dream says the day, the start and how long: Today 04:00 · 31 min")
@@ -244,9 +207,9 @@ struct SettingsTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(identifier: "Europe/London"))
         calendar.locale = Locale(identifier: "en_GB")
-        func dream(_ start: String, _ end: String) throws -> DreamSchedule.LastDream {
-            DreamSchedule.LastDream(
-                trigger: .scheduled, startedAt: try #require(Timestamp(start)),
+        func dream(_ start: String, _ end: String) throws -> Dream {
+            Dream(
+                id: DreamID("d_1"), day: "2026-11-26", startedAt: try #require(Timestamp(start)),
                 endedAt: try #require(Timestamp(end)))
         }
         let now = try #require(Timestamp("2026-11-27T16:40:00.000Z")).date

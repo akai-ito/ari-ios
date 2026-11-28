@@ -229,7 +229,7 @@ struct MainView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $showsSettings) {
             // A sheet takes the environment from where it's attached, outside the one above.
-            SettingsView(model: model, session: session).environment(voices)
+            SettingsView(model: model, session: session).environment(voices).environment(dreams)
         }
         // Notifications show as banners, except while you're reading the chat.
         .onChange(of: scenePhase == .active && place == .chat, initial: true) { _, looking in

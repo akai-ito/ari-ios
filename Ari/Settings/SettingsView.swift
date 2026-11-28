@@ -37,7 +37,7 @@ struct SettingsView: View {
                     ServerProblems(problems: session.problems)
                     server
                     KumoSettings(model: model, client: client)
-                    DreamingSettings(client: client)
+                    DreamingSettings()
                         .id(SettingsAnchor.dreaming)
                     FullAccessSettings(session: session)
                     capabilitiesSection

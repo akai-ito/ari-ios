@@ -4,19 +4,12 @@ import SwiftUI
 /// Settings › Dreaming: when Kumo dreams each night, and when it last did. Dream now and what the
 /// dream did live on the Desk, under the moon.
 struct DreamingSettings: View {
-    let client: ItoClient?
+    /// The Desk's dream, which Settings shares: one model for the moon page and these rows.
+    @Environment(Dreams.self) private var dreams: Dreams?
 
-    @State private var schedule: DreamSchedule?
     /// The time in the picker, ahead of the box while a change is on its way.
-    @State private var chosen: DreamSchedule.Time?
-    @State private var problem: Problem?
-
-    private enum Problem: Equatable {
-        /// The box doesn't dream: it runs an Ito from before the dream.
-        case unsupported
-        case unreachable(String)
-        case notSaved(String)
-    }
+    @State private var chosen: DreamTimeOfDay?
+    @State private var notSaved: String?
 
     var body: some View {
         let name = LeadName.current
@@ -24,11 +17,11 @@ struct DreamingSettings: View {
             DatePicker(
                 "Dream at",
                 selection: Binding(
-                    get: { (chosen ?? schedule?.time ?? .standard).date() },
-                    set: { chosen = DreamSchedule.Time($0) }),
+                    get: { (chosen ?? kept ?? .standard).date() },
+                    set: { chosen = DreamTimeOfDay($0) }),
                 displayedComponents: .hourAndMinute
             )
-            .disabled(schedule == nil)
+            .disabled(dreams?.state == nil)
             LabeledContent("Last dream", value: lastDream)
         } header: {
             Text("Dreaming")
@@ -36,52 +29,50 @@ struct DreamingSettings: View {
             Text(footer(name: name))
         }
         .listRowBackground(Color.ariSurface)
-        .task { await load() }
+        .task {
+            // Ask again if the Desk's first read failed, such as before the box was reachable.
+            if dreams?.state == nil { await dreams?.refresh() }
+        }
         // The picker moves through times as you turn it: only where it settles goes to the box.
         .task(id: chosen) {
-            guard let chosen, chosen != schedule?.time else { return }
+            guard let chosen, chosen != kept else { return }
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
             await save(chosen)
         }
     }
 
+    /// The time the box keeps.
+    private var kept: DreamTimeOfDay? { dreams?.state.flatMap { DreamTimeOfDay($0.time) } }
+
     private var lastDream: String {
-        if schedule?.dreaming != nil { return "Dreaming now" }
-        if let latest = schedule?.latest { return latest.summary() }
-        return schedule == nil ? "" : "Not yet"
+        guard let state = dreams?.state else { return "" }
+        if state.dreaming != nil { return "Dreaming now" }
+        return state.latest?.summary() ?? "Not yet"
     }
 
     private func footer(name: String) -> String {
-        switch problem {
-        case .unsupported:
+        if let notSaved { return "Couldn't change the time: \(notSaved)" }
+        switch dreams?.load {
+        case .failed(let error) where error.status == 404:
+            // The box runs an Ito from before the dream.
             return
                 "Your box doesn't dream yet. Update Ito on it, and \(name) dreams over each day at night."
-        case .unreachable(let words): return "Couldn't read when \(name) dreams: \(words)"
-        case .notSaved(let words): return "Couldn't change the time: \(words)"
-        case nil:
+        case .failed(let error) where dreams?.state == nil:
+            return "Couldn't read when \(name) dreams: \(error.plainWords)"
+        default:
             return
                 "Each night \(name) reads your day, tidies its memory, sets tomorrow up and writes your journal. What it did waits under the moon on your Desk, with Dream now."
         }
     }
 
-    private func load() async {
-        guard let client else { return }
+    private func save(_ time: DreamTimeOfDay) async {
+        guard let dreams else { return }
         do throws(RequestError) {
-            schedule = try await client.dreamSchedule()
-            problem = nil
+            try await dreams.setTime(time.description)
+            notSaved = nil
         } catch {
-            problem = error.status == 404 ? .unsupported : .unreachable(error.plainWords)
-        }
-    }
-
-    private func save(_ time: DreamSchedule.Time) async {
-        guard let client else { return }
-        do throws(RequestError) {
-            schedule = try await client.changeDreamTime(to: time)
-            problem = nil
-        } catch {
-            problem = .notSaved(error.plainWords)
+            notSaved = error.plainWords
         }
         // The picker shows what the box keeps.
         if chosen == time { chosen = nil }

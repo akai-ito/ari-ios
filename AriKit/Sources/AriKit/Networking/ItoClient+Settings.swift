@@ -72,18 +72,4 @@ extension ItoClient {
     public func endFullAccess() async throws(RequestError) -> Access {
         try await call(HTTPRequest(.delete, "/v0/access/full"))
     }
-
-    /// `GET /v0/dream`: when Kumo dreams, and when it last did.
-    public func dreamSchedule() async throws(RequestError) -> DreamSchedule {
-        try await call(HTTPRequest(.get, "/v0/dream"))
-    }
-
-    /// `PUT /v0/dream/time`: Kumo dreams at this time each night from now on, on your local clock.
-    public func changeDreamTime(to time: DreamSchedule.Time) async throws(RequestError)
-        -> DreamSchedule
-    {
-        try await call(
-            HTTPRequest(
-                .put, "/v0/dream/time", body: try Self.json(DreamScheduleChange(time: time))))
-    }
 }
