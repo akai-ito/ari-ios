@@ -43,8 +43,10 @@ memory pages, in the iOS Simulator.</sub></p>
   replayed, then today's plans and what's done, each with its why, Undo and "That was wrong", and
   Dream now. Kumo itself opens Getting to know you: the areas it's learning, and the few things it
   would like you to explain, answered with a tap, your words or your voice. At night Kumo sleeps;
-  while it dreams its thoughts drift up as words, and a tap watches the day being woven. Tapping
-  the day opens it as a list, with Kumo's planned blocks and its guesses marked as guesses.
+  while it dreams its thoughts drift up as words, and a tap watches the day being woven, captioned
+  with each step the dream takes. Plans lists what Kumo will wake up for, each repeat once with how
+  it ends ("4 left"). Tapping the day opens it as a list, with Kumo's planned blocks and its
+  guesses marked as guesses.
 - **Chat.** One conversation, streamed at a reading pace. Between your message and Kumo's answer,
   its trail shows what it did in plain words; tap a step for the specifics. Stop works at once.
   When Kumo needs your go-ahead or an answer, it asks on the trail and waits.
@@ -63,6 +65,8 @@ memory pages, in the iOS Simulator.</sub></p>
   the line being said lit, and a misheard name fixed everywhere it was heard. Kumo's proposed
   changes are rows to approve one at a time, and a file it made opens at its version, with Use in
   draft.
+- **Sharing with Kumo.** The share sheet sends a link, text, photos or files with your thought, and
+  Kumo answers in a thread about it; the sheet waits a moment to show where, and the reply.
 - **Pages Kumo made.** A rich answer worth keeping, such as a gallery guide, comes as a card that
   opens a page with sections that fold and things to tick off, kept current by Kumo. Share sends it
   as clean text, and every page is on the Library's Made shelf.
@@ -80,7 +84,9 @@ memory pages, in the iOS Simulator.</sub></p>
   with captions as each line is heard.
 - **Capabilities and setup.** Mail, calendar and the rest connect through the provider's own page
   where it can ("Connect Outlook") or guided steps where it can't, so keys go to your server and
-  never come back. Getting started walks through it in five short steps.
+  never come back. Getting started walks through it in five short steps. Settings sets when Kumo
+  dreams, and Full access, after Face ID, lets Kumo work outside its sandbox, marked in the chat's
+  header while it's on.
 - **Notifications.** Every message from Kumo notifies, decrypted on the phone: Apple's push service
   only carries ciphertext.
 
