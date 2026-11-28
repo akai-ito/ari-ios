@@ -82,6 +82,12 @@ memory pages, in the iOS Simulator.</sub></p>
   with what changed and when.
 - **Talk.** A call with Kumo through CallKit: your voice goes to your server, and Kumo's comes back
   with captions as each line is heard.
+- **Places.** Once you allow Always with Precise Location, asked honestly a step at a time, the
+  phone keeps a trail for your box: iOS's visits and significant changes all the time, and live
+  GPS only while you're moving, or only the stops in Low Power Mode or under 20%. With less
+  permission, places stay off and say so. The trail waits on the phone through any offline stretch
+  and goes up in batches iOS carries in the background. Your photos' dates and places can seed the
+  past, and Settings › Places pauses it or deletes a day, a range or everything.
 - **Capabilities and setup.** Mail, calendar and the rest connect through the provider's own page
   where it can ("Connect Outlook") or guided steps where it can't, so keys go to your server and
   never come back. Getting started walks through it in five short steps. Settings sets when Kumo

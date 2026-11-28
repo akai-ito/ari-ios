@@ -37,6 +37,12 @@ struct SettingsView: View {
                     ServerProblems(problems: session.problems)
                     server
                     KumoSettings(model: model, client: client)
+                    Section {
+                        NavigationLink(value: SettingsRoute.places) {
+                            LabeledContent("Places", value: PlacesWords.state(model.places))
+                        }
+                    }
+                    .listRowBackground(Color.ariSurface)
                     DreamingSettings()
                         .id(SettingsAnchor.dreaming)
                     FullAccessSettings(session: session)
@@ -85,6 +91,8 @@ struct SettingsView: View {
                         if let voices { VoicePickerView(voices: voices) }
                     case .memoryBackup:
                         if let backup { MemoryBackupPage(backup: backup) }
+                    case .places:
+                        PlacesPage(model: model)
                     }
                 }
                 .navigationBarTitleDisplayMode(.inline)

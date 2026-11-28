@@ -78,6 +78,8 @@ enum SettingsRoute: Hashable {
     case voice
     /// Backing memory up to GitHub, a step at a time.
     case memoryBackup
+    /// Places: whether they're on, pausing them, photos and deleting.
+    case places
 }
 
 /// Places in Settings' own list to scroll to.

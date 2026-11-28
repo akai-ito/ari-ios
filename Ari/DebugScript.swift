@@ -46,6 +46,8 @@ import SwiftUI
         }()
         /// `ARI_MOODS` opens Ari on Kumo's moods side by side, without a server.
         static let showsMoods = environment["ARI_MOODS"] != nil
+        /// Shows places' first-run ask, whatever was answered before.
+        static let asksPlaces = environment["ARI_PLACES_ASK"] != nil
         /// `ARI_DESK`: what the Desk opens once it's up.
         static let desk = environment["ARI_DESK"]
         /// `ARI_GUESS` shows the day's first guess open (`open`), or with what it really was
@@ -88,6 +90,7 @@ import SwiftUI
             case "model": return [.model]
             case "voice": return [.voice]
             case "backup": return [.memoryBackup]
+            case "places": return [.places]
             case "capability" where parts.count == 2:
                 return [.capabilities, .capability(CapabilityID(parts[1]))]
             case "setup" where parts.count == 2:

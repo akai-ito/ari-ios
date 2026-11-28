@@ -63,7 +63,7 @@ struct AmbientLine: View {
 }
 
 /// Where the weather would be, before Ito may know roughly where you are: one line asking, and one
-/// on why. Allow asks iOS, for rough location only; the cross closes it for good.
+/// on why. Allow asks iOS for location while Ito is in use; the cross closes it for good.
 struct WeatherOffer: View {
     let allow: () -> Void
     let decline: () -> Void
@@ -86,7 +86,7 @@ struct WeatherOffer: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Asks to use your rough location")
+            .accessibilityHint("Asks to use your location")
             Button(action: decline) {
                 Image(systemName: "xmark")
                     .font(.caption2.weight(.semibold))

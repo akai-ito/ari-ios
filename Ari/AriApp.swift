@@ -34,6 +34,7 @@ struct AriApp: App {
                     model.resumeUploads()
                     model.refreshServer()
                     model.whereabouts.refresh()
+                    model.sendTrail()
                 case .background:
                     // A call carries on in your pocket: Ari's replies still have to arrive.
                     model.pauseUploads()

@@ -224,6 +224,15 @@ struct MainView: View {
                 .environment(talk)
                 .environment(voices)
         }
+        // Places' honest ask, once, after getting started.
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { model.asksPlaces && !onboarding }, set: { if !$0 { model.answeredPlaces() } }
+            )
+        ) {
+            PlacesAsk(places: model.places, close: model.answeredPlaces)
+        }
+        .task { model.offerPlaces() }
         // A tab bar on the iPhone; a sidebar once there's an iPad layout.
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
