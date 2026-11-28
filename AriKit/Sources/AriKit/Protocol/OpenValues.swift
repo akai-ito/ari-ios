@@ -160,6 +160,11 @@ public struct StepKind: OpenValue {
     public static let memory = StepKind(rawValue: "memory")
     /// A thing in motion Ari started, changed or finished.
     public static let motion = StepKind(rawValue: "motion")
+    /// Written by the server: a time Kumo's browser needed your hand, or you took the page over.
+    public static let handoff = StepKind(rawValue: "handoff")
+    /// Written by the server: how a one-tap card you answered went.
+    public static let commit = StepKind(rawValue: "commit")
+    // `handoff` and `commit` join `known` once protocol/ is pinned at the server that writes them.
     public static let known = [
         thinking, webSearch, command, fileChange, tool, plan, wait, imageView, compacting, memory,
         motion,
