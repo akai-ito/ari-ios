@@ -51,10 +51,12 @@ struct SharedLinkCard: View {
                             .foregroundStyle(.ariSecondary)
                             .lineLimit(2)
                     }
-                    Text(site)
-                        .font(.caption)
-                        .foregroundStyle(.ariTertiary)
-                        .lineLimit(1)
+                    if link.title != nil || site != link.host {
+                        Text(site)
+                            .font(.caption)
+                            .foregroundStyle(.ariTertiary)
+                            .lineLimit(1)
+                    }
                 }
                 .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)

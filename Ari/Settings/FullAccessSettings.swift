@@ -58,7 +58,11 @@ struct FullAccessSettings: View {
         let since = session.access.since.map { "On since \(DayLabel.describe($0.date)). " } ?? ""
         let what =
             "\(name) works inside a sandbox: its own folder and the tools you've connected. With full access it can use the whole box, any file and any program, from its next message; the dream follows it too."
-        if isOn { return since + what }
+        if isOn {
+            return since
+                + "\(name) can use the whole box, any file and any program; the dream follows it too. "
+                + "Turning it off puts \(name) back in its sandbox from its next message."
+        }
         return canCheck
             ? what + " Turning it on asks for Face ID."
             : what + " It needs a passcode on this iPhone, so only you can turn it on."

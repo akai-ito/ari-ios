@@ -89,20 +89,24 @@ struct PlansPage: View {
                             .foregroundStyle(.ariTertiary)
                             .frame(width: 16)
                             .accessibilityHidden(true)
-                        Text(plan.shownTitle).foregroundStyle(.ariText)
-                        if let repeating = plan.repeat {
-                            Text("·").foregroundStyle(.ariTertiary)
-                            Text(
-                                PlanWords.ending(
-                                    "\(PlanWords.repeats(repeating)) \(repeating.time)", repeating)
-                            )
-                            .foregroundStyle(.ariSecondary)
-                            .monospacedDigit()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(plan.shownTitle)
+                                .foregroundStyle(.ariText)
+                                .lineLimit(2)
+                            if let repeating = plan.repeat {
+                                Text(
+                                    PlanWords.ending(
+                                        "\(PlanWords.repeats(repeating)) \(repeating.time)",
+                                        repeating)
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.ariSecondary)
+                                .monospacedDigit()
+                            }
                         }
                         Spacer(minLength: 0)
                     }
                     .font(.subheadline)
-                    .lineLimit(1)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
