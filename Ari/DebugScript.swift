@@ -73,9 +73,13 @@ import SwiftUI
             }
         }
 
-        /// Where `ARI_SETTINGS` scrolls Settings' own list to: `memory`.
+        /// Where `ARI_SETTINGS` scrolls Settings' own list to: `memory` or `dreaming`.
         static var settingsAnchor: SettingsAnchor? {
-            environment["ARI_SETTINGS"] == "memory" ? .memory : nil
+            switch environment["ARI_SETTINGS"] {
+            case "memory": .memory
+            case "dreaming": .dreaming
+            default: nil
+            }
         }
 
         /// Adopts the test's notification key, so `xcrun simctl push` can send a sealed push.

@@ -150,6 +150,13 @@ struct ProtocolDecodingTests {
                     #expect(detail.made.id == id && !detail.content.sections.isEmpty, "\(place)")
                 case .madeState:
                     _ = try body.decode(MadeStateBody.self)
+                case .access, .giveFullAccess, .endFullAccess:
+                    let access = try body.decode(Access.self)
+                    #expect(access.mode.isKnown, "\(place)")
+                    #expect((request.route == .giveFullAccess) == access.isFull, "\(place)")
+                case .share:
+                    let sent = try #require(request.body).decode(SendShare.self)
+                    #expect(try body.decode(ShareAnswer.self).share.id == sent.id, "\(place)")
                 case .speech, .callStream:
                     continue
                 case .attachment, .events, .other:
@@ -242,6 +249,15 @@ struct ProtocolDecodingTests {
             case .correct:
                 let words = try body.decode(CorrectDone.self).text
                 #expect(try JSONValue(encoding: CorrectDone(text: words)) == body, "\(place)")
+            case .giveFullAccess:
+                // The app sends nothing else: the body only says it's meant.
+                #expect(body == (try JSONValue(json: #"{"confirm":true}"#)), "\(place)")
+            case .share:
+                let share = try body.decode(SendShare.self)
+                let encoded = SendShare(
+                    id: share.id, url: share.url, text: share.text, note: share.note,
+                    attachments: share.attachments ?? [])
+                #expect(try JSONValue(encoding: encoded) == body, "\(place)")
             default:
                 Issue.record("\(place): an unexpected request body")
             }
@@ -265,6 +281,21 @@ struct ProtocolDecodingTests {
         #expect(ProtocolVersion(major: 0, minor: 20) > .supported)
         // By number, not by text: 0.10 comes after 0.9.
         #expect(ProtocolVersion("0.10")! > ProtocolVersion("0.9")!)
+    }
+
+    @Test("access.changed, from the protocol after the pin, decodes with its whole state")
+    func accessChanged() throws {
+        let event = try JSONValue(
+            json:
+                #"{"id":"e_0100_00004","type":"access.changed","at":"2026-11-27T14:00:06.040Z","access":{"mode":"full","since":"2026-11-27T14:00:06.040Z"}}"#
+        ).decode(Event.self)
+        #expect(event.payload.type == "access.changed")
+        #expect(Event.typesAheadOfPin.contains("access.changed"))
+        guard case .accessChanged(let changed) = event.payload else {
+            Issue.record("not access.changed")
+            return
+        }
+        #expect(changed.access.isFull)
     }
 
     @Test("timestamps keep the server's text, milliseconds included")
@@ -318,7 +349,13 @@ extension Event.Payload {
         case .recordingChanged: "recording.changed"
         case .browserChanged: "browser.changed"
         case .problemsChanged: "problems.changed"
+        case .accessChanged: "access.changed"
         case .unknown: nil
         }
     }
+}
+
+/// The answer to `POST /v0/shares`, which the client reads as its own type.
+private struct ShareAnswer: Decodable {
+    let share: ShareStatus
 }

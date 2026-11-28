@@ -128,6 +128,8 @@ extension Conversation {
         public internal(set) var urgent = false
         /// Your messages, inside a thread: the message you replied to.
         public internal(set) var quotes: Quote?
+        /// Your messages: on a share from the share sheet, the link and text you shared.
+        public internal(set) var share: Shared?
 
         public enum Delivery: Sendable, Equatable {
             /// Saved on this device; the server hasn't confirmed it.
@@ -146,13 +148,21 @@ extension Conversation {
         /// A line of it to show beside it, as a quote or a thread's news: its first words, or what
         /// it carries.
         public var line: String {
+            if let first = Self.firstLine(of: text) { return first }
+            // A share with no note: what was shared.
+            if let link = share?.link { return link.title ?? link.host }
+            if let first = share?.text.flatMap(Self.firstLine) { return first }
+            if attachments.contains(where: { $0.kind == .image }) { return "A photo" }
+            return attachments.isEmpty ? "A message" : "A file"
+        }
+
+        /// The first line with words in it, outside code, cut to 200 characters.
+        private static func firstLine(of text: String) -> String? {
             let first =
                 text.split(separator: "\n").lazy
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .first { !$0.isEmpty && !$0.hasPrefix("```") }
-            if let first { return first.count > 200 ? String(first.prefix(199)) + "…" : first }
-            if attachments.contains(where: { $0.kind == .image }) { return "A photo" }
-            return attachments.isEmpty ? "A message" : "A file"
+            return first.map { $0.count > 200 ? String($0.prefix(199)) + "…" : $0 }
         }
 
         /// Whether the conversation shows it: your messages, the agent's replies and Kumo's posts.
@@ -180,6 +190,7 @@ extension Conversation {
             spoken = message.spoken
             urgent = message.urgent == true
             quotes = message.quotes
+            share = message.share
         }
 
         init(
@@ -298,8 +309,10 @@ extension Conversation {
         // So do the pages Kumo made.
         case .madeCreated, .madeChanged, .madeState, .madeRemoved:
             break
-        // The Desk, getting started, the server's problems and recordings are the session's.
-        case .deskChanged, .onboardingChanged, .problemsChanged, .recordingChanged, .browserChanged:
+        // The Desk, getting started, the server's problems, recordings and Kumo's access are the
+        // session's.
+        case .deskChanged, .onboardingChanged, .problemsChanged, .recordingChanged, .browserChanged,
+            .accessChanged:
             break
         case .voiceStatus, .unknown:
             // The server's voice is Talk's business, not the conversation's.

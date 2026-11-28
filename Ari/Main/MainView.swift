@@ -47,6 +47,18 @@ struct MainView: View {
                             .padding(.trailing, 16)
                             .padding(.top, 2)
                     }
+                    // Kumo out of its sandbox shows here, on the main chat only.
+                    .overlay(alignment: .topLeading) {
+                        ZStack {
+                            if session.access.isFull {
+                                FullAccessMarker { showsSettings = true }
+                                    .padding(.leading, 16)
+                                    .padding(.top, 7)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.3), value: session.access.isFull)
+                    }
             }
             Tab("In motion", systemImage: "circle.dotted.circle", value: .motion) {
                 InMotionView { showsSettings = true }

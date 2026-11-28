@@ -107,15 +107,33 @@ final class AppModel {
         defaults.set(true, forKey: "declinedWeather")
     }
 
-    /// A link Ari was opened with: only pairing links, for now.
+    /// A link Ari was opened with: a pairing link, or a thread to open, from the share sheet's
+    /// Open the thread.
     func open(_ url: URL) {
+        if let thread = ThreadLink.thread(from: url) {
+            openingThread = thread
+            return
+        }
         guard let link = Connector.pairing(from: url) else { return }
         pairing = PairingLink(address: link.address, code: link.code)
     }
 
+    /// Whether the share inbox is being sent to, so coming back to Ari twice doesn't send it twice
+    /// at once.
+    @ObservationIgnored private var sendingShares = false
+
     /// Shares the share extension couldn't send, as when the phone was offline: they go now, in
-    /// the order you shared them.
+    /// the order you shared them. Shares go to the server's share inbox, which puts each in its
+    /// thread; a recording, shared before the inbox or carried in chunks, goes as a message.
     func collectShares() {
+        if let outbox = group.shareOutbox(), !outbox.isEmpty, !sendingShares, let client = client()
+        {
+            sendingShares = true
+            Task {
+                _ = await ShareDelivery.deliver(outbox, with: client)
+                sendingShares = false
+            }
+        }
         guard let session, let shares = group.shares() else { return }
         for attachment in shares.attachments() {
             session.attach(attachment)

@@ -20,6 +20,8 @@ struct SessionTranscriptTests {
                 // Its last request pages back from a message the phone still holds, to show a
                 // history page carries ticks: the store plays it, but a session never would.
                 "59-a-plan-you-can-tick",
+                // The share sheet sends shares and their photos, not the session: ShareInboxTests.
+                "98-sharing-with-kumo",
             ].contains($0.name)
         })
     func plays(_ transcript: Transcript) async throws {
