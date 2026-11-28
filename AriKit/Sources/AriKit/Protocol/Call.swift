@@ -8,7 +8,7 @@ public struct CallID: OpaqueIdentifier {
 
 /// A call with Ari, shown in the conversation as a block that opens and closes the stretch it
 /// covered.
-public struct Call: Hashable, Sendable, Identifiable, Decodable {
+public struct Call: Hashable, Sendable, Identifiable, Codable {
     public var id: CallID
     public var startedAt: Timestamp
     /// Where the call started in the conversation, in one order with messages and steps.

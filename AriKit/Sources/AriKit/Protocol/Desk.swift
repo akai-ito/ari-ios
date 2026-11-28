@@ -685,11 +685,14 @@ public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
     /// The track this call belongs to, when it's in an area Kumo is learning. "That was wrong" on
     /// it steps the track back.
     public let track: TrackID?
+    /// The dream that did it: it shows with that dream rather than as the day's work.
+    public let dream: DreamID?
 
     public init(
         id: DoneID, at: Timestamp, text: String, reason: String? = nil, mail: DoneMail? = nil,
         event: CalendarItem? = nil, motion: MotionID? = nil, undo: Bool = false,
-        quiet: Bool = false, correctedAt: Timestamp? = nil, track: TrackID? = nil
+        quiet: Bool = false, correctedAt: Timestamp? = nil, track: TrackID? = nil,
+        dream: DreamID? = nil
     ) {
         self.id = id
         self.at = at
@@ -702,13 +705,14 @@ public struct DoneEntry: Sendable, Equatable, Decodable, Identifiable {
         self.quiet = quiet
         self.correctedAt = correctedAt
         self.track = track
+        self.dream = dream
     }
 
     /// Whether you've said it was wrong.
     public var isCorrected: Bool { correctedAt != nil }
 
     enum CodingKeys: String, CodingKey {
-        case id, at, text, reason, mail, event, motion, undo, quiet, track
+        case id, at, text, reason, mail, event, motion, undo, quiet, track, dream
         case correctedAt = "corrected_at"
     }
 }

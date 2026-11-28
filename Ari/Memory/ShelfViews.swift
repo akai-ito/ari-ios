@@ -59,10 +59,12 @@ struct ShelfView: View {
                 showsCalendar = DebugScript.showsCalendar
             #endif
             guard let memory else { return }
+            // What the Library last read of the shelf shows at once, while it's asked for.
+            if pages == nil { pages = memory.shelfPages[shelf] }
             do throws(RequestError) {
                 pages = try await memory.pages(on: shelf)
             } catch {
-                problem = "Couldn't load this shelf: \(error.plainWords)"
+                if pages == nil { problem = "Couldn't load this shelf: \(error.plainWords)" }
             }
         }
     }

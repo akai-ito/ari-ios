@@ -55,6 +55,9 @@ extension ConversationView {
                     text: YourTap.words(of: entry.text),
                     tag: tag(for: entry, in: conversation)
                 ) {
+                    if let share = entry.share {
+                        SharedPieces(share: share, hasAttachments: !entry.attachments.isEmpty)
+                    }
                     if !entry.attachments.isEmpty {
                         MessageAttachments(
                             attachments: entry.attachments, recordings: entry.spoken == nil

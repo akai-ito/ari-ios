@@ -18,6 +18,10 @@ struct MainView: View {
     @State private var motions: Motions?
     /// The pages Kumo made, for their cards in the chat and the Made shelf.
     @State private var made: MadePages?
+    /// Kumo's dream, for the moon and the sun on the Desk and their page.
+    @State private var dreams: Dreams?
+    /// Understanding you, for Getting to know you.
+    @State private var understanding: UnderstandingYou?
     #if DEBUG
         /// A page or a name's card `ARI_MADE` or `ARI_NAME` opens.
         @State private var debugMade: MadeID?
@@ -47,6 +51,18 @@ struct MainView: View {
                             .padding(.trailing, 16)
                             .padding(.top, 2)
                     }
+                    // Kumo out of its sandbox shows here, on the main chat only.
+                    .overlay(alignment: .topLeading) {
+                        ZStack {
+                            if session.access.isFull {
+                                FullAccessMarker { showsSettings = true }
+                                    .padding(.leading, 16)
+                                    .padding(.top, 7)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.3), value: session.access.isFull)
+                    }
             }
             Tab("In motion", systemImage: "circle.dotted.circle", value: .motion) {
                 InMotionView { showsSettings = true }
@@ -64,8 +80,13 @@ struct MainView: View {
         .environment(model.uploads)
         .environment(model.hands)
         .environment(\.hidesYou, youTab.isHidden)
+        // Offline, what's on screen is the copy Ari kept: a quiet note says so, and what the server
+        // must answer at once waits.
+        .environment(\.offline, Offline(session))
         .environment(motions)
         .environment(made)
+        .environment(dreams)
+        .environment(understanding)
         // A Desk item in the chat is the Desk's own card, as it is now.
         .environment(
             \.deskItems,
@@ -89,6 +110,17 @@ struct MainView: View {
                 motions = made
             }
             await motions?.refresh()
+        }
+        .task {
+            if dreams == nil, let client = model.client() {
+                let dream = Dreams(client: client)
+                session.dreams = dream
+                dreams = dream
+                let questions = UnderstandingYou(client: client)
+                session.understanding = questions
+                understanding = questions
+            }
+            await dreams?.refresh()
         }
         .task {
             if made == nil, let client = model.client() {
@@ -197,7 +229,7 @@ struct MainView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $showsSettings) {
             // A sheet takes the environment from where it's attached, outside the one above.
-            SettingsView(model: model, session: session).environment(voices)
+            SettingsView(model: model, session: session).environment(voices).environment(dreams)
         }
         // Notifications show as banners, except while you're reading the chat.
         .onChange(of: scenePhase == .active && place == .chat, initial: true) { _, looking in

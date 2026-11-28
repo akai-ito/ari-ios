@@ -19,6 +19,9 @@ import Observation
 /// - **The Desk's answers** (a card, a guess, one of Kumo's plans moved or cancelled, Done and its
 ///   undo, a calendar event, today's work) are plain requests: you're watching for them, so they
 ///   say at once when they fail.
+/// - **A copy on the device** of the chat, its threads and the Desk, kept a few seconds after they
+///   change and as Ari leaves the screen, is what the session starts from the next time: readable at
+///   once, with or without a connection, until the server's snapshot replaces it.
 @MainActor
 @Observable
 public final class Session {
@@ -44,6 +47,9 @@ public final class Session {
     public private(set) var problems: [ServerProblem] = []
     /// How the event stream is doing.
     public private(set) var link: Link = .paused
+    /// When Ari last heard from the server, kept across launches: what it shows is as of then, for
+    /// "Offline · updated 14:02". `nil` before it ever has.
+    public private(set) var updatedAt: Date?
     /// Something that needs you before Ari can carry on.
     public private(set) var problem: Problem?
     /// Whether a page of older messages is on its way.
@@ -56,8 +62,15 @@ public final class Session {
     @ObservationIgnored public weak var motions: Motions?
     /// The pages Kumo made, kept current from the stream.
     @ObservationIgnored public weak var made: MadePages?
+    /// Kumo's dream, for the moon and the sun on the Desk, kept current from the stream.
+    @ObservationIgnored public weak var dreams: Dreams?
+    /// Understanding you, kept current from the stream.
+    @ObservationIgnored public weak var understanding: UnderstandingYou?
     /// Kumo's browser, as the snapshot and `browser.changed` last said.
     public private(set) var browser = Browser.idle
+    /// How Kumo runs on the server, as the snapshot and `access.changed` last said, or as you just
+    /// set it here: the main chat shows a marker while it's full.
+    public internal(set) var access = Access.sandboxed
     /// Kumo's hands, which follow the browser from the same stream.
     @ObservationIgnored public weak var hands: Hands? {
         didSet {
@@ -144,6 +157,16 @@ public final class Session {
     @ObservationIgnored private var sleepers: [Int: (reasons: Wake, task: Task<Void, Never>)] = [:]
     @ObservationIgnored private var nextSleeper = 0
     @ObservationIgnored private let cache: AttachmentCache?
+    /// Where the copy of what Ari read is kept, if anywhere.
+    @ObservationIgnored private let copies: LocalCopy?
+    /// Whether to keep it: not once you're leaving the server.
+    @ObservationIgnored private var keepsCopy = true
+    /// The copy being written, after any before it, so they land in order.
+    @ObservationIgnored private var keeping: Task<Void, Never>?
+    /// The copy to write shortly, once a run of changes has settled.
+    @ObservationIgnored private var keepingSoon: Task<Void, Never>?
+    /// When the stream last brought anything, an event or a ping.
+    @ObservationIgnored private var heardAt: Date?
     /// The server this session talks to.
     public let address: ServerAddress
     /// Attachments being fetched, so two views asking at once make one request.
@@ -159,22 +182,26 @@ public final class Session {
     ///     after ``start()``.
     ///   - cache: Where attachments' bytes are kept once fetched or attached; with none, they're
     ///     fetched each time.
+    ///   - copies: Where the copy of the chat, its threads and the Desk is kept. With an empty
+    ///     `conversation`, the session starts from it.
     public convenience init(
         connection: Connection, conversation: Conversation = Conversation(), outbox: OutboxStore,
-        cache: AttachmentCache? = nil, transport: any Transport = URLSessionTransport(),
+        cache: AttachmentCache? = nil, copies: LocalCopy? = nil,
+        transport: any Transport = URLSessionTransport(),
         network: any NetworkPath = SystemNetworkPath(),
         clock: some Clock<Duration> = ContinuousClock()
     ) {
         self.init(
             address: connection.address, token: connection.token, conversation: conversation,
-            outbox: outbox, cache: cache, transport: transport, network: network, clock: clock)
+            outbox: outbox, cache: cache, copies: copies, transport: transport, network: network,
+            clock: clock)
     }
 
     /// A session with the server at `address`, for when who answered there isn't known, such as
     /// when an older Ari saved it in a shape this one can't read.
     public init(
         address: ServerAddress, token: Token, conversation: Conversation = Conversation(),
-        outbox: OutboxStore, cache: AttachmentCache? = nil,
+        outbox: OutboxStore, cache: AttachmentCache? = nil, copies: LocalCopy? = nil,
         transport: any Transport = URLSessionTransport(),
         network: any NetworkPath = SystemNetworkPath(),
         clock: some Clock<Duration> = ContinuousClock()
@@ -183,9 +210,13 @@ public final class Session {
         self.address = address
         self.outbox = outbox
         self.cache = cache
+        self.copies = copies
         self.network = network
         ticker = Ticker(clock)
-        client = ItoClient(address: address, token: token, transport: transport)
+        client = ItoClient(address: address, token: token, transport: transport, copies: copies)
+        if let copies, conversation.entries.isEmpty, conversation.cursor == nil {
+            restore(from: copies)
+        }
     }
 
     // MARK: - Lifecycle
@@ -248,11 +279,14 @@ public final class Session {
     }
 
     /// Ari has left the screen: close the stream. Waiting messages stay saved, and a Stop still goes.
+    /// What it shows is kept on the device as it is now.
     public func pause() {
         streamTask?.cancel()
         streamTask = nil
         readingTask?.cancel()
         link = .paused
+        heard()
+        writeCopy()
     }
 
     /// Ends everything. Waiting messages stay in the outbox for next time.
@@ -261,6 +295,10 @@ public final class Session {
         for lane in lanes { lane.cancel() }
         lanes = []
     }
+
+    /// Whether there's no network: Ari shows what it kept, and what you do that the server must
+    /// answer at once, such as a card's answer, waits until it's back.
+    public var isOffline: Bool { link == .offline }
 
     // MARK: - What you do
 
@@ -389,6 +427,7 @@ public final class Session {
             for event in opening[thread] ?? [] { opened.apply(event) }
             threadConversations[thread] = opened
             conversation.update(page.thread)
+            keepCopySoon()
         } catch {
             // It stays as it was; opening it again tries again.
         }
@@ -399,9 +438,34 @@ public final class Session {
     public func threads(matching query: String = "", before: ThreadID? = nil)
         async throws(RequestError) -> ThreadList
     {
-        let listed = try await client.threads(matching: query, before: before)
+        let listed: ThreadList
+        do throws(RequestError) {
+            listed = try await client.threads(matching: query, before: before)
+        } catch {
+            // Without the server, the threads Ari knows from the copy it kept.
+            guard error.isTemporary, before == nil else { throw error }
+            return knownThreads(matching: query)
+        }
         conversation.learn(listed.open + listed.threads)
+        keepCopySoon()
         return listed
+    }
+
+    /// The threads the main chat knows, listed as the server lists them, with only those whose
+    /// name or line holds all of `query`'s words.
+    private func knownThreads(matching query: String) -> ThreadList {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace)
+        let known = conversation.threads.values.filter { thread in
+            let text = [thread.title, thread.result].compactMap(\.self).joined(separator: " ")
+                .lowercased()
+            return words.allSatisfy { text.contains($0) }
+        }
+        let newestFirst = known.sorted {
+            ($0.lastAt.date, $0.id.rawValue) > ($1.lastAt.date, $1.id.rawValue)
+        }
+        return ThreadList(
+            open: newestFirst.filter(\.isOpen), threads: newestFirst.filter { !$0.isOpen },
+            hasMore: false)
     }
 
     /// Renames a thread, or marks it done or open.
@@ -654,6 +718,7 @@ public final class Session {
             } else {
                 conversation.insertEarlier(page, before: oldest.id)
             }
+            keepCopySoon()
         } catch {
             // The server no longer has that message: Ari's view is stale, so replace it.
             if error.status == 404 {
@@ -728,7 +793,7 @@ public final class Session {
         try await client.undo(entry)
     }
 
-    /// Asks for all of Kumo's plans again, such as when What I'm up to opens.
+    /// Asks for all of Kumo's plans again, such as when the Plans page opens.
     public func refreshPlans() async throws(RequestError) {
         let plans = try await client.wakeUps()
         desk = desk?.replacing(plans: plans)
@@ -745,8 +810,18 @@ public final class Session {
         return changed
     }
 
-    /// You cancelled one of Kumo's plans. It leaves the Desk at once; Kumo doesn't set it again
-    /// unasked.
+    /// You skipped a repeating plan's next time. It shows at the time after at once, or leaves the
+    /// Desk when that was its last.
+    public func skip(_ plan: WakeUpID) async throws(RequestError) {
+        if let next = try await client.skipWakeUp(plan) {
+            desk = desk?.replacing(plan: next)
+        } else {
+            desk = desk?.removing(plan: plan)
+        }
+    }
+
+    /// You cancelled one of Kumo's plans, or stopped a repeating one. It leaves the Desk at once;
+    /// Kumo doesn't set it again unasked.
     public func cancel(_ plan: WakeUpID) async throws(RequestError) {
         do throws(RequestError) {
             try await client.cancelWakeUp(plan)
@@ -826,10 +901,12 @@ public final class Session {
             link = failures == 0 && !wasLive ? .connecting : .reconnecting
             do {
                 try await follow()
+                heard()
                 failures = 0
                 wasLive = true
                 continue
             } catch {
+                heard()
                 switch error {
                 case .refused(401, let refusal, _):
                     problem = .tokenRejected(refusal)
@@ -852,14 +929,18 @@ public final class Session {
         let cursor = wantsSnapshot || conversation.needsSnapshot ? nil : conversation.cursor
         let stream = try await client.events(after: cursor)
         link = .live
+        heardAt = .now
         lastHeard = ticker.now()
         wake(.live)
         let feed = EventFeed.items(from: stream.body)
         let reading = Task {
             for try await item in feed {
                 lastHeard = ticker.now()
-                guard case .event(let event) = item else { continue }
+                heardAt = .now
+                guard case .event(let event, let desk) = item else { continue }
                 receive(event)
+                if let desk { keep(desk: desk) }
+                keepCopySoon()
                 if conversation.needsSnapshot { return }
             }
         }
@@ -898,6 +979,8 @@ public final class Session {
         for key in opening.keys { opening[key]?.append(event) }
         motions?.apply(event)
         made?.apply(event)
+        dreams?.apply(event)
+        understanding?.apply(event)
         switch event.payload {
         case .snapshot(let snapshot):
             desk = snapshot.desk
@@ -905,19 +988,27 @@ public final class Session {
             // The browser's changes are compacted: no browser in the snapshot means it's idle.
             browser = snapshot.browser ?? .idle
             hands?.follow(browser)
+            for step in snapshot.steps { hands?.follow(step: step) }
             onboarding = snapshot.onboarding
             problems = snapshot.problems ?? []
+            // The snapshot carries access only while it's full.
+            access = snapshot.access ?? .sandboxed
             wantsSnapshot = false
             // Recordings' changes are compacted, so a snapshot means asking again.
             refreshRecordings()
         case .problemsChanged(let changed):
             problems = changed.problems
+        case .accessChanged(let changed):
+            access = changed.access
         case .deskChanged(let changed):
             desk = changed.desk
             hands?.follow(desk: changed.desk)
         case .browserChanged(let changed):
             browser = changed.browser
             hands?.follow(changed.browser)
+        case .stepStarted(let changed), .stepUpdated(let changed), .stepEnded(let changed):
+            // How a one-tap card settled, as the trail says.
+            hands?.follow(step: changed.step)
         case .recordingChanged(let changed):
             recordings[changed.recording.attachment] = changed.recording
         case .onboardingChanged(let changed):
@@ -944,9 +1035,106 @@ public final class Session {
         isOnline = online
         if !online {
             readingTask?.cancel()
+            heard()
             if streamTask != nil { link = .offline }
         }
         wake(.network)
+    }
+
+    // MARK: - The copy on the device
+
+    /// The names the session's own pieces are kept under, beside the answers the client keeps.
+    private nonisolated static let conversationCopy = "session/conversation"
+    private nonisolated static let threadsCopy = "session/threads"
+    private nonisolated static let updatedCopy = "session/updated"
+    /// How many threads the copy keeps.
+    private nonisolated static let threadsKept = 8
+    /// How long a run of changes settles before the copy is written.
+    public nonisolated static let copyDelay = Duration.seconds(3)
+
+    /// Starts from the copy kept last time: the chat, the threads you opened, the Desk and when Ari
+    /// last heard from the server.
+    private func restore(from copies: LocalCopy) {
+        if let kept = copies.value(Conversation.Copy.self, Self.conversationCopy) {
+            conversation = Conversation(copy: kept)
+        }
+        for kept in copies.value([Conversation.Copy].self, Self.threadsCopy) ?? [] {
+            guard let thread = kept.place else { continue }
+            threadConversations[thread] = Conversation(copy: kept)
+        }
+        desk = copies.value(Desk.self, ItoClient.Kept.desk)
+        updatedAt = copies.value(Date.self, Self.updatedCopy)
+    }
+
+    /// The stream ended or Ari is leaving: what it shows is as of the last thing it heard.
+    private func heard() {
+        guard let heardAt, heardAt != updatedAt else { return }
+        updatedAt = heardAt
+    }
+
+    /// Writes the copy once the changes coming in have settled for a few seconds.
+    private func keepCopySoon() {
+        guard copies != nil, keepsCopy, keepingSoon == nil else { return }
+        let ticker = ticker
+        keepingSoon = Task { [weak self] in
+            try? await ticker.sleep(Self.copyDelay)
+            guard !Task.isCancelled, let self else { return }
+            self.keepingSoon = nil
+            self.writeCopy()
+        }
+    }
+
+    /// Writes the copy now, away from the main actor, after any still being written.
+    private func writeCopy() {
+        keepingSoon?.cancel()
+        keepingSoon = nil
+        guard let copies, keepsCopy else { return }
+        let main = conversation.copy()
+        // The threads you opened most lately: each opens again from the server once it's back.
+        let threads = threadConversations.values
+            .filter { $0.place.map { drafts[$0] == nil } ?? false }
+            .sorted {
+                ($0.thread?.lastAt.date ?? .distantPast) > ($1.thread?.lastAt.date ?? .distantPast)
+            }
+            .prefix(Self.threadsKept).map { $0.copy(keeping: 100) }
+        let updated = [heardAt, updatedAt].compactMap(\.self).max()
+        after { [main, threads = Array(threads)] in
+            copies.keep(main, as: Self.conversationCopy)
+            copies.keep(threads, as: Self.threadsCopy)
+            if let updated { copies.keep(updated, as: Self.updatedCopy) }
+        }
+    }
+
+    /// The Desk as the server wrote it, kept where the client keeps `GET /v0/desk`'s answer.
+    private func keep(desk: Data) {
+        guard let copies, keepsCopy else { return }
+        after { copies.keep(desk, as: ItoClient.Kept.desk) }
+    }
+
+    /// Runs `write` once every copy before it is written.
+    private func after(_ write: @escaping @Sendable () -> Void) {
+        let previous = keeping
+        keeping = Task.detached(priority: .utility) {
+            await previous?.value
+            write()
+        }
+    }
+
+    /// Writes the copy now and waits until it's on the device.
+    public func keepCopy() async {
+        writeCopy()
+        await keeping?.value
+    }
+
+    /// You're leaving this server: its copy goes, once any still being written is, and no more is
+    /// kept.
+    public func forgetCopy() async {
+        keepingSoon?.cancel()
+        keepingSoon = nil
+        keepsCopy = false
+        guard let copies else { return }
+        after { copies.clear() }
+        await keeping?.value
     }
 
     // MARK: - The lanes

@@ -47,6 +47,11 @@ public struct Event: Sendable, Equatable, Decodable {
         case problemsChanged(ProblemsChanged)
         case recordingChanged(RecordingChanged)
         case browserChanged(BrowserChanged)
+        /// Full access turned on or off.
+        case accessChanged(AccessChanged)
+        case dreamFinished(DreamFinished)
+        case dreamProgress(DreamProgress)
+        case questionChanged(QuestionChanged)
         /// A type this version of Ari doesn't know: skip it, but keep its id as the cursor.
         case unknown
     }
@@ -61,7 +66,8 @@ public struct Event: Sendable, Equatable, Decodable {
         "message.amended", "motion.started", "motion.changed", "motion.finished", "motion.state",
         "motion.removed", "made.created", "made.changed", "made.state", "made.removed",
         "desk.changed", "onboarding.changed", "problems.changed", "recording.changed",
-        "browser.changed",
+        "browser.changed", "dream.finished", "question.changed", "access.changed",
+        "dream.progress",
     ]
 
     private enum EnvelopeKeys: String, CodingKey {
@@ -112,6 +118,10 @@ public struct Event: Sendable, Equatable, Decodable {
             case "problems.changed": .problemsChanged(try ProblemsChanged(from: decoder))
             case "recording.changed": .recordingChanged(try RecordingChanged(from: decoder))
             case "browser.changed": .browserChanged(try BrowserChanged(from: decoder))
+            case "access.changed": .accessChanged(try AccessChanged(from: decoder))
+            case "dream.finished": .dreamFinished(try DreamFinished(from: decoder))
+            case "dream.progress": .dreamProgress(try DreamProgress(from: decoder))
+            case "question.changed": .questionChanged(try QuestionChanged(from: decoder))
             default: .unknown
             }
     }
@@ -148,10 +158,12 @@ public struct Snapshot: Sendable, Equatable, Decodable {
     public let problems: [ServerProblem]?
     /// Kumo's browser, while it's doing something; absent while it's idle.
     public let browser: Browser?
+    /// How Kumo runs, while it has full access; absent while it's in its sandbox.
+    public let access: Access?
 
     enum CodingKeys: String, CodingKey {
         case at, reason, messages, steps, asks, calls, threads, turn, next, desk, onboarding
-        case problems, browser
+        case problems, browser, access
         case hasMore = "has_more"
     }
 }

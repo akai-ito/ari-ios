@@ -121,7 +121,7 @@ struct HandsTests {
         #expect(stuck.phase == .handingBack)
     }
 
-    @Test("take over, type, hand back: the trail keeps the hand-off and the line is back on it")
+    @Test("take over, type, hand back: the line is back on it")
     func takeOverAndHandBack() async throws {
         let backend = FakeHands()
         let socket = FakeSocket()
@@ -160,25 +160,79 @@ struct HandsTests {
         await hands.handBack()
         #expect(!hands.showsTakeover && hands.takeover == nil)
         #expect(backend.handBacks == 1)
-        let handoff = try #require(hands.handoffs(in: "h_rail").first)
-        #expect(handoff.asked == "Needed you to log in")
-        #expect(handoff.answered == "You logged in and handed back")
-        #expect(handoff.at == Date(timeIntervalSince1970: 1_000))
         #expect(hands.line(in: "h_rail")?.text == "Back on it · filling in the checkout · step 7")
         hands.unwatch()
     }
 
-    @Test("a page that went back by itself says so on the trail")
-    func wentBackByItself() throws {
+    @Test("the trail's hand-off says what Kumo needed and how the page came back")
+    func handoffSteps() throws {
+        func step(_ facts: Step.HandoffFacts) -> Step {
+            var step = Step(
+                id: "s_1", turn: "t_1", kind: .handoff, title: "Needed you to log in",
+                at: Timestamp("2026-11-28T08:42:00.000Z")!, position: 4)
+            step.handoff = facts
+            return step
+        }
+        let asked = try #require(Handoff(step: step(.init(need: .login, site: "Railway"))))
+        #expect(asked.asked == "Needed you to log in")
+        #expect(asked.answered == nil, "still waiting on you")
+        let back = try #require(
+            Handoff(
+                step: step(
+                    .init(
+                        need: .login, site: "Railway", answer: "handed_back",
+                        answeredAt: Timestamp("2026-11-28T08:44:10.000Z")))))
+        #expect(back.answered == "You logged in and handed back")
+        #expect(back.at == Timestamp("2026-11-28T08:44:10.000Z")?.date)
+        #expect(
+            Handoff(step: step(.init(need: .captcha, site: "Railway", answer: "stopped")))?.answered
+                == "You stopped the task")
+        #expect(
+            Handoff(step: step(.init(site: "Railway", answer: "lapsed")))?.answered
+                == "The page went back to Kumo")
+        #expect(
+            Handoff(
+                step: Step(
+                    id: "s_2", turn: "t_1", kind: .tool, title: "Used browser",
+                    at: Timestamp("2026-11-28T08:42:00.000Z")!, position: 5)) == nil)
+
+        // Back with Kumo after you had it: "Back on it".
         let hands = Hands(backend: FakeHands())
         hands.follow(Browser(state: .yours, thread: "h_rail", need: Self.login))
         hands.follow(Browser(state: .browsing, thread: "h_rail", site: "Railway", step: 8))
-        let handoff = try #require(hands.handoffs(in: "h_rail").first)
-        #expect(!handoff.handedBack)
-        #expect(handoff.answered == "The page went back to Kumo")
         #expect(hands.resumed)
         hands.follow(.idle)
         #expect(!hands.resumed)
+    }
+
+    @Test("stopping the task ends the takeover; a card's outcome and reference come from the trail")
+    func stopAndSettle() async throws {
+        let backend = FakeHands()
+        backend.answer = Browser(state: .yours, thread: "h_rail")
+        let hands = Hands(backend: backend)
+        await hands.takeOver()
+        #expect(hands.takeover?.phase == .holding)
+        backend.answer = .idle
+        await hands.stopTask()
+        #expect(backend.stops == 1)
+        #expect(!hands.showsTakeover && hands.takeover == nil)
+
+        var step = Step(
+            id: "s_9", turn: "t_1", kind: .commit, title: "Pressed “Book now”",
+            at: Timestamp("2026-11-28T08:50:00.000Z")!, position: 9)
+        step.commit = .init(card: "k_1", title: "Book the 07:42", verb: "Book", outcome: "done")
+        hands.follow(step: step)
+        #expect(
+            hands.state(of: "k_1", on: nil)
+                == .done(reference: nil, at: Timestamp("2026-11-28T08:50:00.000Z")!.date))
+        step.commit?.reference = "FR-7Q2K"
+        hands.follow(step: step)
+        #expect(
+            hands.state(of: "k_1", on: nil)
+                == .done(reference: "FR-7Q2K", at: Timestamp("2026-11-28T08:50:00.000Z")!.date))
+        step.commit = .init(card: "k_2", title: "Again", verb: "Book", outcome: "changed")
+        hands.follow(step: step)
+        #expect(hands.state(of: "k_2", on: nil) == .changed)
     }
 
     @Test("a takeover the server refuses says why, and can be asked for again")
@@ -383,6 +437,25 @@ struct HandsTests {
                     Browser(
                         state: .yours,
                         lease: Browser.Lease(until: Timestamp("2026-11-23T17:31:00.000Z")!))))
+        #expect(
+            event(
+                #"{"type":"mark","mark":{"box":{"x":20,"y":540,"width":362,"height":48},"label":"Pay £58.40"}}"#
+            )
+                == .mark(
+                    PageMark(
+                        box: PageRect(x: 20, y: 540, width: 362, height: 48), label: "Pay £58.40")
+                ))
+        #expect(event(#"{"type":"mark"}"#) == .mark(nil))
+        #expect(event(#"{"type":"link","state":"reconnecting"}"#) == .live(false))
+        #expect(event(#"{"type":"link","state":"live"}"#) == .live(true))
+        #expect(event(#"{"type":"link","state":"underwater"}"#) == .live(true))
+        #expect(
+            event(
+                #"{"type":"view","url":"https://a.example/","width":402,"height":640,"tab":1,"tabs":1,"display":"headful"}"#
+            )
+                == .view(
+                    PageView(
+                        url: "https://a.example/", width: 402, height: 640, display: "headful")))
         #expect(event(#"{"type":"cursor","x":1}"#) == .unknown)
         #expect(event("not json") == .unknown)
     }
@@ -408,6 +481,62 @@ struct HandsTests {
         #expect(
             try object(.navigate(.url("https://railway.example")))
                 == JSONValue(json: #"{"type":"navigate","url":"https://railway.example"}"#))
+        #expect(
+            try object(.viewport(width: 402, height: 640.04, keyboard: 0))
+                == JSONValue(json: #"{"type":"viewport","width":402,"height":640}"#))
+        #expect(
+            try object(.viewport(width: 402, height: 640, keyboard: 336))
+                == JSONValue(json: #"{"type":"viewport","width":402,"height":640,"keyboard":336}"#))
+    }
+
+    @Test("what waits to go up joins moves, scrolls and sizes, and never holds a tap behind them")
+    func outbox() {
+        var outbox = InputOutbox()
+        outbox.push(.tap(x: 1, y: 1))
+        outbox.push(.scroll(x: 5, y: 5, dx: 0, dy: 10))
+        outbox.push(.scroll(x: 6, y: 6, dx: 2, dy: 20))
+        outbox.push(.touch(.move, x: 1, y: 2))
+        outbox.push(.touch(.move, x: 3, y: 4))
+        outbox.push(.viewport(width: 402, height: 640, keyboard: 100))
+        outbox.push(.viewport(width: 402, height: 640, keyboard: 336))
+        outbox.push(.key(.enter))
+        outbox.push(.key(.enter))
+        #expect(
+            outbox.waiting == [
+                .tap(x: 1, y: 1), .scroll(x: 6, y: 6, dx: 2, dy: 30), .touch(.move, x: 3, y: 4),
+                .viewport(width: 402, height: 640, keyboard: 336), .key(.enter), .key(.enter),
+            ])
+        #expect(outbox.next() == .tap(x: 1, y: 1))
+        outbox.clear()
+        #expect(outbox.isEmpty && outbox.next() == nil)
+    }
+
+    @Test("the picture says it isn't live while the server reconnects, and rings the pay button")
+    func reconnecting() async throws {
+        let socket = FakeSocket()
+        socket.script([
+            .message(.text(Data(#"{"type":"link","state":"reconnecting"}"#.utf8))),
+            .message(
+                .text(
+                    Data(
+                        #"{"type":"mark","mark":{"box":{"x":20,"y":540,"width":362,"height":48},"label":"Pay £58.40"}}"#
+                            .utf8))),
+            .awaitSent(1),
+            .message(.text(Data(#"{"type":"link","state":"live"}"#.utf8))),
+            .message(.text(Data(#"{"type":"state","browser":{"state":"browsing"}}"#.utf8))),
+            .awaitSent(10_000),
+        ])
+        let stream = BrowserStream(connect: { socket })
+        stream.start()
+        for _ in 0..<200 where stream.mark == nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(stream.isReconnecting)
+        #expect(stream.mark?.label == "Pay £58.40")
+        stream.send(.tap(x: 1, y: 1))
+        for _ in 0..<200 where stream.browser == nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(socket.sent == [.text(BrowserInput.tap(x: 1, y: 1).json)])
+        #expect(!stream.isReconnecting)
+        #expect(stream.mark == nil, "the page went back: no ring")
+        stream.close()
     }
 
     @Test(
@@ -500,6 +629,7 @@ final class FakeHands: HandsBackend, @unchecked Sendable {
     var failure: RequestError?
     private(set) var takes = 0
     private(set) var handBacks = 0
+    private(set) var stops = 0
 
     func takeOver() async throws(RequestError) -> Browser {
         takes += 1
@@ -509,6 +639,12 @@ final class FakeHands: HandsBackend, @unchecked Sendable {
 
     func handBack() async throws(RequestError) -> Browser {
         handBacks += 1
+        if let failure { throw failure }
+        return answer
+    }
+
+    func stopTask() async throws(RequestError) -> Browser {
+        stops += 1
         if let failure { throw failure }
         return answer
     }

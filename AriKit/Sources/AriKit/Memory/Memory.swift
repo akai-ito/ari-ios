@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 /// What the Library's Memory and *In mind* show of what Ari knows. Read-only: Ari writes every
-/// page, and you see what it wrote and what it uses. A refresh that fails keeps what was shown.
+/// page, and you see what it wrote and what it uses. A refresh that fails keeps what was shown, and
+/// what was shown last time shows at once, from the copy kept on the device.
 @MainActor
 @Observable
 public final class Memory {
@@ -33,6 +34,17 @@ public final class Memory {
 
     public init(client: ItoClient) {
         self.client = client
+        guard let mind: MemoryPages = client.kept(ItoClient.Kept.inMind),
+            let counts: ShelfList = client.kept(ItoClient.Kept.shelves)
+        else { return }
+        inMind = mind.pages
+        shelves = counts.shelves
+        load = .loaded
+        chapters = (client.kept(ItoClient.Kept.chapters) as ChapterList?)?.chapters ?? []
+        learnt = (client.kept(ItoClient.Kept.learnt) as LearntLines?)?.lines ?? []
+        for shelf in shelves.map(\.shelf) {
+            shelfPages[shelf] = (client.kept(ItoClient.Kept.pages(on: shelf)) as PageList?)?.pages
+        }
     }
 
     /// Asks for In mind, the shelves, the chapters and what Kumo learnt together. Chapters or what
@@ -71,6 +83,11 @@ public final class Memory {
         try await client.page(address)
     }
 
+    /// The page as it was kept the last time it opened, to show at once while it's asked for.
+    public func keptPage(_ address: PageAddress) -> MemoryPage? {
+        client.kept(ItoClient.Kept.page(address))
+    }
+
     public func change(_ change: String) async throws(RequestError) -> PageChange {
         try await client.change(change)
     }
@@ -79,7 +96,10 @@ public final class Memory {
     public func photo(_ photo: MemoryPhoto) async -> Data? {
         let key = photo.name as NSString
         if let kept = photos.object(forKey: key) { return kept as Data }
-        guard let data = try? await client.memoryPhoto(photo.name) else { return nil }
+        // Kept on the device once fetched, as photos never change: no need to ask again.
+        var data = client.copies?.data(ItoClient.Kept.photo(photo.name))
+        if data == nil { data = try? await client.memoryPhoto(photo.name) }
+        guard let data else { return nil }
         photos.setObject(data as NSData, forKey: key, cost: data.count)
         return data
     }

@@ -11,14 +11,16 @@ import SwiftUI
     /// `ARI_MOTION_PLACE` on a place's page,
     /// `ARI_MOTION_PIN` with a map pin's callout up (a stop's id), or `ARI_MOTION_CHANGES` showing what changed), `ARI_SETTINGS` opens Settings (or, with
     /// `capabilities`, `capability:<id>`, `setup:<id>`, `model`, `voice` or `backup`, goes on to that place, or with `memory` scrolls to it),
-    /// `ARI_THREADS` opens Threads by day, `ARI_OPEN_THREAD` opens a thread (its id), `ARI_DESK` opens part of the Desk (`upto` for What I'm up to, `tracks` for it scrolled to Getting to know you, `day` for your day, `problems`, or `wrong` for That was wrong in Kumo's work), `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
+    /// `ARI_THREADS` opens Threads by day, `ARI_OPEN_THREAD` opens a thread (its id), `ARI_DESK` opens part of the Desk (`needs` for what waits on you, `sky` for the moon or sun's page, with `line`, `done` or `today` opening a line's detail and `lower` at its foot, `plans` and `plan` for the Plans page, `know` for Getting to know you, `question` for a question's answer sheet, `weave` for the dream as it's woven, `day` for your day, `problems`, or `wrong` for That was wrong in Kumo's work), `ARI_STILL` and `ARI_CLOCK` run it on samples at a time of day (see `DeskStills`), `ARI_PAGE` opens a page of memory in the Library (`memory:people/alex`),
     /// `ARI_SHELF` opens a shelf (`people`, `made`, or `journal` and with `ARI_CALENDAR` its calendar), and
     /// `ARI_NOTIFICATION_KEY` (base64) makes the notification key one a test can seal pushes with,
     /// `ARI_ATTACH` attaches files (paths, separated by commas) to the message `ARI_SAY` sends, and
     /// `ARI_OPEN_URL` opens Ari with a link, as the Camera does with a pairing code, and
     /// `ARI_OPEN_ROW` opens the conversation at a row (a message's id, or `call <id>`), `ARI_TALK`
     /// starts a call, `ARI_MADE` opens a page Kumo made (its id; with `ARI_MADE_END` at its foot),
-    /// and `ARI_NAME` opens a name's card (such as `memory:people/alex`).
+    /// `ARI_NAME` opens a name's card (such as `memory:people/alex`), and `ARI_OFFLINE` takes the
+    /// network away that many seconds after launch (`0` for none from the start), to see Ari read
+    /// from its copy.
     enum DebugScript {
         static let environment = ProcessInfo.processInfo.environment
 
@@ -55,6 +57,27 @@ import SwiftUI
         static let made = environment["ARI_MADE"].map(MadeID.init(rawValue:))
         static let opensMadeAtEnd = environment["ARI_MADE_END"] != nil
         static let name = environment["ARI_NAME"].flatMap(URL.init(string:)).flatMap(NameLink.init)
+        static let offlineAfter = environment["ARI_OFFLINE"].flatMap(Double.init)
+
+        /// A network that goes away `after` seconds, as airplane mode would.
+        struct LosingNetwork: NetworkPath {
+            let after: Double
+
+            func updates() -> AsyncStream<Bool> {
+                AsyncStream { continuation in
+                    guard after > 0 else {
+                        continuation.yield(false)
+                        return
+                    }
+                    continuation.yield(true)
+                    let losing = Task {
+                        try? await Task.sleep(for: .seconds(after))
+                        continuation.yield(false)
+                    }
+                    continuation.onTermination = { _ in losing.cancel() }
+                }
+            }
+        }
 
         /// Where `ARI_SETTINGS` goes past the top of Settings.
         static var settingsPath: [SettingsRoute] {
@@ -73,9 +96,13 @@ import SwiftUI
             }
         }
 
-        /// Where `ARI_SETTINGS` scrolls Settings' own list to: `memory`.
+        /// Where `ARI_SETTINGS` scrolls Settings' own list to: `memory` or `dreaming`.
         static var settingsAnchor: SettingsAnchor? {
-            environment["ARI_SETTINGS"] == "memory" ? .memory : nil
+            switch environment["ARI_SETTINGS"] {
+            case "memory": .memory
+            case "dreaming": .dreaming
+            default: nil
+            }
         }
 
         /// Adopts the test's notification key, so `xcrun simctl push` can send a sealed push.

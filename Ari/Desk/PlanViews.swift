@@ -20,10 +20,32 @@ enum PlanWords {
         return date.formatted(DeskTime.weekdayDay)
     }
 
-    /// "Weekdays at 08:30", "Every day at 09:00", "Sat, Sun at 10:00", or "Once" for a one-off.
+    /// "Weekdays at 08:30", "Every day at 09:00", "Tuesdays at 23:45 · 4 left", or "Once" for a
+    /// one-off.
     static func repeats(_ plan: WakeUp) -> String {
         guard let repeating = plan.repeat else { return "Once" }
-        return "\(days(repeating.days)) at \(repeating.time)"
+        return ending("\(days(repeating.days)) at \(repeating.time)", repeating)
+    }
+
+    /// Words about a repeat, then how it ends when it does: "Tuesdays · 4 left", "Fridays 18:00 ·
+    /// until 22 Dec".
+    static func ending(_ words: String, _ repeating: Repeat) -> String {
+        [words, PlanReading.end(of: repeating)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "Tuesdays", "Every day", "Weeknights" or "Mon, Thu": how a repeat comes back, in short.
+    static func repeats(_ repeating: Repeat) -> String {
+        let set = Set(repeating.days)
+        let evening = (Int(repeating.time.prefix(2)) ?? 0) >= 18
+        if set == Set(Weekday.known) { return evening ? "Every night" : "Every day" }
+        if set == Set(Weekday.weekdays) { return evening ? "Weeknights" : "Weekdays" }
+        if set == Set(Weekday.weekend) { return "Weekends" }
+        let days = Weekday.known.filter(set.contains)
+        if days.count == 1, let index = Weekday.known.firstIndex(of: days[0]) {
+            // The calendar's names start on Sunday; the protocol's days start on Monday.
+            return Calendar.current.weekdaySymbols[(index + 1) % 7] + "s"
+        }
+        return days.map(name).joined(separator: ", ")
     }
 
     static func days(_ days: [Weekday]) -> String {
@@ -111,6 +133,7 @@ struct PlanEditor: View {
     let session: Session
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.offline) private var offline
     @State private var what: String
     @State private var at: Date
     @State private var oneOff = false
@@ -150,7 +173,7 @@ struct PlanEditor: View {
                 .foregroundStyle(.ariSecondary)
                 Section {
                     Button("Cancel this plan", role: .destructive) { confirmsCancel = true }
-                        .disabled(cancelling || saving)
+                        .disabled(cancelling || saving || offline.isOffline)
                 }
                 .listRowBackground(Color.ariSurface)
             }
@@ -166,7 +189,7 @@ struct PlanEditor: View {
                         ProgressView()
                     } else {
                         Button("Save") { Task { await save() } }
-                            .disabled(change == nil || trimmed.isEmpty)
+                            .disabled(change == nil || trimmed.isEmpty || offline.isOffline)
                     }
                 }
             }

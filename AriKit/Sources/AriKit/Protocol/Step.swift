@@ -4,7 +4,7 @@ import Foundation
 /// tool, a plan, a wait. Its title is plain words written by the server, safe to show as it is; the
 /// other fields carry the specifics exactly as the agent used them, and a step has those of its kind.
 /// Every step event carries the whole step as it now stands.
-public struct Step: Hashable, Sendable, Decodable, Identifiable {
+public struct Step: Hashable, Sendable, Codable, Identifiable {
     public var id: StepID
     /// The turn it belongs to.
     public var turn: TurnID
@@ -81,9 +81,65 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
     /// Ari's note on the change, such as "Booked the Uffizi, 8:15 Saturday"; for a tool, why, such
     /// as the reason a mail was binned.
     public var note: String?
+    // handoff
+    /// A time Kumo's browser needed your hand, and how the page came back once it did.
+    public var handoff: HandoffFacts?
+    // commit
+    /// How a one-tap card you answered went, and the site's reference once Kumo read it.
+    public var commit: CommitFacts?
+
+    /// A time Kumo's browser needed your hand, as the trail keeps it.
+    public struct HandoffFacts: Hashable, Sendable, Decodable {
+        /// What Kumo asked your hand for; `nil` when you took the page over unasked.
+        public var need: BrowserNeedKind?
+        public var why: String?
+        public var site: String
+        /// How the page came back: `handed_back`, `lapsed` or `stopped`; `nil` while it hasn't.
+        public var answer: String?
+        public var answeredAt: Timestamp?
+
+        public init(
+            need: BrowserNeedKind? = nil, why: String? = nil, site: String, answer: String? = nil,
+            answeredAt: Timestamp? = nil
+        ) {
+            self.need = need
+            self.why = why
+            self.site = site
+            self.answer = answer
+            self.answeredAt = answeredAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case need, why, site, answer
+            case answeredAt = "answered_at"
+        }
+    }
+
+    /// How a one-tap card settled: `done`, `uncertain`, `failed`, `changed`, `declined` or
+    /// `refused`, with the site's reference once Kumo read it on the confirmation.
+    public struct CommitFacts: Hashable, Sendable, Decodable {
+        public var card: CardID
+        public var title: String
+        public var verb: String
+        public var outcome: String
+        public var answer: String?
+        public var reference: String?
+
+        public init(
+            card: CardID, title: String, verb: String, outcome: String, answer: String? = nil,
+            reference: String? = nil
+        ) {
+            self.card = card
+            self.title = title
+            self.verb = verb
+            self.outcome = outcome
+            self.answer = answer
+            self.reference = reference
+        }
+    }
 
     /// A run's line, with `{count}` for how many: present while one runs, past once they're over.
-    public struct RunTitle: Hashable, Sendable, Decodable {
+    public struct RunTitle: Hashable, Sendable, Codable {
         public var present: String
         public var past: String
 
@@ -94,7 +150,7 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
     }
 
     /// A mail a step was about: who sent it, its subject and date, and for one it read, its words.
-    public struct Mail: Hashable, Sendable, Decodable {
+    public struct Mail: Hashable, Sendable, Codable {
         public var from: String
         public var subject: String
         public var date: Timestamp
@@ -104,18 +160,18 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         public var cut: Bool?
     }
 
-    public struct SearchResult: Hashable, Sendable, Decodable {
+    public struct SearchResult: Hashable, Sendable, Codable {
         public var title: String?
         public var url: String
     }
 
-    public struct Action: Hashable, Sendable, Decodable {
+    public struct Action: Hashable, Sendable, Codable {
         public var type: ActionType
         public var path: String?
         public var query: String?
     }
 
-    public struct FileChange: Hashable, Sendable, Decodable {
+    public struct FileChange: Hashable, Sendable, Codable {
         public var path: String
         public var change: FileChangeKind
         /// For a moved file, where it was.
@@ -130,7 +186,7 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         }
     }
 
-    public struct PlanItem: Hashable, Sendable, Decodable {
+    public struct PlanItem: Hashable, Sendable, Codable {
         public var text: String
         public var state: PlanItemState
     }
@@ -152,6 +208,7 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         case heading, summary, query, queries, url, pattern, results
         case command, cwd, actions, output, files, capability, operation, arguments
         case explanation, items, path, pages, change, motion, version, note, tally, mails
+        case handoff, commit
         case runTitle = "run_title"
         case memoryAction = "action"
         case endedAt = "ended_at"
@@ -198,9 +255,62 @@ public struct Step: Hashable, Sendable, Decodable, Identifiable {
         motion = try c.decodeIfPresent(MotionID.self, forKey: .motion)
         version = try c.decodeIfPresent(Int.self, forKey: .version)
         note = try c.decodeIfPresent(String.self, forKey: .note)
+        handoff = try c.decodeIfPresent(HandoffFacts.self, forKey: .handoff)
+        commit = try c.decodeIfPresent(CommitFacts.self, forKey: .commit)
         tally = try c.decodeIfPresent(String.self, forKey: .tally)
         runTitle = try c.decodeIfPresent(RunTitle.self, forKey: .runTitle)
         mails = try c.decodeIfPresent([Mail].self, forKey: .mails)
+    }
+}
+
+extension Step {
+    /// The step as the server sends it, for the copy of the conversation Ari keeps on the device.
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(turn, forKey: .turn)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(title, forKey: .title)
+        try c.encode(at, forKey: .at)
+        try c.encode(position, forKey: .position)
+        try c.encodeIfPresent(endedAt, forKey: .endedAt)
+        try c.encodeIfPresent(outcome, forKey: .outcome)
+        try c.encodeIfPresent(durationMs, forKey: .durationMs)
+        try c.encodeIfPresent(detail, forKey: .detail)
+        try c.encodeIfPresent(heading, forKey: .heading)
+        try c.encodeIfPresent(summary, forKey: .summary)
+        try c.encodeIfPresent(query, forKey: .query)
+        try c.encodeIfPresent(queries, forKey: .queries)
+        try c.encodeIfPresent(url, forKey: .url)
+        try c.encodeIfPresent(pattern, forKey: .pattern)
+        try c.encodeIfPresent(results, forKey: .results)
+        try c.encodeIfPresent(command, forKey: .command)
+        try c.encodeIfPresent(cwd, forKey: .cwd)
+        try c.encodeIfPresent(actions, forKey: .actions)
+        try c.encodeIfPresent(exitCode, forKey: .exitCode)
+        try c.encodeIfPresent(output, forKey: .output)
+        try c.encodeIfPresent(files, forKey: .files)
+        try c.encodeIfPresent(capability, forKey: .capability)
+        try c.encodeIfPresent(operation, forKey: .operation)
+        // The arguments came as JSON and are kept as its text: they go back as the JSON.
+        if let arguments {
+            try c.encode(
+                (try? JSONDecoder().decode(AnyJSON.self, from: Data(arguments.utf8)))
+                    ?? .string(arguments), forKey: .arguments)
+        }
+        try c.encodeIfPresent(explanation, forKey: .explanation)
+        try c.encodeIfPresent(items, forKey: .items)
+        try c.encodeIfPresent(waitMs, forKey: .waitMs)
+        try c.encodeIfPresent(path, forKey: .path)
+        try c.encodeIfPresent(memoryAction, forKey: .memoryAction)
+        try c.encodeIfPresent(pages, forKey: .pages)
+        try c.encodeIfPresent(change, forKey: .change)
+        try c.encodeIfPresent(motion, forKey: .motion)
+        try c.encodeIfPresent(version, forKey: .version)
+        try c.encodeIfPresent(note, forKey: .note)
+        try c.encodeIfPresent(tally, forKey: .tally)
+        try c.encodeIfPresent(runTitle, forKey: .runTitle)
+        try c.encodeIfPresent(mails, forKey: .mails)
     }
 }
 

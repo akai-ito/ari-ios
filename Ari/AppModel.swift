@@ -61,6 +61,20 @@ final class AppModel {
         whereabouts.report = { [weak self] place in
             self?.session?.report(place, device: notifications.deviceID)
         }
+        #if DEBUG
+            // The Desk's stills: a server of samples in place of yours.
+            if let still = DeskStills.server {
+                address = DeskStills.address
+                declinedWeather = true
+                LeadName.remember("Kumo")
+                session = Session(
+                    address: DeskStills.address, token: DeskStills.token,
+                    outbox: OutboxStore(
+                        directory: FileManager.default.temporaryDirectory.appending(path: "Stills")),
+                    transport: still)
+                return
+            }
+        #endif
         guard let saved = Saved.load(from: defaults) else { return }
         group.address = saved.address
         address = saved.address
@@ -77,6 +91,10 @@ final class AppModel {
     /// The connect screen reached a server that accepted the token.
     func connected(_ connection: Connection) {
         pairing = nil
+        // Another server: what Ari kept of the last one goes.
+        if let previous = address, previous != connection.address {
+            forgetCopy(of: previous, session: session)
+        }
         try? tokens.save(connection.token, for: connection.address)
         Saved(address: connection.address, server: connection.server).save(to: defaults)
         group.address = connection.address
@@ -103,15 +121,33 @@ final class AppModel {
         defaults.set(true, forKey: "declinedWeather")
     }
 
-    /// A link Ari was opened with: only pairing links, for now.
+    /// A link Ari was opened with: a pairing link, or a thread to open, from the share sheet's
+    /// Open the thread.
     func open(_ url: URL) {
+        if let thread = ThreadLink.thread(from: url) {
+            openingThread = thread
+            return
+        }
         guard let link = Connector.pairing(from: url) else { return }
         pairing = PairingLink(address: link.address, code: link.code)
     }
 
+    /// Whether the share inbox is being sent to, so coming back to Ari twice doesn't send it twice
+    /// at once.
+    @ObservationIgnored private var sendingShares = false
+
     /// Shares the share extension couldn't send, as when the phone was offline: they go now, in
-    /// the order you shared them.
+    /// the order you shared them. Shares go to the server's share inbox, which puts each in its
+    /// thread; a recording, shared before the inbox or carried in chunks, goes as a message.
     func collectShares() {
+        if let outbox = group.shareOutbox(), !outbox.isEmpty, !sendingShares, let client = client()
+        {
+            sendingShares = true
+            Task {
+                _ = await ShareDelivery.deliver(outbox, with: client)
+                sendingShares = false
+            }
+        }
         guard let session, let shares = group.shares() else { return }
         for attachment in shares.attachments() {
             session.attach(attachment)
@@ -183,8 +219,16 @@ final class AppModel {
     /// A client for the server Ari is connected to, for calls outside the conversation, such as
     /// Settings' capabilities.
     func client() -> ItoClient? {
+        #if DEBUG
+            if let still = DeskStills.server {
+                return ItoClient(
+                    address: DeskStills.address, token: DeskStills.token, transport: still)
+            }
+        #endif
         guard let address, let token = try? tokens.token(for: address) else { return nil }
-        return ItoClient(address: address, token: token, transport: URLSessionTransport())
+        return ItoClient(
+            address: address, token: token, transport: URLSessionTransport(),
+            copies: try? LocalCopy.applicationSupport(for: address))
     }
 
     /// Asks the server who it is again, so Settings shows what it runs now rather than what it ran
@@ -204,6 +248,7 @@ final class AppModel {
         if let address {
             forgetDevice(at: address)
             try? tokens.delete(for: address)
+            forgetCopy(of: address, session: session)
         }
         group.address = nil
         session?.close()
@@ -320,12 +365,33 @@ final class AppModel {
         return text[key.upperBound...].prefix(80).contains("development") ? .sandbox : .production
     }()
 
+    /// You left the server at `address`, or the token stopped working: the copy Ari kept to read
+    /// offline goes, photos and all, once the session has written its last.
+    private func forgetCopy(of address: ServerAddress, session: Session?) {
+        let copies = try? LocalCopy.applicationSupport(for: address)
+        Task {
+            await session?.forgetCopy()
+            copies?.clear()
+            AttachmentCache.forThisApp().clear()
+        }
+    }
+
     private static func session(at address: ServerAddress, token: Token) -> Session {
         let outbox =
             (try? OutboxStore.applicationSupport(for: address))
             ?? OutboxStore(
                 directory: FileManager.default.temporaryDirectory.appending(path: "Outbox"))
-        return Session(address: address, token: token, outbox: outbox, cache: .forThisApp())
+        #if DEBUG
+            let network: any NetworkPath =
+                DebugScript.offlineAfter.map { DebugScript.LosingNetwork(after: $0) }
+                ?? SystemNetworkPath()
+        #else
+            let network = SystemNetworkPath()
+        #endif
+        // What you've read, kept to show at once on the next launch and without a connection.
+        return Session(
+            address: address, token: token, outbox: outbox, cache: .forThisApp(),
+            copies: try? LocalCopy.applicationSupport(for: address), network: network)
     }
 
     private struct Saved: Codable {

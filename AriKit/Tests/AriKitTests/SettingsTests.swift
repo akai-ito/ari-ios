@@ -103,6 +103,31 @@ struct SettingsTests {
         try await cancelling.value
     }
 
+    @Test("Skip skips one time of a repeat that counts down, and its last ends it")
+    func skipsARepeat() async throws {
+        let server = ScriptedServer()
+        let skipping = Task { [client = try client(server)] in
+            try await client.skipWakeUp("w_2")
+        }
+        let sent = try await request(from: server)
+        #expect(sent.method == .post && sent.path == "/v0/wakeups/w_2/skip" && sent.body == nil)
+        try await server.answer(
+            200,
+            json: #"""
+                { "wake_up": { "id": "w_2", "at": "2026-12-08T23:45:00.000Z", "title": "Aligner change",
+                  "what": "Say which tray is next", "why": "Tray 9 of 12.", "by": "kumo",
+                  "repeat": { "days": ["tue"], "time": "23:45", "left": 3 },
+                  "source": { "kind": "chat", "title": "Chat" }, "set_at": "2026-11-10T19:00:00.000Z" } }
+                """#)
+        let next = try #require(try await skipping.value)
+        #expect(next.repeat?.left == 3 && next.repeat?.until == nil)
+
+        let last = Task { [client = try client(server)] in try await client.skipWakeUp("w_2") }
+        _ = try await request(from: server)
+        try await server.answer(200, json: "{}")
+        #expect(try await last.value == nil)
+    }
+
     @Test("a refusal keeps the server's reason")
     func refuses() async throws {
         let server = ScriptedServer()
@@ -156,5 +181,74 @@ struct SettingsTests {
         #expect(info.leadName == "Tess")
         #expect(info.timeZone == "Europe/Rome")
         #expect(info.whereabouts?.area?.name == "Rome")
+    }
+
+    // MARK: - Full access and the dream's time (protocol 0.20)
+
+    @Test("full access is read, turned on with a body that says it's meant, and turned off")
+    func fullAccess() async throws {
+        let server = ScriptedServer()
+        let client = try client(server)
+
+        let reading = Task { try await client.access() }
+        let read = try await request(from: server)
+        #expect(read.method == .get && read.path == "/v0/access")
+        try await server.answer(200, json: #"{ "mode": "sandboxed" }"#)
+        #expect(try await reading.value == .sandboxed)
+
+        let giving = Task { try await client.giveFullAccess() }
+        let give = try await request(from: server)
+        #expect(give.method == .post && give.path == "/v0/access/full")
+        #expect(give.headers["Content-Type"] == "application/json")
+        #expect(try json(give) == JSONValue(json: #"{ "confirm": true }"#))
+        try await server.answer(
+            200, json: #"{ "mode": "full", "since": "2026-11-27T14:02:00.000Z" }"#)
+        let full = try await giving.value
+        #expect(full.isFull && full.since == Timestamp("2026-11-27T14:02:00.000Z"))
+
+        let ending = Task { try await client.endFullAccess() }
+        let end = try await request(from: server)
+        #expect(end.method == .delete && end.path == "/v0/access/full" && end.body == nil)
+        try await server.answer(200, json: #"{ "mode": "sandboxed" }"#)
+        #expect(try await ending.value == .sandboxed)
+    }
+
+    @Test("a mode Ari doesn't know isn't full access, so no marker shows for it")
+    func unknownAccessMode() throws {
+        let access = try JSONDecoder().decode(
+            Access.self, from: Data(#"{ "mode": "supervised" }"#.utf8))
+        #expect(!access.isFull && access.mode.rawValue == "supervised")
+    }
+
+    @Test("a dream time must be a real time of day, written HH:mm")
+    func dreamTimeOfDay() {
+        #expect(DreamTimeOfDay("24:00") == nil && DreamTimeOfDay("4:00") == nil)
+        #expect(DreamTimeOfDay("03:30") == DreamTimeOfDay(hour: 3, minute: 30))
+        #expect(DreamTimeOfDay(hour: 7, minute: 5)?.description == "07:05")
+    }
+
+    @Test("Last dream says the day, the start and how long: Today 04:00 · 31 min")
+    func lastDreamSummary() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/London"))
+        calendar.locale = Locale(identifier: "en_GB")
+        func dream(_ start: String, _ end: String) throws -> Dream {
+            Dream(
+                id: DreamID("d_1"), day: "2026-11-26", startedAt: try #require(Timestamp(start)),
+                endedAt: try #require(Timestamp(end)))
+        }
+        let now = try #require(Timestamp("2026-11-27T16:40:00.000Z")).date
+        #expect(
+            try dream("2026-11-27T04:00:00.000Z", "2026-11-27T04:31:00.000Z")
+                .summary(now: now, calendar: calendar) == "Today 04:00 · 31 min")
+        #expect(
+            try dream("2026-11-26T04:00:00.000Z", "2026-11-26T06:05:00.000Z")
+                .summary(now: now, calendar: calendar) == "Yesterday 04:00 · 2 hr 5 min")
+        #expect(
+            try dream("2026-11-27T14:20:00.000Z", "2026-11-27T14:20:20.000Z")
+                .summary(now: now, calendar: calendar) == "Today 14:20 · 1 min")
+        #expect(
+            try dream("2026-11-23T04:00:00.000Z", "2026-11-23T05:00:00.000Z")
+                .summary(now: now, calendar: calendar).hasSuffix("04:00 · 1 hr"))
     }
 }

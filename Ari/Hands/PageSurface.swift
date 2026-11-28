@@ -2,15 +2,20 @@ import AriKit
 import SwiftUI
 import UIKit
 
-/// The streamed page in a takeover, at the browser's phone size, edge to edge: your taps and
-/// scrolls go to the page, and when a field on it takes the focus, a real text field lies over it,
-/// invisible, so the iOS keyboard types into the page with Passwords, codes from Messages and paste.
+/// The streamed page in a takeover, edge to edge, at the size of the room it has here: it tells the
+/// server that room, and how much of it the keyboard covers, and the page's viewport follows, so
+/// nothing sits under the bar or the keyboard. Your taps and scrolls go to the page, and when a
+/// field on it takes the focus, a real text field lies over it, invisible, so the iOS keyboard types
+/// into the page with Passwords, codes from Messages and paste. On a payment, the site's own button
+/// has a ring around it; while the picture isn't live, it dims.
 struct PageSurface: UIViewRepresentable {
     let stream: BrowserStream
     /// What Kumo asked your hand for: in a login, the email field is the username.
     let need: BrowserNeedKind?
     /// Whether what you do reaches the page.
     let live: Bool
+    /// Whether the keyboard is up.
+    var keyboard = false
     let send: (BrowserInput) -> Void
 
     func makeUIView(context: Context) -> PageSurfaceView {
@@ -21,17 +26,30 @@ struct PageSurface: UIViewRepresentable {
         view.send = send
         view.need = need
         view.live = live
+        view.keyboardUp = keyboard
         view.show(
             picture: stream.picture, count: stream.pictures,
             page: stream.view.map { CGSize(width: $0.width, height: $0.height) })
         view.focus(live ? stream.focus : nil)
+        view.ring(live ? stream.mark : nil)
+        view.dims(stream.isReconnecting)
     }
 }
 
 final class PageSurfaceView: UIView, UITextFieldDelegate {
     var send: (BrowserInput) -> Void = { _ in }
     var need: BrowserNeedKind?
-    var live = false
+    var live = false {
+        didSet {
+            guard live != oldValue else { return }
+            // Holding the page again: the server hears the room afresh.
+            reported = nil
+            reportRoom()
+        }
+    }
+    var keyboardUp = false {
+        didSet { if keyboardUp != oldValue { reportRoom() } }
+    }
 
     private let picture = UIImageView()
     private let field = PageTextField()
@@ -44,6 +62,17 @@ final class PageSurfaceView: UIView, UITextFieldDelegate {
     private var focusedField: FocusedField?
     private var mirror: FieldMirror?
     private var pasting = false
+    private let markRing = UIView()
+    private var shownMark: PageMark?
+    /// The room's height while the keyboard is down, and the room last told to the server.
+    private var fullHeight: CGFloat = 0
+    private var reported: Room?
+
+    private struct Room: Equatable {
+        let width: Double
+        let height: Double
+        let keyboard: Double
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -67,6 +96,12 @@ final class PageSurfaceView: UIView, UITextFieldDelegate {
             self.mirror = mirror
         }
         field.willPaste = { [weak self] in self?.pasting = true }
+        markRing.isUserInteractionEnabled = false
+        markRing.isHidden = true
+        markRing.layer.borderWidth = 2.5
+        markRing.layer.cornerRadius = 10
+        markRing.layer.borderColor = UIColor(Color.ariBone).cgColor
+        addSubview(markRing)
         addSubview(field)
         isAccessibilityElement = true
         accessibilityLabel = "The page Kumo was on"
@@ -80,6 +115,14 @@ final class PageSurfaceView: UIView, UITextFieldDelegate {
         if let page, page != self.page {
             self.page = page
             setNeedsLayout()
+            // A page at another size than the room told, such as one that opened before the
+            // server heard it, gets the room again, once.
+            if let reported,
+                page != CGSize(width: reported.width, height: reported.height - reported.keyboard)
+            {
+                self.reported = nil
+                reportRoom()
+            }
         }
         guard count != shown, let data, let image = UIImage(data: data) else { return }
         shown = count
@@ -131,6 +174,40 @@ final class PageSurfaceView: UIView, UITextFieldDelegate {
         if let focusedField {
             field.frame = geometry.screen(focusedField.box).insetBy(dx: 0, dy: 0)
         }
+        if let shownMark {
+            markRing.frame = geometry.screen(shownMark.box).insetBy(dx: -5, dy: -5)
+        }
+        if !keyboardUp, bounds.height > 0 { fullHeight = bounds.height }
+        reportRoom()
+    }
+
+    /// Tells the server the room the page has here, and how much of it the keyboard covers, when
+    /// that changes; it makes the page's viewport the room above the keyboard.
+    private func reportRoom() {
+        guard live, bounds.width > 0, bounds.height > 0 else { return }
+        let full = max(fullHeight, bounds.height)
+        let keyboard = keyboardUp ? max(0, full - bounds.height) : 0
+        let room = Room(
+            width: bounds.width.rounded(), height: full.rounded(), keyboard: keyboard.rounded())
+        guard room != reported else { return }
+        reported = room
+        send(.viewport(width: room.width, height: room.height, keyboard: room.keyboard))
+    }
+
+    /// The site's own pay button, ringed, or no ring.
+    func ring(_ mark: PageMark?) {
+        guard mark != shownMark else { return }
+        shownMark = mark
+        markRing.isHidden = mark == nil
+        markRing.accessibilityLabel = mark.map { "Press \($0.label) yourself" }
+        setNeedsLayout()
+    }
+
+    /// While the picture isn't live, it dims, so it never passes for the page as it is now.
+    func dims(_ reconnecting: Bool) {
+        let alpha: CGFloat = reconnecting ? 0.45 : 1
+        guard picture.alpha != alpha else { return }
+        UIView.animate(withDuration: 0.25) { self.picture.alpha = alpha }
     }
 
     // MARK: - Touches

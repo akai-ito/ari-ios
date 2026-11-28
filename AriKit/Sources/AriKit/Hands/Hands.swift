@@ -5,12 +5,14 @@ import Foundation
 public protocol HandsBackend: Sendable {
     func takeOver() async throws(RequestError) -> Browser
     func handBack() async throws(RequestError) -> Browser
+    func stopTask() async throws(RequestError) -> Browser
     func openStream() -> any WebSocketChannel
 }
 
 extension ItoClient: HandsBackend {
     public func takeOver() async throws(RequestError) -> Browser { try await takeOverBrowser() }
     public func handBack() async throws(RequestError) -> Browser { try await handBackBrowser() }
+    public func stopTask() async throws(RequestError) -> Browser { try await stopBrowserTask() }
     public func openStream() -> any WebSocketChannel { browserStream() }
 }
 
@@ -77,27 +79,29 @@ public struct LiveLine: Sendable, Equatable {
     }
 }
 
-/// A time Kumo needed your hand and got the page back, for the trail: "Needed you to log in", then
-/// "You logged in and handed back · 17:21".
-public struct Handoff: Sendable, Equatable, Identifiable {
-    public let id: Int
-    /// The thread the task lives in; `nil` for the main chat.
-    public let thread: ThreadID?
+/// A time Kumo needed your hand, as the server keeps it in the task's trail: "Needed you to log
+/// in", then how the page came back, "You logged in and handed back · 17:21".
+public struct Handoff: Sendable, Equatable {
     /// What Kumo asked your hand for, if it asked.
     public let need: BrowserNeedKind?
-    /// Whether you handed it back, rather than it going back by itself.
-    public let handedBack: Bool
-    public let at: Date
+    /// How the page came back: `handed_back`, `lapsed` or `stopped`; `nil` while it hasn't.
+    public let answer: String?
+    /// When it came back.
+    public let at: Date?
 
-    public init(id: Int, thread: ThreadID?, need: BrowserNeedKind?, handedBack: Bool, at: Date) {
-        self.id = id
-        self.thread = thread
+    public init(need: BrowserNeedKind?, answer: String?, at: Date?) {
         self.need = need
-        self.handedBack = handedBack
+        self.answer = answer
         self.at = at
     }
 
-    /// The step's words: what Kumo needed.
+    /// The hand-off a trail step holds, if it's one.
+    public init?(step: Step) {
+        guard let facts = step.handoff else { return nil }
+        self.init(need: facts.need, answer: facts.answer, at: facts.answeredAt?.date)
+    }
+
+    /// What Kumo needed, when the server's title isn't to hand.
     public var asked: String {
         switch need?.shown {
         case .login: "Needed you to log in"
@@ -109,14 +113,20 @@ public struct Handoff: Sendable, Equatable, Identifiable {
         }
     }
 
-    /// Under it: how the page came back.
-    public var answered: String {
-        guard handedBack else { return "The page went back to \(LeadName.current)" }
-        return switch need?.shown {
-        case .login: "You logged in and handed back"
-        case .code: "You put the code in and handed back"
-        case .captcha: "You got past it and handed back"
-        default: "You had the page and handed back"
+    /// Under it: how the page came back; `nil` while it hasn't. One Ari doesn't know reads as
+    /// handed back.
+    public var answered: String? {
+        switch answer {
+        case nil: nil
+        case "lapsed": "The page went back to \(LeadName.current)"
+        case "stopped": "You stopped the task"
+        default:
+            switch need?.shown {
+            case .login: "You logged in and handed back"
+            case .code: "You put the code in and handed back"
+            case .captcha: "You got past it and handed back"
+            default: "You had the page and handed back"
+            }
         }
     }
 }
@@ -130,15 +140,15 @@ public enum CommitState: Sendable, Equatable {
     /// You tapped it and it's off the Desk. The server doesn't say yet how pressing went, so Ari
     /// says only what you did.
     case pressed(at: Date)
-    /// Booked, with the site's reference when it gave one. Needs the server to say.
+    /// Booked, with the site's reference once Kumo read it on the confirmation.
     case done(reference: String?, at: Date)
-    /// The page had changed, so nothing was pressed and Kumo looks again. Needs the server to say.
+    /// The page had changed, so nothing was pressed and Kumo looks again.
     case changed
 }
 
-/// Kumo's hands, as Ari follows them: what the browser is doing, its line where its task lives, the
-/// times it needed you, the live view while something shows it, and a takeover while you hold the
-/// page. The session feeds it the browser's state.
+/// Kumo's hands, as Ari follows them: what the browser is doing, its line where its task lives, how
+/// its cards settled, the live view while something shows it, and a takeover while you hold the
+/// page. The session feeds it the browser's state and the trail's steps.
 @MainActor
 @Observable
 public final class Hands {
@@ -146,9 +156,6 @@ public final class Hands {
     public private(set) var browser = Browser.idle
     /// Whether Kumo has the page back after you had it, for "Back on it".
     public private(set) var resumed = false
-    /// The times Kumo needed your hand and got the page back, oldest first. Kept while Ari runs:
-    /// the server's trail doesn't hold them yet.
-    public private(set) var handoffs: [Handoff] = []
     /// The takeover, while you hold the page or are asking for it.
     public private(set) var takeover: Takeover?
     /// Whether the takeover's screen is up. Leaving it with you hides it and keeps the page.
@@ -159,6 +166,16 @@ public final class Hands {
     public private(set) var commits: [CardID: DeskCard] = [:]
     /// The commit cards you tapped Book on, and when.
     public private(set) var pressed: [CardID: Date] = [:]
+    /// How each commit card settled, as the server's trail says, with the site's reference once
+    /// Kumo read it.
+    public private(set) var settled: [CardID: Settled] = [:]
+
+    /// How a commit card settled, and when.
+    public struct Settled: Sendable, Equatable {
+        public let outcome: String
+        public let reference: String?
+        public let at: Date
+    }
 
     @ObservationIgnored private let backend: any HandsBackend
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -166,7 +183,6 @@ public final class Hands {
     @ObservationIgnored private var closing: Task<Void, Never>?
     @ObservationIgnored private var lastNeed: Browser.Need?
     @ObservationIgnored private var listening: Int?
-    @ObservationIgnored private var nextHandoff = 0
     @ObservationIgnored private let makeStream: (any HandsBackend) -> BrowserStream
 
     public init(
@@ -187,12 +203,8 @@ public final class Hands {
         let after = next.state.shown
         if let need = next.need { lastNeed = need }
         if before == .yours, after != .yours {
-            // Handed back, here or from another device, or gone back by itself.
-            let byYou = takeover?.phase == .handingBack || takeover?.phase == .handedBack
-            record(
-                Handoff(
-                    id: nextHandoff, thread: browser.thread ?? next.thread,
-                    need: lastNeed?.kind, handedBack: byYou, at: now()))
+            // Handed back, here or from another device, or gone back by itself; the server's
+            // trail keeps the hand-off.
             resumed = after == .browsing
             lastNeed = nil
         } else if after == .idle || after == .needsYou {
@@ -214,14 +226,11 @@ public final class Hands {
         return LiveLine(browser, resumed: resumed)
     }
 
-    /// The times Kumo needed your hand in `place`.
-    public func handoffs(in place: ThreadID?) -> [Handoff] {
-        handoffs.filter { $0.thread == place }
-    }
-
-    private func record(_ handoff: Handoff) {
-        handoffs.append(handoff)
-        nextHandoff += 1
+    /// A step from the event stream: how a commit card settled, once the server's trail says.
+    public func follow(step: Step) {
+        guard let commit = step.commit else { return }
+        settled[commit.card] = Settled(
+            outcome: commit.outcome, reference: commit.reference, at: step.at.date)
     }
 
     // MARK: - The live view
@@ -296,6 +305,18 @@ public final class Hands {
         }
     }
 
+    /// Stop the task: nothing more of it is done, the takeover ends without waking Kumo, and the
+    /// page stays as it is, unpressed.
+    public func stopTask() async {
+        do {
+            let browser = try await backend.stopTask()
+            follow(browser)
+            close()
+        } catch {
+            takeover?.couldNotStop(Self.words(error))
+        }
+    }
+
     /// Leave it with you for now: the screen goes, the page stays yours until you come back or it
     /// goes back to Kumo by itself.
     public func leave() {
@@ -338,6 +359,14 @@ public final class Hands {
     public func state(of id: CardID, on desk: Desk?) -> CommitState? {
         if let card = desk?.waiting.first(where: { $0.id == id }) {
             return card.state == .working || card.answer != nil ? .booking : .ready
+        }
+        if let settled = settled[id] {
+            switch settled.outcome {
+            case "done": return .done(reference: settled.reference, at: settled.at)
+            case "changed": return .changed
+            case "uncertain": return .pressed(at: settled.at)
+            default: break
+            }
         }
         if let at = pressed[id] { return .pressed(at: at) }
         return nil

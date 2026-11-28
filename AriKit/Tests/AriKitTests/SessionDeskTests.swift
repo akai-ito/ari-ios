@@ -36,6 +36,36 @@ struct SessionDeskTests {
         #expect(session.onboarding == nil && session.desk == Desk())
     }
 
+    @Test("full access follows the snapshot and access.changed, and Settings' switch at once")
+    func fullAccess() async throws {
+        let bench = try Bench()
+        defer { bench.close() }
+        let full = #"{"mode":"full","since":"2026-11-27T14:00:06.040Z"}"#
+        try await bench.open(with: Self.snapshot("e_10", access: full))
+        let session = bench.session
+        #expect(session.access.isFull)
+        #expect(session.access.since == Timestamp("2026-11-27T14:00:06.040Z"))
+
+        // Another device turned it off: the marker goes, and the stream moves on past it.
+        try await bench.push(
+            #"{"id":"e_11","type":"access.changed","at":"2026-11-27T14:10:00.000Z","access":{"mode":"sandboxed"}}"#
+        )
+        #expect(session.access == .sandboxed)
+        #expect(session.conversation.cursor == "e_11")
+
+        // Settings turns it on: the answer shows before the event comes round.
+        let giving = Task { try await session.giveFullAccess() }
+        let request = try await bench.nextRequest()
+        #expect(request.method == .post && request.path == "/v0/access/full")
+        try await bench.server.answer(200, json: full)
+        try await giving.value
+        #expect(session.access.isFull)
+
+        // A snapshot without access means the sandbox.
+        try await bench.push(Self.snapshot("e_20"))
+        #expect(session.access == .sandboxed)
+    }
+
     @Test("desk.changed replaces the whole Desk, and the stream resumes after it")
     func deskChanged() async throws {
         let bench = try Bench()
@@ -193,7 +223,6 @@ struct SessionDeskTests {
         try await bench.push(
             #"{"id":"e_12","type":"browser.changed","at":"2026-11-23T17:21:00.000Z","browser":{"state":"browsing","thread":"h_table","site":"Tablewise","doing":"filling in the checkout","step":7}}"#
         )
-        #expect(hands.handoffs(in: "h_table").map(\.asked) == ["Needed you to log in"])
         #expect(hands.line(in: "h_table")?.detail == "Back on it · step 7")
         #expect(session.conversation.cursor == "e_12")
 
@@ -501,12 +530,13 @@ struct SessionDeskTests {
 
     private static func snapshot(
         _ id: String, messages: [String] = [], desk: String = #"{"coming_up":[],"waiting":[]}"#,
-        onboarding: String? = nil, browser: String? = nil
+        onboarding: String? = nil, browser: String? = nil, access: String? = nil
     ) -> String {
         let onboarding = onboarding.map { #","onboarding":\#($0)"# } ?? ""
         let browser = browser.map { #","browser":\#($0)"# } ?? ""
+        let access = access.map { #","access":\#($0)"# } ?? ""
         return
-            #"{"id":"\#(id)","type":"snapshot","at":"2026-11-10T08:00:00.000Z","reason":"no_cursor","messages":[\#(messages.joined(separator: ","))],"has_more":false,"steps":[],"asks":[],"calls":[],"threads":[],"turn":null,"next":[],"desk":\#(desk)\#(onboarding)\#(browser)}"#
+            #"{"id":"\#(id)","type":"snapshot","at":"2026-11-10T08:00:00.000Z","reason":"no_cursor","messages":[\#(messages.joined(separator: ","))],"has_more":false,"steps":[],"asks":[],"calls":[],"threads":[],"turn":null,"next":[],"desk":\#(desk)\#(onboarding)\#(browser)\#(access)}"#
     }
 
     private static func message(_ id: String, _ text: String, _ position: Int) -> String {

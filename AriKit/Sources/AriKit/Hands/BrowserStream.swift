@@ -21,6 +21,10 @@ public enum BrowserInput: Sendable, Equatable {
     /// A key that isn't text.
     case key(BrowserKey)
     case navigate(Navigation)
+    /// The room the page has on screen, between the takeover's header and its bar, and how much of
+    /// it the keyboard covers from the bottom while it's up. The server makes the page's viewport
+    /// the room above the keyboard and answers with the view at that size.
+    case viewport(width: Double, height: Double, keyboard: Double)
 
     public enum TouchPhase: String, Sendable, Equatable {
         case start, move, end, cancel
@@ -50,6 +54,9 @@ public enum BrowserInput: Sendable, Equatable {
         case .navigate(.back): frame = ["type": "navigate", "action": "back"]
         case .navigate(.forward): frame = ["type": "navigate", "action": "forward"]
         case .navigate(.reload): frame = ["type": "navigate", "action": "reload"]
+        case .viewport(let width, let height, let keyboard):
+            frame = ["type": "viewport", "width": Self.round(width), "height": Self.round(height)]
+            if keyboard > 0 { frame["keyboard"] = Self.round(keyboard) }
         }
         return (try? JSONSerialization.data(withJSONObject: frame, options: [.sortedKeys]))
             ?? Data()
@@ -58,6 +65,46 @@ public enum BrowserInput: Sendable, Equatable {
     /// Points never go below zero, and a tenth of a pixel is plenty.
     private static func css(_ value: Double) -> Double { round(max(0, value)) }
     private static func round(_ value: Double) -> Double { (value * 10).rounded() / 10 }
+
+    /// This and the next as one, when one waiting to go up can take the next in: a finger's moves
+    /// keep only the latest place, scrolls add up, and the room keeps the latest size. `nil` when
+    /// both must go.
+    public func joined(with next: BrowserInput) -> BrowserInput? {
+        switch (self, next) {
+        case (.touch(.move, _, _), .touch(.move, _, _)): next
+        case (.scroll(_, _, let dx, let dy), .scroll(let x, let y, let nextDx, let nextDy)):
+            .scroll(x: x, y: y, dx: dx + nextDx, dy: dy + nextDy)
+        case (.viewport, .viewport): next
+        default: nil
+        }
+    }
+}
+
+/// What waits to go up the stream while the connection is busy sending: in order, with moves,
+/// scrolls and sizes that come faster than it sends joined to the one before, so a slow connection
+/// catches up at once rather than replaying every step, and a tap or a key is never held behind
+/// them for long.
+public struct InputOutbox: Sendable, Equatable {
+    public private(set) var waiting: [BrowserInput] = []
+
+    public init() {}
+
+    public var isEmpty: Bool { waiting.isEmpty }
+
+    public mutating func push(_ input: BrowserInput) {
+        if let last = waiting.last, let joined = last.joined(with: input) {
+            waiting[waiting.count - 1] = joined
+        } else {
+            waiting.append(input)
+        }
+    }
+
+    /// The next to send, taken out.
+    public mutating func next() -> BrowserInput? {
+        waiting.isEmpty ? nil : waiting.removeFirst()
+    }
+
+    public mutating func clear() { waiting = [] }
 }
 
 /// The keys the phone's keyboard has that aren't text.
@@ -81,13 +128,30 @@ public struct PageView: Sendable, Equatable {
     /// Which tab, counting from 1, of how many.
     public var tab: Int
     public var tabs: Int
+    /// How Chromium runs on the server: `headful`, or `headless` when no display could start.
+    public var display: String?
 
-    public init(url: String, width: Int, height: Int, tab: Int = 1, tabs: Int = 1) {
+    public init(
+        url: String, width: Int, height: Int, tab: Int = 1, tabs: Int = 1, display: String? = nil
+    ) {
         self.url = url
         self.width = width
         self.height = height
         self.tab = tab
         self.tabs = tabs
+        self.display = display
+    }
+}
+
+/// The site's own button a payment waits on, for a ring around it: where it is on the page and
+/// what it says, such as "Pay £58.40".
+public struct PageMark: Sendable, Equatable {
+    public var box: PageRect
+    public var label: String
+
+    public init(box: PageRect, label: String) {
+        self.box = box
+        self.label = label
     }
 }
 
@@ -157,6 +221,11 @@ public enum BrowserStreamEvent: Sendable, Equatable {
     case view(PageView)
     /// The field with the focus, or `nil` when nothing editable has it: hide the keyboard.
     case focus(FocusedField?)
+    /// The pay button to ring, or `nil` for none.
+    case mark(PageMark?)
+    /// Whether the server can show the page: `false` while it's reconnecting, such as when the page
+    /// is frozen or between documents.
+    case live(Bool)
     /// Something you sent didn't reach the page, with why.
     case refused(String)
     /// The browser stopped, with why; the server closes the stream next.
@@ -181,7 +250,7 @@ public enum BrowserStreamEvent: Sendable, Equatable {
             self = .view(
                 PageView(
                     url: url, width: width, height: height, tab: frame.tab ?? 1,
-                    tabs: frame.tabs ?? 1))
+                    tabs: frame.tabs ?? 1, display: frame.display))
         case "focus":
             self = .focus(
                 frame.field.map {
@@ -191,6 +260,16 @@ public enum BrowserStreamEvent: Sendable, Equatable {
                             x: $0.box?.x ?? 0, y: $0.box?.y ?? 0, width: $0.box?.width ?? 0,
                             height: $0.box?.height ?? 0), length: $0.length ?? 0)
                 })
+        case "mark":
+            self = .mark(
+                frame.mark.map {
+                    PageMark(
+                        box: PageRect(
+                            x: $0.box.x, y: $0.box.y, width: $0.box.width, height: $0.box.height),
+                        label: $0.label)
+                })
+        // One Ari doesn't know is live.
+        case "link": self = .live(frame.state != "reconnecting")
         case "refused": self = .refused(frame.message ?? "That didn't reach the page.")
         case "ended": self = .ended(frame.reason ?? "The browser stopped.")
         default: self = .unknown
@@ -208,6 +287,14 @@ public enum BrowserStreamEvent: Sendable, Equatable {
         let field: Field?
         let message: String?
         let reason: String?
+        let display: String?
+        let mark: Mark?
+        let state: String?
+    }
+
+    private struct Mark: Decodable {
+        let box: Box
+        let label: String
     }
 
     private struct Field: Decodable {
@@ -239,6 +326,10 @@ public final class BrowserStream {
     public private(set) var view: PageView?
     /// The field with the focus, in a takeover.
     public private(set) var focus: FocusedField?
+    /// The pay button to ring, on a payment.
+    public private(set) var mark: PageMark?
+    /// Whether the server can show the page; `false` while it's reconnecting.
+    public private(set) var isPageLive = true
     /// The browser's state as the stream last said.
     public private(set) var browser: Browser?
     /// The last thing that didn't reach the page, and why.
@@ -259,10 +350,18 @@ public final class BrowserStream {
     /// Whether to say the connection is struggling.
     public var isDegraded: Bool { link == .slow || link == .down }
 
+    /// Whether the picture isn't live: the connection dropped, or the server can't show the page,
+    /// such as while it's frozen. Say so quietly over it, rather than leave it up as if it were
+    /// live; both come back by themselves.
+    public var isReconnecting: Bool { link == .down || !isPageLive }
+
     @ObservationIgnored private let connect: @Sendable () -> any WebSocketChannel
     @ObservationIgnored private let clock: any Clock<Duration>
     @ObservationIgnored private var channel: (any WebSocketChannel)?
-    @ObservationIgnored private var outgoing: AsyncStream<WebSocketMessage>.Continuation?
+    /// Wakes the sender when something waits in the outbox.
+    @ObservationIgnored private var outgoing: AsyncStream<Void>.Continuation?
+    @ObservationIgnored private var outbox = InputOutbox()
+    @ObservationIgnored private var missedPings = 0
     @ObservationIgnored private var running: Task<Void, Never>?
     @ObservationIgnored private var pinging: Task<Void, Never>?
     @ObservationIgnored private var closed = false
@@ -272,6 +371,8 @@ public final class BrowserStream {
 
     /// A ping slower than this says taps may lag.
     public static let slowPing = Duration.milliseconds(600)
+    /// After this many pings in a row go unanswered, the connection is dropped and made again.
+    public static let missedPingsToReconnect = 2
 
     public init(
         connect: @escaping @Sendable () -> any WebSocketChannel,
@@ -287,10 +388,14 @@ public final class BrowserStream {
         pinging = Task { await ping() }
     }
 
-    /// Sends what you did to the page. Dropped while the connection is down: a tap that lands
-    /// seconds late, on a page that moved, is worse than none.
+    /// Sends what you did to the page, never waiting: it goes at once, in order, and while the
+    /// connection is still sending what came before, moves, scrolls and sizes join up rather than
+    /// queue. Dropped while the connection is down: a tap that lands seconds late, on a page that
+    /// moved, is worse than none.
     public func send(_ input: BrowserInput) {
-        outgoing?.yield(.text(input.json))
+        guard let outgoing else { return }
+        outbox.push(input)
+        outgoing.yield()
     }
 
     /// Calls `listener` with each event as it arrives; returns a token for ``stopListening(_:)``.
@@ -323,12 +428,17 @@ public final class BrowserStream {
         case .state(let browser):
             self.browser = browser
             // Only while it's yours does the page take typing.
-            if browser.state.shown != .yours { focus = nil }
+            if browser.state.shown != .yours {
+                focus = nil
+                mark = nil
+            }
         case .view(let view):
             // Another page: what had the focus is gone.
             if view.url != self.view?.url { focus = nil }
             self.view = view
         case .focus(let field): focus = field
+        case .mark(let given): mark = given
+        case .live(let isLive): isPageLive = isLive
         case .refused(let message): refusal = message
         case .ended(let reason): endReason = reason
         case .unknown: break
@@ -341,10 +451,17 @@ public final class BrowserStream {
         while !Task.isCancelled, !closed {
             let channel = connect()
             self.channel = channel
-            let (messages, outgoing) = AsyncStream<WebSocketMessage>.makeStream()
+            outbox.clear()
+            missedPings = 0
+            let (wakes, outgoing) = AsyncStream<Void>.makeStream(
+                bufferingPolicy: .bufferingNewest(1))
             self.outgoing = outgoing
-            let sender = Task {
-                for await message in messages { try? await channel.send(message) }
+            let sender = Task { [weak self] in
+                for await _ in wakes {
+                    while let input = self?.outbox.next() {
+                        try? await channel.send(.text(input.json))
+                    }
+                }
             }
             defer {
                 outgoing.finish()
@@ -396,8 +513,18 @@ public final class BrowserStream {
             guard !closed, self.channel != nil else { continue }
             let took = started.duration(to: .now)
             link = answered && took < Self.slowPing ? .live : .slow
+            // A connection that stopped answering for whole seconds, without saying it closed, is
+            // made again.
+            missedPings = answered || took < .seconds(2) ? 0 : missedPings + 1
+            if missedPings >= Self.missedPingsToReconnect {
+                missedPings = 0
+                channel.close(code: Self.unanswered)
+            }
         }
     }
+
+    /// The close code for a connection given up on because it stopped answering.
+    static let unanswered = 4001
 
     private func finish() {
         closed = true
@@ -449,6 +576,14 @@ extension ItoClient {
     public func handBackBrowser() async throws(RequestError) -> Browser {
         let body: BrowserBody = try await call(
             HTTPRequest(.delete, "/v0/capabilities/browser/takeover"))
+        return body.browser
+    }
+
+    /// `DELETE /v0/capabilities/browser/task`: stops Kumo's browsing task. A takeover you hold
+    /// ends without waking Kumo, and the page stays as it is, unpressed.
+    public func stopBrowserTask() async throws(RequestError) -> Browser {
+        let body: BrowserBody = try await call(
+            HTTPRequest(.delete, "/v0/capabilities/browser/task"))
         return body.browser
     }
 }

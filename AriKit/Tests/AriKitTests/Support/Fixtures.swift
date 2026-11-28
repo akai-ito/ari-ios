@@ -25,7 +25,10 @@ enum Fixtures {
             at: directory, includingPropertiesForKeys: nil
         )
         .filter { $0.pathExtension == "jsonl" }
-        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        // By number, so 100 comes after 99.
+        .sorted {
+            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+        }
     }
 
     /// Every golden transcript, in scenario order.

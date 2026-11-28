@@ -2,7 +2,9 @@ import Foundation
 
 /// What the event stream brings once read: an event, or only a sign that the connection is alive.
 enum FeedItem: Sendable {
-    case event(Event)
+    /// An event, and when it carries the Desk, the Desk as the server wrote it: what Ari keeps on
+    /// the device to show without a connection.
+    case event(Event, desk: Data?)
     /// A ping, or an event this Ari couldn't read.
     case alive
 }
@@ -25,10 +27,10 @@ enum EventFeed {
                             case .event(let sent):
                                 // An event that can't be read is skipped. If it mattered, the next
                                 // piece of text shows a gap, and the store asks for a snapshot.
-                                if let event = try? decoder.decode(
-                                    Event.self, from: Data(sent.data.utf8))
-                                {
-                                    continuation.yield(.event(event))
+                                let data = Data(sent.data.utf8)
+                                if let event = try? decoder.decode(Event.self, from: data) {
+                                    continuation.yield(
+                                        .event(event, desk: desk(in: data, of: event)))
                                 } else {
                                     continuation.yield(.alive)
                                 }
@@ -42,5 +44,17 @@ enum EventFeed {
             }
             continuation.onTermination = { _ in reader.cancel() }
         }
+    }
+
+    /// The Desk's own JSON, from an event that carries all of it: a snapshot or `desk.changed`.
+    static func desk(in data: Data, of event: Event) -> Data? {
+        switch event.payload {
+        case .snapshot, .deskChanged: break
+        default: return nil
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let desk = object["desk"], JSONSerialization.isValidJSONObject(desk)
+        else { return nil }
+        return try? JSONSerialization.data(withJSONObject: desk)
     }
 }

@@ -37,6 +37,9 @@ struct SettingsView: View {
                     ServerProblems(problems: session.problems)
                     server
                     KumoSettings(model: model, client: client)
+                    DreamingSettings()
+                        .id(SettingsAnchor.dreaming)
+                    FullAccessSettings(session: session)
                     capabilitiesSection
                     GettingStartedAgain(session: session) { dismiss() }
                     MemoryBackupSection(

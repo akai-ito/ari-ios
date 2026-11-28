@@ -52,3 +52,24 @@ extension ItoClient {
         }
     }
 }
+
+// MARK: - Full access and the dream's time
+
+extension ItoClient {
+    /// `GET /v0/access`: how Kumo runs on the server, in its sandbox or with full access.
+    public func access() async throws(RequestError) -> Access {
+        try await call(HTTPRequest(.get, "/v0/access"))
+    }
+
+    /// `POST /v0/access/full`: Kumo runs without its sandbox from its next turn. Send it only once
+    /// the phone has checked it's you: the body says it's meant. The answer is the new state.
+    public func giveFullAccess() async throws(RequestError) -> Access {
+        try await call(
+            HTTPRequest(.post, "/v0/access/full", body: try Self.json(FullAccessConsent())))
+    }
+
+    /// `DELETE /v0/access/full`: Kumo is back in its sandbox from its next turn. Safe to repeat.
+    public func endFullAccess() async throws(RequestError) -> Access {
+        try await call(HTTPRequest(.delete, "/v0/access/full"))
+    }
+}

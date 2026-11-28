@@ -16,7 +16,10 @@ public struct WakeUp: Sendable, Equatable, Decodable, Identifiable {
     public let id: WakeUpID
     /// When it's next due, a concrete time Kumo worked out, such as the end of the event it's for.
     public let at: Timestamp
-    /// What it's for, in a line, such as "Ask how the Halcyon technical went".
+    /// What it is in a few plain words, as you'd say it, such as "Ask how the technical went": the
+    /// line Kumo's plans show. A server from before titles leaves it out; ``shownTitle`` falls back.
+    public let title: String?
+    /// What Kumo will do when it wakes, in its own words, shown with `why` when a plan is open.
     public let what: String
     /// Why, in Kumo's words: what it will have in mind when it wakes.
     public let why: String
@@ -32,12 +35,13 @@ public struct WakeUp: Sendable, Equatable, Decodable, Identifiable {
     public let setAt: Timestamp
 
     public init(
-        id: WakeUpID, at: Timestamp, what: String, why: String, repeat: Repeat? = nil,
-        by: WakeUpAuthor = .kumo, source: WakeUpSource, motion: MotionID? = nil,
-        setAt: Timestamp
+        id: WakeUpID, at: Timestamp, title: String? = nil, what: String, why: String,
+        repeat: Repeat? = nil, by: WakeUpAuthor = .kumo, source: WakeUpSource,
+        motion: MotionID? = nil, setAt: Timestamp
     ) {
         self.id = id
         self.at = at
+        self.title = title
         self.what = what
         self.why = why
         self.repeat = `repeat`
@@ -47,8 +51,11 @@ public struct WakeUp: Sendable, Equatable, Decodable, Identifiable {
         self.setAt = setAt
     }
 
+    /// Its line in Kumo's plans: its title, or what it's for from a server before titles.
+    public var shownTitle: String { title ?? what }
+
     enum CodingKeys: String, CodingKey {
-        case id, at, what, why, `repeat`, by, source, motion
+        case id, at, title, what, why, `repeat`, by, source, motion
         case setAt = "set_at"
     }
 }
@@ -83,15 +90,27 @@ public struct Weekday: OpenValue {
 }
 
 /// A wake-up that comes back: on these days, at this time in your time zone, wherever you are, such
-/// as weekdays at 09:00.
+/// as weekdays at 09:00, until it's stopped or, when it has an end, a number of times or up to a day.
 public struct Repeat: Sendable, Equatable, Codable {
     public let days: [Weekday]
     /// Such as `09:00`.
     public let time: String
+    /// How many more times it comes round, counting the next; it ends after the last. `nil` when
+    /// it repeats until stopped.
+    public let left: Int?
+    /// The last day it comes round, on your local clock, such as `2026-12-22`; it ends after that.
+    public let until: String?
 
-    public init(days: [Weekday], time: String) {
+    public init(days: [Weekday], time: String, left: Int? = nil, until: String? = nil) {
         self.days = days
         self.time = time
+        self.left = left
+        self.until = until
+    }
+
+    /// The last day it comes round, at its start on `calendar`, when it has one.
+    public func lastDay(in calendar: Calendar = .current) -> Date? {
+        until.flatMap(LocalTime.init).map { $0.date(in: calendar) }
     }
 
     /// Whether it comes back every day of the week.
@@ -156,14 +175,18 @@ public struct WakeUpChange: Sendable, Equatable, Encodable {
     public var at: Timestamp?
     /// How it comes back: a new repeat, `.some(nil)` to make it a one-off, or `nil` to keep it.
     public var `repeat`: Repeat??
+    /// Its title in Kumo's plans.
+    public var title: String?
     public var what: String?
     public var why: String?
 
     public init(
-        at: Timestamp? = nil, repeat: Repeat?? = nil, what: String? = nil, why: String? = nil
+        at: Timestamp? = nil, repeat: Repeat?? = nil, title: String? = nil, what: String? = nil,
+        why: String? = nil
     ) {
         self.at = at
         self.repeat = `repeat`
+        self.title = title
         self.what = what
         self.why = why
     }
@@ -176,12 +199,13 @@ public struct WakeUpChange: Sendable, Equatable, Encodable {
         case .some(.none): try container.encodeNil(forKey: .repeat)
         case .none: break
         }
+        try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(what, forKey: .what)
         try container.encodeIfPresent(why, forKey: .why)
     }
 
     enum CodingKeys: String, CodingKey {
-        case at, `repeat`, what, why
+        case at, `repeat`, title, what, why
     }
 }
 
@@ -195,6 +219,16 @@ public struct WakeUpList: Sendable, Equatable, Decodable {
 }
 
 /// The answer to `PATCH /v0/wakeups/{wake_up}`: the wake-up as it is now.
+/// The answer to `POST /v0/wakeups/{wake_up}/skip`: the wake-up at its next time, or `nil` when
+/// the time skipped was its last and it's gone.
+public struct WakeUpSkipped: Sendable, Equatable, Decodable {
+    public let wakeUp: WakeUp?
+
+    enum CodingKeys: String, CodingKey {
+        case wakeUp = "wake_up"
+    }
+}
+
 public struct WakeUpResult: Sendable, Equatable, Decodable {
     public let wakeUp: WakeUp
 
