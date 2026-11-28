@@ -467,8 +467,8 @@ export interface paths {
      * Dream now
      * @description Kumo dreams now, in the background, instead of waiting for the dream time; `dream.finished`
      *     follows when it's done, often many minutes later. One dream runs at a time: while one is
-     *     under way this answers with it and starts nothing. A dream in the 12 hours before the dream
-     *     time stands in for that night's, which then doesn't run.
+     *     under way this answers with it and starts nothing. Dream now is an extra: the night's dream
+     *     still runs at the dream time, and reads only what came since.
      */
     post: operations["dreamNow"];
     delete?: never;
@@ -681,6 +681,40 @@ export interface paths {
      */
     put: operations["renameLead"];
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/shares": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Share something with Kumo
+     * @description What the share sheet sends: any mix of a link, text from another app, photos and files, and
+     *     a note you add. Upload photos and files first with `PUT /v0/attachments/{attachment}` (or
+     *     in chunks, for big ones), then name them in `attachments`, as a message does.
+     *
+     *     Answers as soon as the share is on the server's disk, with `state` `sorting`. The server
+     *     then reads the link's page for its title and summary, where it can, and Kumo decides
+     *     where the share belongs: one of your open side threads when it clearly belongs to that
+     *     thread's subject, or a new thread of its own that Kumo names (`thread.started`, by
+     *     `kumo`, comes first). The share becomes your message there, under the share's id, with
+     *     `share` holding the link and text, and arrives as `message.accepted`. Kumo answers it in
+     *     that thread's own turn, saying what it made of it and what it did with it, and its reply
+     *     notifies like any other.
+     *
+     *     Sending the same id again returns the share as it stands, `placed` once it's a message,
+     *     and changes nothing. The same id with anything different is an `id_conflict`.
+     */
+    post: operations["sendShare"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1353,6 +1387,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/capabilities/browser/task": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Stop Kumo's browsing task
+     * @description Stops what Kumo is doing in the browser, for "Stop the task": a step it's in the middle of
+     *     finishes first, then nothing more of the task is done. A takeover you hold ends, without
+     *     waking Kumo; a need it was waiting on, and a one-tap card waiting for your tap, are dropped;
+     *     and the page stays exactly as it is, unpressed. The turn that was browsing can't use the
+     *     browser again, so a new ask starts afresh. The trail's hand-off says you stopped it.
+     *     Stopping with no task changes nothing. The answer is the browser, now `idle`.
+     */
+    delete: operations["stopBrowserTask"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v0/capabilities/browser/stream": {
     parameters: {
       query?: never;
@@ -1366,15 +1425,24 @@ export interface paths {
      *     at once, one for each device; the page is streamed while any is.
      *
      *     - **Binary frames down:** the page, from Chrome's own screencast: one JPEG each, the whole
-     *       viewport at iPhone size, as soon as anything paints. While the page moves they come at 1x,
-     *       up to 60 a second; once it's still for a moment, a sharp one at 2x follows. A slow
+     *       viewport at your phone's size, as soon as anything paints. While the page moves they come
+     *       at 1x, up to 60 a second; once it's still for a moment, a sharp one at 2x follows. A slow
      *       connection gets fewer, never a backlog: draw the latest.
      *     - **Text frames** both ways are JSON, as in [the browser stream schema](browser.schema.json):
-     *       `state`, `view`, `focus`, `refused` and `ended` from the server; `tap`, `touch`, `scroll`,
-     *       `text`, `fill`, `key` and `navigate` from the app, which reach the page only while you
-     *       hold it. `focus` gives the field with the focus, its kind, where it is and how long its
-     *       value is, so a native field laid over it can type with iOS's keyboard and fill in
-     *       passwords and codes, sending each change with `fill` and return as `key` Enter.
+     *       `state`, `view`, `focus`, `mark`, `link`, `refused` and `ended` from the server; `tap`,
+     *       `touch`, `scroll`, `text`, `fill`, `key`, `navigate` and `viewport` from the app, which
+     *       reach the page only while you hold it. What you send reaches the page at once, in order,
+     *       never waiting on anything else: moves and scrolls sent faster than the page takes them
+     *       join up. `focus` gives the field with the focus, its kind, where it is and how long its
+     *       value is, in frames from other sites too, so a native field laid over it can type with
+     *       iOS's keyboard and fill in passwords and codes, sending each change with `fill` and
+     *       return as `key` Enter; it comes by itself when a new page puts the focus in a field.
+     *       `mark` gives the site's own pay button on a `payment` need, to ring, and follows it as
+     *       the page scrolls. `viewport` tells the server how much room the page has between the
+     *       header and the Hand back bar, and how much the keyboard covers, and the page's viewport
+     *       is made the room above the keyboard, so nothing sits under the bar or the keyboard.
+     *       `link` says `reconnecting` while the page should have painted and couldn't be shown, and
+     *       `live` again once it can.
      *
      *     Peeking is watching: nothing you do changes the page until you take it over with
      *     `POST /v0/capabilities/browser/takeover`, and Kumo carries on meanwhile.
@@ -1801,6 +1869,59 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/access": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read how Kumo runs on the server
+     * @description Whether Kumo runs in its sandbox, as it does unless you change it, or with full access, and
+     *     since when. `access.changed` carries every change, and the snapshot holds it while it's full.
+     */
+    get: operations["getAccess"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/access/full": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Give Kumo full access to the server
+     * @description From the next turn or piece of work that starts, in the chat, in the background and in the
+     *     night's dream, Kumo runs without Codex's sandbox: its commands can install, restart and
+     *     change anything the server's user can, Ito's own checkout included, with nothing asked
+     *     first. A turn already running keeps the sandbox it started with. Nothing else turns it on:
+     *     the body must say `confirm: true`, so a stray call can't, and the app asks for Face ID
+     *     before it sends it. Turning it on when it's already on changes nothing. Kumo's work notes
+     *     each change, and every app hears `access.changed`.
+     */
+    post: operations["giveFullAccess"];
+    /**
+     * Put Kumo back in its sandbox
+     * @description From the next turn or piece of work that starts, Kumo runs in its sandbox again: free to
+     *     write in its workspace and reach the network, and to read the rest of the server. Safe to
+     *     repeat. Kumo's work notes the change, and every app hears `access.changed`.
+     */
+    delete: operations["endFullAccess"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v0/calls/{call}": {
     parameters: {
       query?: never;
@@ -2026,6 +2147,13 @@ export interface components {
     };
     CallResult: {
       call: components["schemas"]["Call"];
+    };
+    FullAccessConsent: {
+      /**
+       * @description You mean it, having confirmed it on the phone, such as with Face ID.
+       * @constant
+       */
+      confirm: true;
     };
     ModelChoice: {
       /** @description The model's id. */
@@ -2451,6 +2579,7 @@ export interface components {
       | components["schemas"]["MessageMoved"]
       | components["schemas"]["RecordingChanged"]
       | components["schemas"]["BrowserChanged"]
+      | components["schemas"]["AccessChanged"]
       | components["schemas"]["QuestionChanged"]
       | components["schemas"]["DreamFinished"];
     /**
@@ -2490,6 +2619,8 @@ export interface components {
       problems?: components["schemas"]["Problem"][];
       /** @description Kumo's browser, while it's doing something: browsing, waiting on you, or in your hands. Absent while it's idle. */
       browser?: components["schemas"]["Browser"];
+      /** @description How Kumo runs on the server, while it has full access. Absent while it runs in its sandbox. */
+      access?: components["schemas"]["Access"];
     };
     /**
      * message.accepted
@@ -2780,6 +2911,8 @@ export interface components {
       thread?: components["schemas"]["ThreadId"];
       /** @description User messages only: inside a thread, the message you replied to. */
       quotes?: components["schemas"]["Quote"];
+      /** @description User messages only: on something you shared from your phone's share sheet, what you shared besides your note, which is the `text`, and the photos and files, which are the `attachments`. Kumo puts a share in the side thread it belongs in, or in a new one it names, and answers it there. */
+      share?: components["schemas"]["Shared"];
     } & unknown;
     /** @description One thing the agent did while working on a turn: thinking, a web search, a command, an edit, a tool, a plan, a wait. Its title is plain words written by the server, safe to show as it is. Its other fields carry the specifics exactly as the agent used them (commands, paths, queries, URLs, output); show what you choose. Fields beyond the common ones belong to particular kinds, and a step carries those its kind has. */
     Step: {
@@ -2896,6 +3029,38 @@ export interface components {
       wait_ms?: number;
       /** @description `image_view`: the image looked at. */
       path?: string;
+      /** @description `handoff`: a time Kumo's browser needed your hand, or you took the page over, kept in the trail of the thread its task lives in so it outlasts a relaunch. Its `title` says what for, such as "Needed you to log in", or "You took over" when Kumo hadn't asked; draw `answer` under it, such as "You logged in and handed back · 17:21". It ends at once, as it's written, and `step.updated` adds the answer when the page comes back, even after its turn has ended. */
+      handoff?: {
+        /** @description What Kumo asked your hand for. Absent when you took the page over without being asked. */
+        need?: components["schemas"]["BrowserNeedKind"];
+        /** @description What Kumo asked, in its words, such as "Sign in to Railway so I can get the tickets". */
+        why?: string;
+        /** @description The site, such as "Railway". */
+        site: string;
+        /**
+         * @description How the page came back: `handed_back` by you, `lapsed` when you left it untouched until it went back by itself, or `stopped` when you stopped the task. Absent while Kumo still waits on you, or you still hold the page. Treat one you don't recognise as handed back.
+         * @enum {unknown}
+         */
+        answer?: "handed_back" | "lapsed" | "stopped";
+        /** @description When it came back, with `answer`. */
+        answered_at?: components["schemas"]["Timestamp"];
+      };
+      /** @description `commit`: how a one-tap card you answered went, kept in the trail of the thread its task lives in, so the card can be drawn as it settled after it has left the Desk and after a relaunch. Its `title` says it in a line, such as "Pressed “Book now”". When Kumo settles an uncertain press, or reads the site's reference on the confirmation page, `step.updated` brings the new `outcome` or the `reference`. */
+      commit?: {
+        /** @description The card, as it was on the Desk. */
+        card: components["schemas"]["CardId"];
+        /** @description The card's title, such as "Table for two at Kiln". */
+        title: string;
+        /** @description The card's option that acts, such as "Book". */
+        verb: string;
+        outcome: components["schemas"]["CommitOutcome"];
+        /** @description `declined`: what you tapped or wrote instead, such as "Not now". */
+        answer?: string;
+        /** @description `done`: the site's reference for it, as Kumo read it on the confirmation page, such as "TW-48KQ". Absent until Kumo reads one, and when the site gave none. */
+        reference?: string;
+        /** @description The card's page as you saw it: its picture, summary and details. */
+        page: components["schemas"]["CommitCard"];
+      };
     };
     /** @description What the agent is doing right now. */
     Status: {
@@ -3195,6 +3360,54 @@ export interface components {
       next: components["schemas"]["MessageId"][];
       /** @description Whether older messages exist in the thread. */
       has_more: boolean;
+    };
+    SendShare:
+      | {
+          /**
+           * Format: uuid
+           * @description A random UUID the app makes for the share. It is the share's retry key, and the id of the message it becomes.
+           */
+          id: string;
+          /**
+           * Format: uri
+           * @description The link you shared, `http` or `https`.
+           */
+          url?: string;
+          /** @description Text you shared from another app, such as a passage you selected. */
+          text?: string;
+          /** @description What you added in the share sheet, as plain text or Markdown. A quick thought can be a note alone. */
+          note?: string;
+          /** @description The screenshots, photos and files you shared, uploaded first, in order, each once. Naming one the server doesn't have is an `attachment_missing`; naming one a message or another share already carries is an `invalid_request`. */
+          attachments?: components["schemas"]["UploadId"][];
+        }
+      | {
+          url: string;
+        }
+      | {
+          text: string;
+        }
+      | {
+          note: string;
+        }
+      | {
+          attachments: unknown[];
+        };
+    ShareResult: {
+      share: components["schemas"]["Share"];
+    };
+    /** @description A share and where it stands. */
+    Share: {
+      /** @description The share's id, which its message takes once Kumo has placed it. */
+      id: components["schemas"]["MessageId"];
+      /**
+       * @description `sorting` while the server reads it and Kumo decides which thread it belongs in; `placed` once it's your message in that thread.
+       * @enum {string}
+       */
+      state: "sorting" | "placed";
+      /** @description When the server accepted it. */
+      at: components["schemas"]["Timestamp"];
+      /** @description Once it's placed, the thread it's in. */
+      thread?: components["schemas"]["ThreadId"];
     };
     ThreadResult: {
       thread: components["schemas"]["Thread"];
@@ -3640,10 +3853,30 @@ export interface components {
       /** @description A line of the quoted message, at most 200 characters, safe to show as it is. */
       text: string;
     };
+    /** @description A link you shared, with what the server read from the page where it could, so the app can show it as a card without going to the site. */
+    SharedLink: {
+      /**
+       * Format: uri
+       * @description The link, exactly as you shared it.
+       */
+      url: string;
+      /** @description The page's title. */
+      title?: string;
+      /** @description The page's summary of itself, as it gives one to link previews. */
+      description?: string;
+      /** @description The site's name, such as "Halcyon Careers", or else its host. */
+      site?: string;
+    };
+    /** @description What you shared from your phone's share sheet, besides your note and its photos and files: a link, and text from another app. */
+    Shared: {
+      link?: components["schemas"]["SharedLink"];
+      /** @description Text you shared from another app, such as a passage you selected, exactly as it came. */
+      text?: string;
+    };
     /** @description Opaque. The server makes it when a step starts. */
     StepId: string;
     /**
-     * @description What kind of thing the agent did. Show the title of a kind you don't recognise.
+     * @description What kind of thing the agent did. `handoff` and `commit` are written by the server, not the agent: a time Kumo's browser needed your hand, and how a one-tap card you answered went. Show the title of a kind you don't recognise.
      * @enum {unknown}
      */
     StepKind:
@@ -3657,7 +3890,9 @@ export interface components {
       | "image_view"
       | "compacting"
       | "memory"
-      | "motion";
+      | "motion"
+      | "handoff"
+      | "commit";
     /** @description A page in memory, named but not shown. */
     MemoryPageRef: {
       address: components["schemas"]["MemoryAddress"];
@@ -3665,6 +3900,38 @@ export interface components {
     };
     /** @description An opaque id the server chooses for one change to memory. */
     ChangeId: string;
+    /**
+     * @description What Kumo needs your hand for: `login` to sign in, `code` for a two-factor code, `captcha`, `payment` to press the site's pay button yourself, or `other`. Treat a kind you don't recognise as `other`.
+     * @enum {unknown}
+     */
+    BrowserNeedKind: "login" | "code" | "captcha" | "payment" | "other";
+    /** @description Opaque. The server makes it for each card. */
+    CardId: string;
+    /**
+     * @description How a one-tap card settled. `done`: the box pressed the site's button and the site answered. `uncertain`: it pressed, but the site's answer was lost, and Kumo checks on the site before anything is pressed again. `failed`: Kumo checked an uncertain press and it didn't go through. `changed`: the page had moved on before your tap, so nothing was pressed. `declined`: you said not now, or asked for a change, so nothing was pressed. `refused`: nothing was pressed, such as because money moves there or you held the page. Treat one you don't recognise as `refused`.
+     * @enum {unknown}
+     */
+    CommitOutcome: "done" | "uncertain" | "failed" | "changed" | "declined" | "refused";
+    /** @description A free booking or form Kumo has ready on a site, such as a table for two, for your one tap. Show the picture, the summary and the details, with the options: the one that `acts` has the box press the site's own button, exactly the one outlined in the picture, but only if the page is still as it was; if it changed, nothing is pressed and Kumo looks again. The other option, or words of your own, press nothing: Kumo hears them. Money never goes this way: where money moves, Kumo asks you to take over and press the button yourself. */
+    CommitCard: {
+      /** @description The site, such as "OpenTable". */
+      site: string;
+      /** @description The page's address, without its query. */
+      url: string;
+      /** @description The site's own button that a go-ahead presses, as it reads, such as "Book now". */
+      button: string;
+      /** @description What pressing it does, in Kumo's words. */
+      summary: string;
+      /** @description What matters, such as when, for how many, and the name it's under. Absent when Kumo gave none. */
+      details?: {
+        label: string;
+        value: string;
+      }[];
+      /** @description The page as Kumo left it, at iPhone size, with the button outlined. Fetch it with `GET /v0/attachments/{attachment}`. */
+      screenshot: components["schemas"]["AttachmentId"];
+      /** @description The side thread the task lives in, where Kumo tells you how it went. Absent for the main chat. */
+      thread?: components["schemas"]["ThreadId"];
+    };
     /**
      * @description `question` asks for information or a choice. `approval` asks before the agent does something consequential, and shows a `preview` of what would happen. Treat a kind you don't recognise as a question.
      * @enum {unknown}
@@ -3871,8 +4138,6 @@ export interface components {
       /** @description Where, when the phone named it, such as "Rome". */
       place?: string;
     };
-    /** @description Opaque. The server makes it for each card. */
-    CardId: string;
     /** @description A time Kumo offers. */
     Slot: {
       start: components["schemas"]["Timestamp"];
@@ -3956,26 +4221,7 @@ export interface components {
         text: string;
         capability?: string;
       };
-      /** @description A free booking or form Kumo has ready on a site, such as a table for two, for your one tap. Show the picture, the summary and the details, with the options: the one that `acts` has the box press the site's own button, exactly the one outlined in the picture, but only if the page is still as it was; if it changed, nothing is pressed and Kumo looks again. The other option, or words of your own, press nothing: Kumo hears them. Money never goes this way: where money moves, Kumo asks you to take over and press the button yourself. */
-      commit?: {
-        /** @description The site, such as "OpenTable". */
-        site: string;
-        /** @description The page's address, without its query. */
-        url: string;
-        /** @description The site's own button that a go-ahead presses, as it reads, such as "Book now". */
-        button: string;
-        /** @description What pressing it does, in Kumo's words. */
-        summary: string;
-        /** @description What matters, such as when, for how many, and the name it's under. Absent when Kumo gave none. */
-        details?: {
-          label: string;
-          value: string;
-        }[];
-        /** @description The page as Kumo left it, at iPhone size, with the button outlined. Fetch it with `GET /v0/attachments/{attachment}`. */
-        screenshot: components["schemas"]["AttachmentId"];
-        /** @description The side thread the task lives in, where Kumo tells you how it went. Absent for the main chat. */
-        thread?: components["schemas"]["ThreadId"];
-      };
+      commit?: components["schemas"]["CommitCard"];
     } & (unknown & unknown & unknown & unknown & unknown);
     /** @description Home: Kumo's line and mood, the weather around you, Kumo's plans, what's coming up, what's waiting on you, how much Kumo handled today and when it last read your mail. */
     Desk: {
@@ -4033,6 +4279,52 @@ export interface components {
       evidence: components["schemas"]["TrackEvidence"][];
     };
     /**
+     * @description Where a line of a dream belongs: `planned`, tomorrow put in order (Kumo's blocks and guesses, wake-ups set, moved or dropped); `tidied`, memory tended (pages rewritten, merged, Now kept to what's live); `noticed`, what Kumo noticed or learnt (a lasting lesson on How to help you, a pattern, a chapter); `saved`, kept for you (the day's journal, a message or a question for the morning). Show a group you don't recognise under Noticed.
+     * @enum {unknown}
+     */
+    DreamGroup: "planned" | "tidied" | "noticed" | "saved";
+    /** @description One short line of what a dream did, pointing at what it changed or is about. Lines are in the order Kumo wrote them; group them by `group`. */
+    DreamLine: {
+      group: components["schemas"]["DreamGroup"];
+      /** @description Plain words, such as "Moved tomorrow's run to 07:30, before the 09:00 call". */
+      text: string;
+      /** @description The entry in Kumo's work for the change this line made, when it made one. Undo it with `POST /v0/done/{entry}/undo` while `undo` is true. */
+      done?: components["schemas"]["DoneId"];
+      /** @description Whether `POST /v0/done/{entry}/undo` can take the change back now: it puts the page, the wake-up or the block back as it was before the dream. */
+      undo?: boolean;
+      /**
+       * @description You took the change back.
+       * @constant
+       */
+      undone?: true;
+      /** @description The memory page it changed or is about, such as `memory:journal/2026-11-26`. */
+      page?: string;
+      /** @description The wake-up it set, moved or dropped; one it dropped is no longer in the plans. */
+      wake_up?: components["schemas"]["WakeUpId"];
+      /** @description The item on Kumo's calendar it planned, moved or removed; one it removed is no longer in Coming up. */
+      event?: components["schemas"]["CalendarItemId"];
+      /** @description A message it posted to you. */
+      message?: components["schemas"]["MessageId"];
+    };
+    /** @description One of Kumo's dreams: once a day, at the dream time, Kumo looks back over everything since the last one and puts it in order, then leaves this record. Show it from when it finishes until you've seen it (a moon on the Desk), then as seen. */
+    Dream: {
+      id: components["schemas"]["DreamId"];
+      /** @description The local day it mostly looked back on, such as `2026-11-26` for a dream at 04:00 on the 27th. */
+      day: string;
+      /**
+       * @description `scheduled`, at the dream time (or as soon as the server was back, if it was off then); `manual`, from Dream now.
+       * @enum {unknown}
+       */
+      trigger: "scheduled" | "manual";
+      started_at: components["schemas"]["Timestamp"];
+      ended_at: components["schemas"]["Timestamp"];
+      /** @description The night in a line, in Kumo's words, such as "A quiet Wednesday: journal written, Thursday planned". */
+      headline?: string;
+      lines: components["schemas"]["DreamLine"][];
+      /** @description When you saw it, with `POST /v0/dreams/{dream}/seen`. Until then it's new. */
+      seen_at?: components["schemas"]["Timestamp"];
+    };
+    /**
      * @description Where a question stands: `open`, waiting quietly for you for as long as it takes; `answered`, by you; `settled`, Kumo learned the answer elsewhere, such as in the chat, and `note` says where; `dropped`, Kumo let it go because it no longer helps. Treat a state you don't recognise as `dropped`.
      * @enum {unknown}
      */
@@ -4083,52 +4375,6 @@ export interface components {
       filed?: string;
       /** @description `settled`: where Kumo learned the answer, such as "You said in the chat that sleep comes first." `dropped`: why Kumo let it go. */
       note?: string;
-    };
-    /**
-     * @description Where a line of a dream belongs: `planned`, tomorrow put in order (Kumo's blocks and guesses, wake-ups set, moved or dropped); `tidied`, memory tended (pages rewritten, merged, Now kept to what's live); `noticed`, what Kumo noticed or learnt (a lasting lesson on How to help you, a pattern, a chapter); `saved`, kept for you (the day's journal, a message or a question for the morning). Show a group you don't recognise under Noticed.
-     * @enum {unknown}
-     */
-    DreamGroup: "planned" | "tidied" | "noticed" | "saved";
-    /** @description One short line of what a dream did, pointing at what it changed or is about. Lines are in the order Kumo wrote them; group them by `group`. */
-    DreamLine: {
-      group: components["schemas"]["DreamGroup"];
-      /** @description Plain words, such as "Moved tomorrow's run to 07:30, before the 09:00 call". */
-      text: string;
-      /** @description The entry in Kumo's work for the change this line made, when it made one. Undo it with `POST /v0/done/{entry}/undo` while `undo` is true. */
-      done?: components["schemas"]["DoneId"];
-      /** @description Whether `POST /v0/done/{entry}/undo` can take the change back now: it puts the page, the wake-up or the block back as it was before the dream. */
-      undo?: boolean;
-      /**
-       * @description You took the change back.
-       * @constant
-       */
-      undone?: true;
-      /** @description The memory page it changed or is about, such as `memory:journal/2026-11-26`. */
-      page?: string;
-      /** @description The wake-up it set, moved or dropped; one it dropped is no longer in the plans. */
-      wake_up?: components["schemas"]["WakeUpId"];
-      /** @description The item on Kumo's calendar it planned, moved or removed; one it removed is no longer in Coming up. */
-      event?: components["schemas"]["CalendarItemId"];
-      /** @description A message it posted to you. */
-      message?: components["schemas"]["MessageId"];
-    };
-    /** @description One of Kumo's dreams: once a day, at the dream time, Kumo looks back over everything since the last one and puts it in order, then leaves this record. Show it from when it finishes until you've seen it (a moon on the Desk), then as seen. */
-    Dream: {
-      id: components["schemas"]["DreamId"];
-      /** @description The local day it mostly looked back on, such as `2026-11-26` for a dream at 04:00 on the 27th. */
-      day: string;
-      /**
-       * @description `scheduled`, at the dream time (or as soon as the server was back, if it was off then); `manual`, from Dream now.
-       * @enum {unknown}
-       */
-      trigger: "scheduled" | "manual";
-      started_at: components["schemas"]["Timestamp"];
-      ended_at: components["schemas"]["Timestamp"];
-      /** @description The night in a line, in Kumo's words, such as "A quiet Wednesday: journal written, Thursday planned". */
-      headline?: string;
-      lines: components["schemas"]["DreamLine"][];
-      /** @description When you saw it, with `POST /v0/dreams/{dream}/seen`. Until then it's new. */
-      seen_at?: components["schemas"]["Timestamp"];
     };
     /**
      * @description Coarse, for animating the agent's presence. Show the label of a kind you don't recognise.
@@ -4192,11 +4438,6 @@ export interface components {
      * @enum {unknown}
      */
     BrowserState: "idle" | "browsing" | "needs_you" | "yours" | "waiting";
-    /**
-     * @description What Kumo needs your hand for: `login` to sign in, `code` for a two-factor code, `captcha`, `payment` to press the site's pay button yourself, or `other`. Treat a kind you don't recognise as `other`.
-     * @enum {unknown}
-     */
-    BrowserNeedKind: "login" | "code" | "captcha" | "payment" | "other";
     /** @description Kumo's browser on the server: one Chromium, signed in where you signed in, that Kumo uses for you, at iPhone size. A browsing task lives in the thread it started in: show `line` there, in the thread's view or the main chat, and a tap on it peeks at the live view (`GET /v0/capabilities/browser/stream`), which you can take over. Kumo never presses a button that pays, never types a password, card or code, and asks you instead. */
     Browser: {
       state: components["schemas"]["BrowserState"];
@@ -4335,6 +4576,13 @@ export interface components {
       note: string;
       /** @description The position of your message Ari was answering when it made the change. */
       position: components["schemas"]["Position"];
+    };
+    /** @description How Kumo runs on the server. `sandboxed`, the default: Kumo's commands run in Codex's sandbox, free to write only in Kumo's workspace and to reach the network, and to read the rest of the server. `full`: no sandbox, so its commands can install, restart and change anything the server's user can, Ito's own checkout included, with no approval asked. Either applies from the next turn or piece of work that starts, never to one already running. While it's `full`, show a marker on the chat. */
+    Access: {
+      /** @enum {unknown} */
+      mode: "sandboxed" | "full";
+      /** @description `full` only: when you turned it on. */
+      since?: components["schemas"]["Timestamp"];
     };
     /**
      * @description Whether the server can hold a call: `ready` once it can both listen and speak, with memory's vocabulary loaded; `loading` while it starts; `failed` when it can't, until the server restarts.
@@ -4613,6 +4861,17 @@ export interface components {
       browser: components["schemas"]["Browser"];
     };
     /**
+     * access.changed
+     * @description You turned full access on or off, from any device. It carries the whole state. After a `snapshot`, its `access` is the state, or `sandboxed` when absent. It never notifies.
+     */
+    AccessChanged: {
+      id: components["schemas"]["EventId"];
+      /** @constant */
+      type: "access.changed";
+      at: components["schemas"]["Timestamp"];
+      access: components["schemas"]["Access"];
+    };
+    /**
      * question.changed
      * @description A question in Understanding you was added or moved on: answered, filed by Kumo, set aside with "Not now", heard, settled or dropped. It carries the whole question, and never notifies. These events are compacted like the Desk's, so after a `snapshot`, fetch `GET /v0/understanding`.
      */
@@ -4881,6 +5140,7 @@ export type VoiceprintState = components["schemas"]["VoiceprintState"];
 export type VoiceChoice = components["schemas"]["VoiceChoice"];
 export type Voice = components["schemas"]["Voice"];
 export type CallResult = components["schemas"]["CallResult"];
+export type FullAccessConsent = components["schemas"]["FullAccessConsent"];
 export type ModelChoice = components["schemas"]["ModelChoice"];
 export type ModelList = components["schemas"]["ModelList"];
 export type ModelOption = components["schemas"]["ModelOption"];
@@ -4964,6 +5224,9 @@ export type MessageResult = components["schemas"]["MessageResult"];
 export type MessagePage = components["schemas"]["MessagePage"];
 export type ThreadList = components["schemas"]["ThreadList"];
 export type ThreadPage = components["schemas"]["ThreadPage"];
+export type SendShare = components["schemas"]["SendShare"];
+export type ShareResult = components["schemas"]["ShareResult"];
+export type Share = components["schemas"]["Share"];
 export type ThreadResult = components["schemas"]["ThreadResult"];
 export type ThreadChange = components["schemas"]["ThreadChange"];
 export type MoveMessage = components["schemas"]["MoveMessage"];
@@ -5036,10 +5299,16 @@ export type Outcome = components["schemas"]["Outcome"];
 export type DoneId = components["schemas"]["DoneId"];
 export type ThreadId = components["schemas"]["ThreadId"];
 export type Quote = components["schemas"]["Quote"];
+export type SharedLink = components["schemas"]["SharedLink"];
+export type Shared = components["schemas"]["Shared"];
 export type StepId = components["schemas"]["StepId"];
 export type StepKind = components["schemas"]["StepKind"];
 export type MemoryPageRef = components["schemas"]["MemoryPageRef"];
 export type ChangeId = components["schemas"]["ChangeId"];
+export type BrowserNeedKind = components["schemas"]["BrowserNeedKind"];
+export type CardId = components["schemas"]["CardId"];
+export type CommitOutcome = components["schemas"]["CommitOutcome"];
+export type CommitCard = components["schemas"]["CommitCard"];
 export type AskKind = components["schemas"]["AskKind"];
 export type AskOption = components["schemas"]["AskOption"];
 export type AskOutcome = components["schemas"]["AskOutcome"];
@@ -5058,7 +5327,6 @@ export type WakeUpSource = components["schemas"]["WakeUpSource"];
 export type WakeUp = components["schemas"]["WakeUp"];
 export type DeskLine = components["schemas"]["DeskLine"];
 export type Ambient = components["schemas"]["Ambient"];
-export type CardId = components["schemas"]["CardId"];
 export type Slot = components["schemas"]["Slot"];
 export type Card = components["schemas"]["Card"];
 export type Desk = components["schemas"]["Desk"];
@@ -5066,12 +5334,12 @@ export type TrackStage = components["schemas"]["TrackStage"];
 export type QuestionId = components["schemas"]["QuestionId"];
 export type TrackEvidence = components["schemas"]["TrackEvidence"];
 export type Track = components["schemas"]["Track"];
-export type QuestionState = components["schemas"]["QuestionState"];
-export type QuestionAnswer = components["schemas"]["QuestionAnswer"];
-export type Question = components["schemas"]["Question"];
 export type DreamGroup = components["schemas"]["DreamGroup"];
 export type DreamLine = components["schemas"]["DreamLine"];
 export type Dream = components["schemas"]["Dream"];
+export type QuestionState = components["schemas"]["QuestionState"];
+export type QuestionAnswer = components["schemas"]["QuestionAnswer"];
+export type Question = components["schemas"]["Question"];
 export type StatusKind = components["schemas"]["StatusKind"];
 export type StatusLabel = components["schemas"]["StatusLabel"];
 export type StatusDetail = components["schemas"]["StatusDetail"];
@@ -5080,7 +5348,6 @@ export type RecordingState = components["schemas"]["RecordingState"];
 export type Recording = components["schemas"]["Recording"];
 export type FileId = components["schemas"]["FileId"];
 export type BrowserState = components["schemas"]["BrowserState"];
-export type BrowserNeedKind = components["schemas"]["BrowserNeedKind"];
 export type Browser = components["schemas"]["Browser"];
 export type Motion = components["schemas"]["Motion"];
 export type MotionChange = components["schemas"]["MotionChange"];
@@ -5090,6 +5357,7 @@ export type Made = components["schemas"]["Made"];
 export type MadeItemId = components["schemas"]["MadeItemId"];
 export type MadeState = components["schemas"]["MadeState"];
 export type MadeChange = components["schemas"]["MadeChange"];
+export type Access = components["schemas"]["Access"];
 export type VoiceState = components["schemas"]["VoiceState"];
 export type VoiceReason = components["schemas"]["VoiceReason"];
 export type MessageAmended = components["schemas"]["MessageAmended"];
@@ -5115,6 +5383,7 @@ export type ThreadChanged = components["schemas"]["ThreadChanged"];
 export type MessageMoved = components["schemas"]["MessageMoved"];
 export type RecordingChanged = components["schemas"]["RecordingChanged"];
 export type BrowserChanged = components["schemas"]["BrowserChanged"];
+export type AccessChanged = components["schemas"]["AccessChanged"];
 export type QuestionChanged = components["schemas"]["QuestionChanged"];
 export type DreamFinished = components["schemas"]["DreamFinished"];
 export type NotificationKind = components["schemas"]["NotificationKind"];
@@ -6125,6 +6394,61 @@ export interface operations {
       };
       400: components["responses"]["InvalidRequest"];
       401: components["responses"]["TokenRejected"];
+    };
+  };
+  sendShare: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "id": "0f9b4c2e-6a71-4d3b-8e25-9c1a7d4e3b60",
+         *       "url": "https://careers.halcyon.example/jobs/platform-engineer",
+         *       "note": "This is the one Sam mentioned"
+         *     }
+         */
+        "application/json": components["schemas"]["SendShare"];
+      };
+    };
+    responses: {
+      /** @description Already accepted earlier; nothing changed. This is where it stands. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ShareResult"];
+        };
+      };
+      /** @description Accepted for the first time; Kumo is sorting it. */
+      201: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ShareResult"];
+        };
+      };
+      /** @description The request is malformed or not possible now (`invalid_request`), such as an attachment that belongs to a message already, or an attachment it names isn't on the server (`attachment_missing`). */
+      400: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResult"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      409: components["responses"]["IdConflict"];
+      429: components["responses"]["SlowDown"];
     };
   };
   listThreads: {
@@ -7339,6 +7663,29 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  stopBrowserTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stopped; the browser, now `idle`. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BrowserBody"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   streamBrowser: {
     parameters: {
       query?: never;
@@ -7887,6 +8234,98 @@ export interface operations {
       400: components["responses"]["InvalidRequest"];
       401: components["responses"]["TokenRejected"];
       503: components["responses"]["Unavailable"];
+    };
+  };
+  getAccess: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description How Kumo runs. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "mode": "sandboxed"
+           *     }
+           */
+          "application/json": components["schemas"]["Access"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  giveFullAccess: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "confirm": true
+         *     }
+         */
+        "application/json": components["schemas"]["FullAccessConsent"];
+      };
+    };
+    responses: {
+      /** @description Full access is on. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "mode": "full",
+           *       "since": "2026-11-27T14:02:00.000Z"
+           *     }
+           */
+          "application/json": components["schemas"]["Access"];
+        };
+      };
+      400: components["responses"]["InvalidRequest"];
+      401: components["responses"]["TokenRejected"];
+    };
+  };
+  endFullAccess: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Kumo runs in its sandbox. */
+      200: {
+        headers: {
+          "Ito-Protocol": components["headers"]["ItoProtocol"];
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {
+           *       "mode": "sandboxed"
+           *     }
+           */
+          "application/json": components["schemas"]["Access"];
+        };
+      };
+      401: components["responses"]["TokenRejected"];
     };
   };
   startCall: {

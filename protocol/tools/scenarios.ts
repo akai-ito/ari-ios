@@ -5014,141 +5014,6 @@ const scenarios: readonly (() => Transcript)[] = [
 
   () => {
     const transcript = createTranscript({
-      name: "97-understanding-you",
-      scenario: 97,
-      title: "Understanding you",
-      summary:
-        "Kumo asks two things it would like you to explain, on its Planning with you track, each with what it " +
-        "already understands, the missing piece and why it would help. They wait quietly in Understanding you: no " +
-        "Desk card, no notification. You say Not now to one. You answer the other with two taps and a line: it's " +
-        "evidence on the track, and Kumo files what it learned in the background, with no follow-up. Kumo settles " +
-        "the one you set aside once you answer it in the chat, and never asks the same thing twice.",
-      guarantees: ["G63"],
-    });
-    transcript.begin("2026-11-27T09:00:00.000Z");
-    transcript.connect();
-    transcript.registerDevice();
-    transcript.time("2026-11-27T09:00:01.000Z");
-    const name = "Planning with you";
-    const trackNote = "How you like your days and weekends planned.";
-    agentCalls(transcript, "open_track", { name, note: trackNote });
-    const track = {
-      id: transcript.track(),
-      name,
-      stage: "learning",
-      since: "2026-11-27T09:00:01.000Z",
-      note: trackNote,
-      confirmed: 0,
-      corrected: 0,
-      evidence: [] as readonly Readonly<Record<string, unknown>>[],
-    };
-    transcript.wait(500);
-    transcript.getUnderstanding({ tracks: [track], questions: [], recent: [] });
-    const ask = (
-      at: string,
-      fields: {
-        readonly understood: string;
-        readonly missing: string;
-        readonly why: string;
-        readonly options: readonly string[];
-      },
-    ) => {
-      transcript.time(at);
-      agentCalls(transcript, "add_question", { track: track.id, ...fields });
-      const question = {
-        id: transcript.questionId(),
-        track: track.id,
-        state: "open",
-        ...fields,
-        asked_at: at,
-        changed_at: at,
-      };
-      transcript.question(question);
-      return question;
-    };
-    const restful = ask("2026-11-27T09:00:02.000Z", {
-      understood: "You keep Sunday mornings free, and your long run is on Saturdays.",
-      missing: "What makes a weekend feel restful rather than busy?",
-      why: "So the weekends I plan leave you rested, not just full.",
-      options: ["Unplanned time", "Seeing friends", "Being outdoors", "A long lie-in"],
-    });
-    const packed = ask("2026-11-27T09:00:03.000Z", {
-      understood: "Packed weeks are when your runs slip first, and you've said you sleep badly after late calls.",
-      missing: "When a week is packed, what should I protect first?",
-      why: "So I know what to keep when something has to give.",
-      options: ["Training", "Sleep", "Evenings with friends"],
-    });
-    transcript.time("2026-11-27T09:01:03.000Z");
-    transcript.getUnderstanding({ tracks: [track], questions: [restful, packed], recent: [] });
-
-    transcript.time("2026-11-27T09:01:08.000Z");
-    transcript.request("POST", `/v0/understanding/questions/${packed.id}/not-now`);
-    const later = { ...packed, changed_at: "2026-11-27T09:01:08.000Z", later_at: "2026-11-27T09:01:08.000Z" };
-    transcript.question(later);
-    transcript.wait(60);
-    transcript.response(200, { question: later });
-
-    transcript.time("2026-11-27T09:01:30.000Z");
-    const filed = "Weekends start slow: nothing booked before noon, and time outdoors.";
-    transcript.world("kumo_works", { calls: [], answer: filed });
-    const answer = {
-      picked: ["Unplanned time", "Being outdoors"],
-      text: "A slow morning and a long walk, with nothing booked before noon.",
-    };
-    transcript.request("POST", `/v0/understanding/questions/${restful.id}/answer`, { body: answer });
-    const answeredAt = "2026-11-27T09:01:30.000Z";
-    const answered = { ...restful, state: "answered", changed_at: answeredAt, answer: { at: answeredAt, ...answer } };
-    transcript.question(answered);
-    const kept = { ...answered, filed };
-    transcript.question(kept);
-    transcript.wait(60);
-    transcript.response(202, { question: answered });
-
-    transcript.time("2026-11-27T09:02:00.000Z");
-    const evidence = {
-      at: answeredAt,
-      kind: "answered",
-      text:
-        "You answered “What makes a weekend feel restful rather than busy?”: Unplanned time, Being outdoors; " +
-        "“A slow morning and a long walk, with nothing booked before noon.”",
-      question: restful.id,
-    };
-    const answeredTrack = { ...track, evidence: [evidence] };
-    transcript.getWork({ handled: [], cleared: [], tracks: [answeredTrack] });
-    transcript.wait(1000);
-    transcript.getUnderstanding({ tracks: [answeredTrack], questions: [later], recent: [kept] });
-
-    const settledAt = "2026-11-27T12:40:00.000Z";
-    transcript.time(settledAt);
-    const note = "You said in the chat that sleep comes first when a week is packed.";
-    agentCalls(transcript, "settle_question", { question: packed.id, note });
-    const settled = {
-      id: packed.id,
-      track: track.id,
-      state: "settled",
-      understood: packed.understood,
-      missing: packed.missing,
-      why: packed.why,
-      options: packed.options,
-      asked_at: packed.asked_at,
-      changed_at: settledAt,
-      note,
-    };
-    transcript.question(settled);
-    transcript.time("2026-11-28T04:10:00.000Z");
-    agentCalls(transcript, "add_question", {
-      track: track.id,
-      understood: "You run long on Saturdays.",
-      missing: "What makes a weekend restful for you, rather than busy?",
-      why: "So I plan weekends that rest you.",
-    });
-    transcript.time("2026-11-28T08:30:00.000Z");
-    transcript.getUnderstanding({ tracks: [answeredTrack], questions: [], recent: [settled, kept] });
-    return transcript;
-  },
-
-  () => {
-    const transcript = createTranscript({
       name: "92-a-nights-dream",
       scenario: 92,
       title: "A night's dream",
@@ -5164,6 +5029,7 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.registerDevice();
     transcript.wait(1000);
     const legs = {
+      title: "Ask how the legs feel",
       what: "Ask how the legs feel after the long run",
       why: "Fourteen kilometres is a jump; check recovery before Saturday's session.",
       source: { kind: "chat", title: "The long run with Leo" },
@@ -5180,6 +5046,7 @@ const scenarios: readonly (() => Transcript)[] = [
       "A long run along the river with Leo this morning: 14 km, my longest since the summer. Best run in months. " +
       "We stopped for pastries at the market on the way back.";
     const saturday = {
+      title: "Check Saturday's session",
       what: "Check Saturday's session still suits the legs",
       why: "After Thursday's 14 km, Saturday's intervals may want to be easy miles instead.",
       source: { kind: "chat", title: "The long run with Leo" },
@@ -5220,7 +5087,7 @@ const scenarios: readonly (() => Transcript)[] = [
     const dream = transcript.dreamId();
     const wrote = transcript.addDone({ text: "Wrote Thursday's journal", dream, undo: true });
     const movedDone = transcript.addDone({ text: moved, dream, undo: true });
-    const sessionText = `Set “${saturday.what}” for Sat 28 Nov 07:00`;
+    const sessionText = `Set “${saturday.title}” for Sat 28 Nov 07:00`;
     const sessionDone = transcript.addDone({ text: sessionText, dream, undo: true });
     const record = transcript.dreamFinished({
       id: dream,
@@ -5277,14 +5144,15 @@ const scenarios: readonly (() => Transcript)[] = [
       title: "Dream now",
       summary:
         "You're off to bed early, so you ask Kumo to dream now. It dreams at once, moves Friday's planning to " +
-        "09:00 so you can sleep in, and leaves its record. Being so close to the dream time, it stands in for the " +
-        "night's dream, which doesn't run at 04:00. In the morning you move the dream time to 03:30.",
+        "09:00 so you can sleep in, and leaves its record. Dream now is an extra: the night's dream still runs at " +
+        "04:00, looking back only over what came since. In the morning you move the dream time to 03:30.",
       guarantees: ["G60", "G61"],
     });
     transcript.begin("2026-11-26T23:15:00.000Z");
     transcript.connect();
     transcript.wait(1000);
     const planning = {
+      title: "Shape Friday",
       what: "Shape Friday with you",
       why: "You asked for a look at the day each morning; Friday is wide open.",
       source: { kind: "chat", title: "“Look at my day with me each morning”" },
@@ -5327,12 +5195,30 @@ const scenarios: readonly (() => Transcript)[] = [
       headline: "An early night: Friday starts at nine",
       lines: [{ group: "planned", text: moved, wake_up: look.id, done: String(done.id), undo: true }],
     });
+    transcript.wait(2000);
+    transcript.request("GET", "/v0/dream");
+    transcript.response(200, { time: "04:00", next_at: "2026-11-27T04:00:00.000Z", latest: record });
+    // The night's dream runs as ever, looking back only since Dream now.
+    const quiet = "Nothing new since your early dream: Friday still starts at nine";
+    transcript.world("kumo_dreams", {
+      calls: [{ tool: "record_dream", input: { lines: [{ group: "noticed", text: quiet }] } }],
+      answer: "Dreamt.",
+    });
+    transcript.time("2026-11-27T04:00:00.000Z");
+    const night = transcript.dreamFinished({
+      id: transcript.dreamId(),
+      day: "2026-11-26",
+      trigger: "scheduled",
+      started_at: "2026-11-27T04:00:00.000Z",
+      ended_at: "2026-11-27T04:00:00.000Z",
+      lines: [{ group: "noticed", text: quiet }],
+    });
     transcript.time("2026-11-27T07:30:00.000Z");
     transcript.request("GET", "/v0/dream");
-    transcript.response(200, { time: "04:00", next_at: "2026-11-28T04:00:00.000Z", latest: record });
+    transcript.response(200, { time: "04:00", next_at: "2026-11-28T04:00:00.000Z", latest: night });
     transcript.wait(5000);
     transcript.request("PUT", "/v0/dream/time", { body: { time: "03:30" } });
-    transcript.response(200, { time: "03:30", next_at: "2026-11-28T03:30:00.000Z", latest: record });
+    transcript.response(200, { time: "03:30", next_at: "2026-11-28T03:30:00.000Z", latest: night });
     return transcript;
   },
 
@@ -5780,6 +5666,305 @@ const scenarios: readonly (() => Transcript)[] = [
     transcript.wait(300);
     writeWhole(transcript, "Any time. I'll remind you on Thursday evening.");
     transcript.endTurn("completed");
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "97-understanding-you",
+      scenario: 97,
+      title: "Understanding you",
+      summary:
+        "Kumo asks two things it would like you to explain, on its Planning with you track, each with what it " +
+        "already understands, the missing piece and why it would help. They wait quietly in Understanding you: no " +
+        "Desk card, no notification. You say Not now to one. You answer the other with two taps and a line: it's " +
+        "evidence on the track, and Kumo files what it learned in the background, with no follow-up. Kumo settles " +
+        "the one you set aside once you answer it in the chat, and never asks the same thing twice.",
+      guarantees: ["G63"],
+    });
+    transcript.begin("2026-11-27T09:00:00.000Z");
+    transcript.connect();
+    transcript.registerDevice();
+    transcript.time("2026-11-27T09:00:01.000Z");
+    const name = "Planning with you";
+    const trackNote = "How you like your days and weekends planned.";
+    agentCalls(transcript, "open_track", { name, note: trackNote });
+    const track = {
+      id: transcript.track(),
+      name,
+      stage: "learning",
+      since: "2026-11-27T09:00:01.000Z",
+      note: trackNote,
+      confirmed: 0,
+      corrected: 0,
+      evidence: [] as readonly Readonly<Record<string, unknown>>[],
+    };
+    transcript.wait(500);
+    transcript.getUnderstanding({ tracks: [track], questions: [], recent: [] });
+    const ask = (
+      at: string,
+      fields: {
+        readonly understood: string;
+        readonly missing: string;
+        readonly why: string;
+        readonly options: readonly string[];
+      },
+    ) => {
+      transcript.time(at);
+      agentCalls(transcript, "add_question", { track: track.id, ...fields });
+      const question = {
+        id: transcript.questionId(),
+        track: track.id,
+        state: "open",
+        ...fields,
+        asked_at: at,
+        changed_at: at,
+      };
+      transcript.question(question);
+      return question;
+    };
+    const restful = ask("2026-11-27T09:00:02.000Z", {
+      understood: "You keep Sunday mornings free, and your long run is on Saturdays.",
+      missing: "What makes a weekend feel restful rather than busy?",
+      why: "So the weekends I plan leave you rested, not just full.",
+      options: ["Unplanned time", "Seeing friends", "Being outdoors", "A long lie-in"],
+    });
+    const packed = ask("2026-11-27T09:00:03.000Z", {
+      understood: "Packed weeks are when your runs slip first, and you've said you sleep badly after late calls.",
+      missing: "When a week is packed, what should I protect first?",
+      why: "So I know what to keep when something has to give.",
+      options: ["Training", "Sleep", "Evenings with friends"],
+    });
+    transcript.time("2026-11-27T09:01:03.000Z");
+    transcript.getUnderstanding({ tracks: [track], questions: [restful, packed], recent: [] });
+
+    transcript.time("2026-11-27T09:01:08.000Z");
+    transcript.request("POST", `/v0/understanding/questions/${packed.id}/not-now`);
+    const later = { ...packed, changed_at: "2026-11-27T09:01:08.000Z", later_at: "2026-11-27T09:01:08.000Z" };
+    transcript.question(later);
+    transcript.wait(60);
+    transcript.response(200, { question: later });
+
+    transcript.time("2026-11-27T09:01:30.000Z");
+    const filed = "Weekends start slow: nothing booked before noon, and time outdoors.";
+    transcript.world("kumo_works", { calls: [], answer: filed });
+    const answer = {
+      picked: ["Unplanned time", "Being outdoors"],
+      text: "A slow morning and a long walk, with nothing booked before noon.",
+    };
+    transcript.request("POST", `/v0/understanding/questions/${restful.id}/answer`, { body: answer });
+    const answeredAt = "2026-11-27T09:01:30.000Z";
+    const answered = { ...restful, state: "answered", changed_at: answeredAt, answer: { at: answeredAt, ...answer } };
+    transcript.question(answered);
+    const kept = { ...answered, filed };
+    transcript.question(kept);
+    transcript.wait(60);
+    transcript.response(202, { question: answered });
+
+    transcript.time("2026-11-27T09:02:00.000Z");
+    const evidence = {
+      at: answeredAt,
+      kind: "answered",
+      text:
+        "You answered “What makes a weekend feel restful rather than busy?”: Unplanned time, Being outdoors; " +
+        "“A slow morning and a long walk, with nothing booked before noon.”",
+      question: restful.id,
+    };
+    const answeredTrack = { ...track, evidence: [evidence] };
+    transcript.getWork({ handled: [], cleared: [], tracks: [answeredTrack] });
+    transcript.wait(1000);
+    transcript.getUnderstanding({ tracks: [answeredTrack], questions: [later], recent: [kept] });
+
+    const settledAt = "2026-11-27T12:40:00.000Z";
+    transcript.time(settledAt);
+    const note = "You said in the chat that sleep comes first when a week is packed.";
+    agentCalls(transcript, "settle_question", { question: packed.id, note });
+    const settled = {
+      id: packed.id,
+      track: track.id,
+      state: "settled",
+      understood: packed.understood,
+      missing: packed.missing,
+      why: packed.why,
+      options: packed.options,
+      asked_at: packed.asked_at,
+      changed_at: settledAt,
+      note,
+    };
+    transcript.question(settled);
+    transcript.time("2026-11-28T04:10:00.000Z");
+    agentCalls(transcript, "add_question", {
+      track: track.id,
+      understood: "You run long on Saturdays.",
+      missing: "What makes a weekend restful for you, rather than busy?",
+      why: "So I plan weekends that rest you.",
+    });
+    transcript.time("2026-11-28T08:30:00.000Z");
+    transcript.getUnderstanding({ tracks: [answeredTrack], questions: [], recent: [settled, kept] });
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "98-sharing-with-kumo",
+      scenario: 98,
+      title: "Sharing with Kumo",
+      summary:
+        "From another app's share sheet you share a job ad's link, with a note. The server reads the page for its " +
+        "title and summary, and Kumo puts the share in your open thread about that role, where it answers with " +
+        "what it made of it and what it did. Then you share a screenshot of a booking, which belongs to no thread, " +
+        "so Kumo starts one it names and answers there. Each reply notifies, naming its thread. The share sheet " +
+        "sends the first share again, and nothing changes.",
+      guarantees: ["G64"],
+    });
+    transcript.time("2026-11-26T17:05:00.000Z");
+    transcript.post(
+      "Sam at Halcyon wrote back: they'd like to talk about the platform team, and a recruiter call is next. " +
+        "I'll keep the role here.",
+      { newThread: "Halcyon role" },
+    );
+    const role = transcript.latestThread();
+    transcript.begin("2026-11-27T08:40:00.000Z", { cursor: "latest" });
+    transcript.connect();
+    transcript.registerDevice();
+    transcript.wait(3000);
+    const url = "https://careers.halcyon.example/jobs/platform-engineer";
+    const html = [
+      "<!doctype html><html><head>",
+      "<title>Platform Engineer, Infrastructure | Halcyon Careers</title>",
+      '<meta property="og:title" content="Platform Engineer, Infrastructure">',
+      '<meta property="og:description" content="Build and run the systems every Halcyon team ships on. London, ',
+      'hybrid, three days a week in the office.">',
+      '<meta property="og:site_name" content="Halcyon Careers">',
+      "</head><body><h1>Platform Engineer</h1></body></html>",
+    ].join("");
+    const note = "This is the one Sam mentioned";
+    const link = transcript.share({ url, html, note, joins: role });
+    transcript.inThread(role, () => {
+      transcript.startTurn([link.id]);
+      transcript.wait(300);
+      transcript.step("thinking", thinking);
+      transcript.wait(1500);
+      writeWhole(
+        transcript,
+        "That's the one Sam meant: Platform Engineer, Infrastructure, building what every Halcyon team ships on, " +
+          "in London and hybrid. I've kept it here with the role, and I'll use it to prep you before the " +
+          "recruiter call.",
+      );
+      const result = "Platform Engineer · recruiter call next";
+      transcript.world("agent_calls", { tool: "update_thread", input: { result }, thread: role });
+      transcript.changeThread(role, { result });
+      transcript.wait(200);
+      transcript.endTurn("completed");
+    });
+    transcript.wait(20 * 60 * 1000);
+    const screenshot = transcript.upload("library-shelves.png", { name: "screenshot.png" });
+    transcript.wait(500);
+    const booking = transcript.share({ attachments: [screenshot], startsThread: "Dentist check-up" });
+    transcript.inThread(booking.thread, () => {
+      transcript.startTurn([booking.id]);
+      transcript.wait(300);
+      transcript.step("thinking", thinking);
+      transcript.wait(1200);
+      const title = "Remind about the dentist";
+      const what = "Remind them of the dentist tomorrow";
+      const why = "Their check-up at Quillfield Dental is on Tuesday 2 December at 09:40; they shared the booking.";
+      const source = { kind: "chat" as const, title: "Quillfield Dental booking" };
+      transcript.world("agent_calls", {
+        tool: "set_wake_up",
+        input: { title, what, why, at: "2026-12-01T19:00:00Z", asked: false, source },
+        thread: booking.thread,
+      });
+      transcript.wakeUp({ at: "2026-12-01T19:00:00.000Z", title, what, why, by: "kumo", source });
+      transcript.wait(300);
+      writeWhole(
+        transcript,
+        "A check-up at Quillfield Dental on Tuesday 2 December at 09:40. I'll remind you the evening before.",
+      );
+      const result = "Tue 2 Dec, 09:40";
+      transcript.world("agent_calls", { tool: "update_thread", input: { result }, thread: booking.thread });
+      transcript.changeThread(booking.thread, { result });
+      transcript.wait(200);
+      transcript.endTurn("completed");
+    });
+    transcript.wait(5000);
+    transcript.shareAgain({ id: link.id, url, note, thread: role });
+    return transcript;
+  },
+
+  () => {
+    const transcript = createTranscript({
+      name: "100-full-access",
+      scenario: 100,
+      title: "Full access",
+      summary:
+        "Kumo can't install what the browser needs from inside its sandbox, so you give it full access in " +
+        "Settings, with Face ID. The command that turns it on says it's meant; every app hears the change, Kumo's " +
+        "work notes it, and from its next turn Kumo runs without the sandbox, saying what it's about to do. You " +
+        "turn it off again once it's done, and the sandbox is back from the turn after.",
+      guarantees: ["G66"],
+    });
+    const headers = { headers: { "Ito-Protocol": protocol } };
+    transcript.begin("2026-11-27T14:00:00.000Z");
+    transcript.connect();
+    transcript.wait(2000);
+    transcript.request("GET", "/v0/access");
+    transcript.wait(40);
+    transcript.response(200, { mode: "sandboxed" }, headers);
+    transcript.wait(4000);
+    transcript.request("POST", "/v0/access/full", { body: { confirm: true } });
+    const full = { mode: "full", since: "2026-11-27T14:00:06.040Z" } as const;
+    transcript.access(full);
+    transcript.addDone({
+      text: "Full access on: Kumo runs without its sandbox from its next turn",
+      reason: "You turned it on in Settings",
+    });
+    transcript.wait(40);
+    transcript.response(200, full, headers);
+    transcript.wait(5000);
+    sendAndStart(transcript, "The browser won't start. Install what it needs and get it going.");
+    transcript.wait(300);
+    transcript.step("thinking", thinking);
+    transcript.wait(900);
+    transcript.endStep();
+    transcript.reply("note");
+    transcript.write("I'll install Ito's packages in its checkout, then Chromium for the browser.", { pieces: 2 });
+    transcript.endMessage("completed");
+    transcript.wait(40);
+    transcript.step("command", {
+      title: "Installing packages",
+      endedTitle: "Installed packages",
+      fields: { command: "npm ci --omit=dev", cwd: "/home/you/ito-core", actions: [{ type: "run" }] },
+    });
+    transcript.wait(18_000);
+    transcript.endStep({ fields: { exit_code: 0, output: "added 412 packages in 18s\n" } });
+    transcript.step("command", {
+      title: "Running a command",
+      endedTitle: "Ran a command",
+      fields: {
+        command: "npx playwright install chromium",
+        cwd: "/home/you/ito-core",
+        actions: [{ type: "run" }],
+      },
+    });
+    transcript.wait(24_000);
+    transcript.endStep({ fields: { exit_code: 0, output: "Chromium downloaded to ~/.cache/ms-playwright\n" } });
+    writeWhole(
+      transcript,
+      "Done: Ito's packages are installed, and Chromium with them. Switch the browser on again in Settings › " +
+        "Capabilities and it'll start.",
+      3,
+    );
+    transcript.endTurn("completed");
+    transcript.wait(10 * 60 * 1000);
+    transcript.request("DELETE", "/v0/access/full");
+    transcript.access({ mode: "sandboxed" });
+    transcript.addDone({
+      text: "Full access off: Kumo's back in its sandbox from its next turn",
+      reason: "You turned it off in Settings",
+    });
+    transcript.wait(40);
+    transcript.response(200, { mode: "sandboxed" }, headers);
     return transcript;
   },
 ];

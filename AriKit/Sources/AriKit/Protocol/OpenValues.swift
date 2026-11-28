@@ -164,10 +164,9 @@ public struct StepKind: OpenValue {
     public static let handoff = StepKind(rawValue: "handoff")
     /// Written by the server: how a one-tap card you answered went.
     public static let commit = StepKind(rawValue: "commit")
-    // `handoff` and `commit` join `known` once protocol/ is pinned at the server that writes them.
     public static let known = [
         thinking, webSearch, command, fileChange, tool, plan, wait, imageView, compacting, memory,
-        motion,
+        motion, handoff, commit,
     ]
 }
 

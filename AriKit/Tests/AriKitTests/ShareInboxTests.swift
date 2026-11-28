@@ -2,9 +2,9 @@ import AriKit
 import Foundation
 import Testing
 
-/// The share sheet's way to the share inbox (protocol 0.20, ahead of the pin): photos first, then
-/// the share under the one id it keeps, then Kumo's answer, followed for as long as the sheet
-/// waits. Each runs the real client against the scripted server.
+/// The share sheet's way to the share inbox (protocol 0.20): photos first, then the share under the
+/// one id it keeps, then Kumo's answer, followed for as long as the sheet waits. Each runs the real
+/// client against the scripted server.
 @Suite("Sharing to the share inbox")
 struct ShareInboxTests {
     private let photo = PendingAttachment(

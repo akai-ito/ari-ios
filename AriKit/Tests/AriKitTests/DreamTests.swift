@@ -57,13 +57,18 @@ struct DreamTests {
         try await dreams.dreamNow()
         #expect(dreams.dreaming?.trigger == .manual)
 
-        let finished = try #require(
-            transcript.events.map(\.event).first {
-                if case .dreamFinished = $0.payload { true } else { false }
-            })
-        dreams.apply(finished)
+        let finished = transcript.events.map(\.event).filter {
+            if case .dreamFinished = $0.payload { true } else { false }
+        }
+        try #require(finished.count == 2)
+        dreams.apply(finished[0])
         #expect(dreams.dreaming == nil)
         #expect(dreams.latest?.trigger == .manual && dreams.latest?.isNew == true)
+
+        // Dream now is an extra: the night's dream still runs, over what came since.
+        await dreams.refresh()
+        dreams.apply(finished[1])
+        #expect(dreams.latest?.trigger == .scheduled)
 
         await dreams.refresh()
         try await dreams.setTime("03:30")
@@ -76,9 +81,10 @@ struct DreamTests {
     @Test("a refresh that fails keeps the dream it had")
     func failedRefresh() async throws {
         let transcript = try Fixtures.transcript("93-dream-now")
-        // Only its two reads of the dream: a third finds the server gone.
+        // Only its three reads of the dream: a fourth finds the server gone.
         let server = TranscriptServer(transcript) { $0 == .dream }
         let dreams = Dreams(client: server.client)
+        await dreams.refresh()
         await dreams.refresh()
         await dreams.refresh()
         let shown = try #require(dreams.state)

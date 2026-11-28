@@ -45,6 +45,10 @@ sequenceDiagram
   with a `snapshot` instead.
 - **Send** messages under an id the app chooses, so retrying is always safe. The server answers
   once the message is on disk; what it does next arrives on the stream.
+- **Share** from the phone's share sheet: any mix of a link, text, photos and files and a note, under
+  an id the app makes, so a retry never makes a second. The server reads the link's page for its
+  title and summary; Kumo puts the share in the open side thread it belongs in, or a new one it
+  names, where it becomes your message with `share` on it, and answers it in that thread's turn.
 - **Stop** a turn, or **try again** after one failed, with commands addressed to the turn.
 - **Attach** photos and files: upload each under an id the app makes, then name them in a message.
   Anything over 20 MB, such as a recording, goes up in chunks that resume after any drop; `GET
@@ -84,6 +88,10 @@ sequenceDiagram
   phone's own keyboard laid over the page's field, and hand it back. Kumo never presses a button
   that pays. A free booking or form can come as a one-tap `commit` card on the Desk, pressed for
   you only if the page is still as it was.
+- **Give Kumo full access** to the server, or put it back in its sandbox, from its next turn: read
+  it with `GET /v0/access`, turn it on with `POST /v0/access/full` and a body that says it's meant,
+  and off with `DELETE /v0/access/full`. `access.changed` tells every app, so the chat can show a
+  marker while it lasts.
 
 ## Events
 
@@ -114,6 +122,7 @@ Every event carries `id`, `type` and `at`, plus the fields of its type.
 | `made.state` | Your ticks on a page changed, from any device |
 | `made.removed` | You let Kumo forget a page |
 | `browser.changed` | Kumo's browser moved on: a step on a site, a takeover asked for, taken or handed back, a commit card, or the task over |
+| `access.changed` | You turned Kumo's full access on or off |
 | `question.changed` | A question in Understanding you was added, answered, filed, heard, set aside, settled or dropped |
 | `dream.finished` | Kumo finished a dream, with its record |
 
